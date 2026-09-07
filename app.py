@@ -1,7 +1,10 @@
+import os
+import pymysql
+import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
-st.title("Test")
-st.write("Hello world!")
-button1 = st.button ("Click")
-if button1:
-    st.write("Goodbye")
+# Load secret credentials from local .env
+load_dotenv()
+
+st.title("Project PULSE Dashboard")
