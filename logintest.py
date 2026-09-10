@@ -32,18 +32,18 @@ def hash_password(password, salt=None):
     password_hash = hashlib.sha256(combined.encode()).hexdigest()
     return password_hash, salt
 
-def insert_jane_user():
-    """Insert Jane Doe as a test user"""
+def insert_new_user():
+    """Insert a test user"""
     connection = pymysql.connect(**DB_CONFIG)
     
     try:
         with connection.cursor() as cursor:
-            user_id = "1111111111"
-            first_name = "Jane"
-            last_name = "Doe"
-            role = "Dean"
-            email = "janedoe@gmail.com"
-            plain_password = "password321"
+            user_id = "1234567890"
+            first_name = "John"
+            last_name = "Odyssey"
+            role = "IT/Admin"
+            email = "odysseus@gmail.com"
+            plain_password = "theodyssey123"
 
             password_hash, salt = hash_password(plain_password)
             
@@ -52,7 +52,7 @@ def insert_jane_user():
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
             cursor.execute(sql, (user_id, first_name, last_name, password_hash, salt, role, email))
-            connection.commmit()
+            connection.commit()
             print("Database updated")
 
     except pymysql.Error as e:
@@ -63,4 +63,4 @@ def insert_jane_user():
         connection.close()
 
 if __name__ == "__main__":
-    insert_jane_user()
+    insert_new_user()
