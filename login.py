@@ -16,11 +16,11 @@ DB_CONFIG = {
     'connect_timeout': 10,
     'cursorclass': pymysql.cursors.DictCursor,
     'database': "defaultdb",
-    'host': "mysql-32679f9d-jillianysabelruedarueda-0f46.f.aivencloud.com",
+    'host': os.getenv('DB_HOST'),
     'password': os.getenv('DB_PASSWORD'),
     'read_timeout': 10,
-    'port': 25535,
-    'user': "avnadmin",
+    'port': int(os.getenv('DB_PORT', 25535)),
+    'user': os.getenv('DB_USER'),
     'write_timeout': 10,
 }
 def verify_login(user_id, password):
