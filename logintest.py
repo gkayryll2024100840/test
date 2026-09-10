@@ -7,7 +7,7 @@ import streamlit as st
 from dotenv import load_dotenv
 import mysql.connector
 from mysql.connector import Error
-import pymysql
+
 load_dotenv()
 timeout = 10
 
