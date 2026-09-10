@@ -1,12 +1,8 @@
 import os
 import hashlib
-import secrets
 import pymysql
-import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
-import mysql.connector
-from mysql.connector import Error
 
 load_dotenv()
 timeout = 10
