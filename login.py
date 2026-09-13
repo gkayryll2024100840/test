@@ -27,26 +27,22 @@ if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
 def log_failed_attempt(user_id, ip_address=None):
-    """Insert a wrong-password attempt into login_logs.
-
-    Only called when the UserID exists in Users (so the FK is always valid).
-    """
+    """Insert a wrong-password attempt into login_logs."""
     try:
         connection = pymysql.connect(**DB_CONFIG)
     except pymysql.Error:
-        return  # never crash the login flow because logging failed
+        return
 
     try:
         with connection.cursor() as cursor:
             sql = """
-                INSERT INTO login_logs (ip_address, attempted_at, UserID)
+                INSERT INTO login_logs (UserID, ip_address, attempted_at)
                 VALUES (%s, %s, NOW())
             """
             cursor.execute(sql, (user_id, ip_address))
             connection.commit()
     except pymysql.Error as e:
-        print(f"❌ log_failed_attempt failed: {e}")  # Temporary debug
-        st.warning(f"⚠️ Log failed: {e}")            # Visible in UI
+        st.warning(f"⚠️ Log failed: {e}")
     finally:
         connection.close()
 
@@ -87,9 +83,9 @@ def verify_login(user_id, password):
                 st.session_state.failed_attempts = 0
                 return True, user
             else:
-                st.session_state.failed_attempts += 1
-                log_failed_attempt(user['UserID'], st.session_state.get('client_ip')) #debugging, move below the if
+                st.session_state.failed_attempts += 1 
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
+                    log_failed_attempt(user['UserID'], st.session_state.get('client_ip')) 
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
@@ -104,7 +100,6 @@ def verify_login(user_id, password):
 st.title("Project PULSE Login Page")
 input_id = st.text_input("User ID")
 input_pass = st.text_input("Password", type = "password")
-st.write(f"🐛 Debug — failed_attempts: {st.session_state.failed_attempts}")
 button_login = st.button("Log in")
 
 if button_login:
