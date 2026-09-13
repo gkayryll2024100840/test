@@ -120,6 +120,7 @@ if button_login:
                 st.write(f"**User ID:** {user['UserID']}")
                 st.write(f"**Email:** {user['email']}")
                 st.write(f"**Role:** {user['role']}")
+                st.write(f"🐛 Debug — failed_attempts: {st.session_state.failed_attempts}")
         else:
             st.error(result)
 
