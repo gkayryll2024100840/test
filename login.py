@@ -86,10 +86,12 @@ def verify_login(user_id, password):
                 st.session_state.failed_attempts += 1 
                 
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
-                    return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                     log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
+                    return False, "Invalid User ID or password. Unauthorized attempts have been logged."
+                    st.write(f"🐛 Debug — failed_attempts: {st.session_state.failed_attempts}")
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
+                
 
     except pymysql.Error as er:
         return False, f"Database error: {er}"
