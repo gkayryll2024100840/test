@@ -44,8 +44,9 @@ def log_failed_attempt(user_id, ip_address=None):
             """
             cursor.execute(sql, (user_id, ip_address))
             connection.commit()
-    except pymysql.Error:
-        pass
+    except pymysql.Error as e:
+        print(f"❌ log_failed_attempt failed: {e}")  # Temporary debug
+        st.warning(f"⚠️ Log failed: {e}")            # Visible in UI
     finally:
         connection.close()
 
@@ -93,8 +94,8 @@ def verify_login(user_id, password):
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
 
-    except pymysql.Error as e:
-        return False, f"Database error: {e}"
+    except pymysql.Error as er:
+        return False, f"Database error: {er}"
     finally:
         connection.close()
 
