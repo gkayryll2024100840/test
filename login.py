@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 timeout = 10
 
+#connect to database
 DB_CONFIG = {
     'charset': "utf8mb4",
     'connect_timeout': 10,
@@ -19,6 +20,36 @@ DB_CONFIG = {
     'user': os.getenv('DB_USER'),
     'write_timeout': 10,
 }
+
+MAX_FAILED_ATTEMPTS = 3
+
+if 'failed_attempts' not in st.session_state:
+    st.session_state.failed_attempts = 0
+
+def log_failed_attempt(user_id, ip_address=None):
+    """Insert a wrong-password attempt into login_logs.
+
+    Only called when the UserID exists in Users (so the FK is always valid).
+    """
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+    except pymysql.Error:
+        return  # never crash the login flow because logging failed
+
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                INSERT INTO login_logs (UserID, ip_address, attempted_at)
+                VALUES (%s, %s, NOW())
+            """
+            cursor.execute(sql, (user_id, ip_address))
+            connection.commit()
+    except pymysql.Error:
+        pass
+    finally:
+        connection.close()
+
+#login verify
 def verify_login(user_id, password):
     """Verify user credentials against the database.
     
@@ -52,9 +83,15 @@ def verify_login(user_id, password):
 
             # Compare hashes
             if computed_hash == user['password_hash']:
+                st.session_state.failed_attempts = 0
                 return True, user
             else:
-                return False, "Invalid User ID or password. Verify using email."
+                st.session_state.failed_attempts += 1
+                if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
+                    log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
+                    return False, "Invalid User ID or password. Unauthorized attempts have been logged."
+                else: 
+                    return False, "Invalid User ID or password. Verify using email."
 
     except pymysql.Error as e:
         return False, f"Database error: {e}"
@@ -78,7 +115,7 @@ if button_login:
             user = result
             st.success(f"Welcome, {user['FirstName']} {user['LastName']}!")
             st.info(f"Your role is: **{user['role']}**")
-            # Optionally display more info
+            # Optionally display more info (for testing only)
             with st.expander("Account details"):
                 st.write(f"**User ID:** {user['UserID']}")
                 st.write(f"**Email:** {user['email']}")
