@@ -39,7 +39,7 @@ def log_failed_attempt(user_id, ip_address=None):
     try:
         with connection.cursor() as cursor:
             sql = """
-                INSERT INTO login_logs (UserID, ip_address, attempted_at)
+                INSERT INTO login_logs (ip_address, attempted_at, UserID)
                 VALUES (%s, %s, NOW())
             """
             cursor.execute(sql, (user_id, ip_address))
