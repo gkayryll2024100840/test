@@ -103,6 +103,7 @@ def verify_login(user_id, password):
 st.title("Project PULSE Login Page")
 input_id = st.text_input("User ID")
 input_pass = st.text_input("Password", type = "password")
+st.write(f"🐛 Debug — failed_attempts: {st.session_state.failed_attempts}")
 button_login = st.button("Log in")
 
 if button_login:
@@ -120,7 +121,6 @@ if button_login:
                 st.write(f"**User ID:** {user['UserID']}")
                 st.write(f"**Email:** {user['email']}")
                 st.write(f"**Role:** {user['role']}")
-                st.write(f"🐛 Debug — failed_attempts: {st.session_state.failed_attempts}")
         else:
             st.error(result)
 
