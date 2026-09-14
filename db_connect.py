@@ -17,6 +17,12 @@ db_config = {
     "port": int(os.getenv("DB_PORT", 3306))
 }
 
+def get_db_connection():
+    """Return a live MySQL connection using the shared db_config.
+    Callers are responsible for closing the connection.
+    """
+    return mysql.connector.connect(**db_config)
+
 #can python successfully talk to SQL DB?
 def trigger_data_sync(login_id=None):
     """Attempts data sync with Aiven MySQL, logging failures locally if connection fails."""
