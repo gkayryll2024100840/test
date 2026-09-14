@@ -76,15 +76,44 @@ def get_max_retry_count(login_id):
     return get_max_retry_count_local(login_id)
 
 #connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
-def get_students_data():
+def get_student_roster_data():
     try:
         conn = mysql.connector.connect(**db_config)
-        query = "SELECT * FROM Students"
+        query = """
+            SELECT 
+                s.StudentNumber,
+                CONCAT(s.FirstName, ' ', s.LastName) AS Student,
+                s.Cohort,
+                s.EnrollmentStatus,
+                a.AdvisorName AS Advisor,
+                sl.CourseworkStatus,
+                sl.CompExamStatus,
+                sl.CapstoneStatus
+            FROM Students s
+            LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
+            LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID
+        """
         df = pd.read_sql(query, conn)
         conn.close()
+
+        # Format casing to match US-08 acceptance criteria
+        status_map = {
+            'in-progress': 'In-Progress',
+            'incomplete': 'Incomplete',
+            'passed': 'Passed'
+        }
+        if 'CompExamStatus' in df.columns:
+            df['CompExamStatus'] = (
+                df['CompExamStatus']
+                .astype(str)
+                .str.lower()
+                .map(status_map)
+                .fillna(df['CompExamStatus'])
+            )
+
         return df
     except Exception as e:
-        print(f"Failed to fetch students: {e}")
+        print(f"Failed to fetch roster data: {e}")
         return pd.DataFrame()
 
 #checks last_sync.txt for the last successful sync timestamp. Returns "No sync recorded" if file doesn't exist or is empty.

@@ -5,24 +5,25 @@ from db_connect import get_student_roster_data, get_last_updated_time, trigger_d
 
 st.set_page_config(page_title="Student Roster", layout="wide")
 
-#session_state defined in app.py
-active_login_id = st.session_state.session_id
+# session_state defined in app.py
+active_login_id = getattr(st.session_state, "session_id", None)
 
 # Check repeated failures specifically for THIS session
-retry_count = get_max_retry_count(active_login_id)
-if retry_count > 1:
-    st.warning(f"**Warning:** Repeated sync failures detected for your session ({retry_count} attempts). Check Admin logs.")
+if active_login_id:
+    retry_count = get_max_retry_count(active_login_id)
+    if retry_count > 1:
+        st.warning(f"**Warning:** Repeated sync failures detected for your session ({retry_count} attempts). Check Admin logs.")
 
-#Splits the top section into two columns. Wider one for the title, smaller one for timestamp 
+# Splits the top section into two columns
 col_title, col_action = st.columns([2, 1])
 
 with col_title:
     st.title("Student Roster")
 
-#refresh button and last sync timestamp 
+# refresh button and last sync timestamp
 with col_action:
     last_sync = get_last_updated_time()
-    st.caption(f"⏱︎ Last Refreshed: {last_sync}")
+    st.caption(f"Last Refreshed: {last_sync}")
     if st.button("Refresh Now"):
         success = trigger_data_sync(login_id=active_login_id)
         if success:
@@ -34,30 +35,29 @@ with col_action:
 
 st.markdown("---")
 
-#displays student roster in table format
+# displays student roster in table format
 df = get_student_roster_data()
 
 if not df.empty:
-  #sorting map (only these columns can be the basis of sorting the table)
-  sort_map = {
-      "Student ID": "StudentNumber",
-      "Student": "Student",
-      "Enrollment Status": "EnrollmentStatus",
-  }
+    # sorting map (US-08: advisors can now also sort by exam status)
+    sort_map = {
+        "Student ID": "StudentNumber",
+        "Student": "Student",
+        "Enrollment Status": "EnrollmentStatus",
+        "Comprehensive Exam": "CompExamStatus"
+    }
 
-  #dropdown selector
-  sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
+    # Available columns only
+    active_sort_options = [k for k, v in sort_map.items() if v in df.columns]
+    sort_choice = st.selectbox("SORT BY:", active_sort_options)
 
-  df_sorted = df.sort_values(by=sort_map[sort_choice])
+    df_sorted = df.sort_values(by=sort_map[sort_choice])
 
-  #formatted column headers (ex: StudentNumber -> STUDENT NUMBER)
-  df_display = df_sorted.rename(
-      columns=lambda x: re.sub(r"(?<!^)(?=[A-Z])", " ", x).upper()
-  )
+    # formatted column headers (ex: CompExamStatus -> COMP EXAM STATUS)
+    df_display = df_sorted.rename(
+        columns=lambda x: re.sub(r"(?<!^)(?=[A-Z])", " ", x).upper()
+    )
 
-  st.dataframe(df_display, use_container_width=True)
-
+    st.dataframe(df_display, use_container_width=True)
 else:
-  st.info(
-      "No student records found in the database or connection issue occurred."
-  )
+    st.info("No student records found in the database or connection issue occurred.")
