@@ -1,36 +1,20 @@
 import os
 import hashlib
-import pymysql
 import streamlit as st
-from dotenv import load_dotenv
-
-load_dotenv()
-timeout = 10
-
-#connect to database
-DB_CONFIG = {
-    'charset': "utf8mb4",
-    'connect_timeout': 10,
-    'cursorclass': pymysql.cursors.DictCursor,
-    'database': "defaultdb",
-    'host': os.getenv('DB_HOST'),
-    'password': os.getenv('DB_PASSWORD'),
-    'read_timeout': 10,
-    'port': int(os.getenv('DB_PORT', 25535)),
-    'user': os.getenv('DB_USER'),
-    'write_timeout': 10,
-}
+import mysql.connector
+from db_connect import get_db_connection
 
 MAX_FAILED_ATTEMPTS = 3
 
+#Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
 def log_failed_attempt(user_id, ip_address=None):
     """Insert a wrong-password attempt into login_logs."""
     try:
-        connection = pymysql.connect(**DB_CONFIG)
-    except pymysql.Error:
+        connection = get_db_connection()
+    except mysql.connector.Error:
         return
 
     try:
@@ -41,7 +25,7 @@ def log_failed_attempt(user_id, ip_address=None):
             """
             cursor.execute(sql, (user_id, ip_address))
             connection.commit()
-    except pymysql.Error as e:
+    except mysql.connector.Error as e:
         st.warning(f"⚠️ Log failed: {e}")
     finally:
         connection.close()
@@ -55,8 +39,8 @@ def verify_login(user_id, password):
     - On failure: (False, error_message)
     """
     try:
-        connection = pymysql.connect(**DB_CONFIG)
-    except pymysql.Error as e:
+        connection = get_db_connection()
+    except mysql.connector.Error as e:
         return False, f"Database connection error: {e}"
 
     try:
@@ -92,7 +76,7 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Verify using email."
                 
 
-    except pymysql.Error as er:
+    except mysql.connector.Error as er:
         return False, f"Database error: {er}"
     finally:
         connection.close()
