@@ -18,7 +18,7 @@ def log_failed_attempt(user_id, ip_address=None):
         return
 
     try:
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             sql = """
                 INSERT INTO login_logs (UserID, ip_address, attempted_at)
                 VALUES (%s, %s, NOW())
