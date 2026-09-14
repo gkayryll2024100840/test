@@ -44,7 +44,7 @@ def verify_login(user_id, password):
         return False, f"Database connection error: {e}"
 
     try:
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             sql = """
                 SELECT UserID, FirstName, LastName, password_hash, salt, role, email
                 FROM Users
