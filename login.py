@@ -26,7 +26,7 @@ def log_failed_attempt(user_id, ip_address=None):
             cursor.execute(sql, (user_id, ip_address))
             connection.commit()
     except mysql.connector.Error as e:
-        st.warning(f"⚠️ Log failed: {e}")
+        st.warning(f"Log failed: {e}")
     finally:
         connection.close()
 
@@ -68,35 +68,56 @@ def verify_login(user_id, password):
                 return True, user
             else:
                 st.session_state.failed_attempts += 1 
-                
+            
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
                     log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
                 
-
     except mysql.connector.Error as er:
         return False, f"Database error: {er}"
     finally:
         connection.close()
 
 #-------------------------------------Streamlit Ui-----------------------------------------------------
+if "user" not in st.session_state:
+    st.title("Project PULSE Login Page")
+    input_id = st.text_input("User ID")
+    input_pass = st.text_input("Password", type = "password")
+    button_login = st.button("Log in")
 
-st.title("Project PULSE Login Page")
-input_id = st.text_input("User ID")
-input_pass = st.text_input("Password", type = "password")
-button_login = st.button("Log in")
-
-if button_login:
-    if not input_id or not input_pass:
-        st.warning("Please enter both User ID and Password.")
-    else:
-        success, result = verify_login(input_id, input_pass)
-
-        if success:
-            st.session_state.user = result
-            st.switch_page("pages/app.py")
+    if button_login:
+        if not input_id or not input_pass:
+            st.warning("Please enter both User ID and Password.")
         else:
-            st.error(result)
+            success, result = verify_login(input_id, input_pass)
 
+            if success:
+                st.session_state.user = result
+                st.rerun()
+            else:
+                st.error(result)
+
+else:
+    user_role = str(st.session_state.user.get("role", "")).strip().lower()
+
+    exec = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
+    roster = st.Page("dashboard_views/student_roster.py", title="Student Roster")
+    profile = st.Page("dashboard_views/student_profile.py", title="Student Profile")
+    config = st.Page("dashboard_views/admin_config.py", title="Admin Config")
+
+    #Role-based acccess
+    if user_role == "dean":
+        allowed_pages = [exec, roster, profile, config]
+    elif user_role in ["program chair", "success advisor"]:
+        allowed_pages = [exec, roster, profile]
+    elif user_role == "faculty member":
+        allowed_pages = [exec]
+    elif user_role == "it admin":
+        allowed_pages = [config]
+    else:
+        allowed_pages = [exec]  #default ito pero i think u should change it....
+
+    pg = st.navigation(allowed_pages, position="sidebar")
+    pg.run()
