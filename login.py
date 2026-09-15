@@ -96,6 +96,8 @@ if not st.session_state.get('user'):
 
             if success:
                 st.session_state.user = result
+                st.write("DEBUG A — login succeeded, user set:", st.session_state.user)
+                st.rerun()
             else:
                 success, result = verify_login(input_id, input_pass)
 
@@ -127,10 +129,8 @@ if not st.session_state.get('user'):
         st.error("No pages assigned to your role. Contact IT/Admin.")
         st.stop()
 
+    st.write("DEBUG B — reached navigation block. user =", st.session_state.get('user'))
     pg = st.navigation(allowed, position="sidebar")
-    st.sidebar.write("DEBUG — user:", st.session_state.get('user', {}).get('UserID'))
-    st.sidebar.write("DEBUG — allowed:", [p.title for p in allowed])
-    st.sidebar.write("DEBUG — about to run nav")
+    st.write("DEBUG C — navigation built, running page")
 
-    pg = st.navigation(allowed, position="sidebar")
     pg.run()
