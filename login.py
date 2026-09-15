@@ -87,26 +87,9 @@ if "user" not in st.session_state:
     input_pass = st.text_input("Password", type = "password")
     button_login = st.button("Log in")
 
-<<<<<<< HEAD
     if button_login:
         if not input_id or not input_pass:
             st.warning("Please enter both User ID and Password.")
-=======
-st.title("Project PULSE Login Page")
-input_id = st.text_input("User ID")
-input_pass = st.text_input("Password", type = "password")
-button_login = st.button("Log in")
-
-if button_login:
-    if not input_id or not input_pass:
-        st.warning("Please enter both User ID and Password.")
-    else:
-        success, result = verify_login(input_id, input_pass)
-
-        if success:
-            st.session_state.user = result
-            st.switch_page("dashboard_view/app.py")
->>>>>>> 72d82b47130d41fc31679dd6f3c7396c4764e4b4
         else:
             success, result = verify_login(input_id, input_pass)
 
