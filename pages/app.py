@@ -5,6 +5,7 @@ if not st.session_state.get('user'):
     st.switch_page("login.py")
 
 user = st.session_state.user
+role = user['role']
 
 st.title("Project PULSE Dashboard")
 
