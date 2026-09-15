@@ -82,31 +82,32 @@ def verify_login(user_id, password):
         connection.close()
 
 #-------------------------------------Streamlit Ui-----------------------------------------------------
+if not st.session_state.get('user'):
+    st.title("Project PULSE Login Page")
+    input_id = st.text_input("User ID")
+    input_pass = st.text_input("Password", type = "password")
+    button_login = st.button("Log in")
 
-st.title("Project PULSE Login Page")
-input_id = st.text_input("User ID")
-input_pass = st.text_input("Password", type = "password")
-button_login = st.button("Log in")
-
-if button_login:
-    if not input_id or not input_pass:
-        st.warning("Please enter both User ID and Password.")
-    else:
-        success, result = verify_login(input_id, input_pass)
-
-        if success:
-            st.session_state.user = result
-            st.switch_page("dashboard_view/app.py")
+    if button_login:
+        if not input_id or not input_pass:
+            st.warning("Please enter both User ID and Password.")
         else:
             success, result = verify_login(input_id, input_pass)
 
             if success:
                 st.session_state.user = result
-                st.rerun()
+                st.switch_page("dashboard_views/app.py")
             else:
-                st.error(result)
+                success, result = verify_login(input_id, input_pass)
 
-if st.session_state.get('user'):
+                if success:
+                    st.session_state.user = result
+                    st.rerun()
+                else:
+                    st.error(result)
+    st.stop()
+
+
     user = st.session_state.user
     role = user['role']
 
@@ -127,5 +128,5 @@ if st.session_state.get('user'):
         st.error("No pages assigned to your role. Contact IT/Admin.")
         st.stop()
 
-    pg = st.navigation(allowed_pages, position="sidebar")
+    pg = st.navigation(allowed, position="sidebar")
     pg.run()
