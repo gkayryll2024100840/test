@@ -96,7 +96,7 @@ if button_login:
 
         if success:
             st.session_state.user = result
-            st.switch_page("app.py")
+            st.switch_page("pages/app.py")
         else:
             st.error(result)
 
