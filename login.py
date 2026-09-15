@@ -96,9 +96,15 @@ if button_login:
 
         if success:
             st.session_state.user = result
-            st.switch_page("dashboard_views/app.py")
+            st.switch_page("dashboard_view/app.py")
         else:
-            st.error(result)
+            success, result = verify_login(input_id, input_pass)
+
+            if success:
+                st.session_state.user = result
+                st.rerun()
+            else:
+                st.error(result)
 
 if st.session_state.get('user'):
     user = st.session_state.user
@@ -121,6 +127,5 @@ if st.session_state.get('user'):
         st.error("No pages assigned to your role. Contact IT/Admin.")
         st.stop()
 
-    nav = st.navigation(allowed)
-    nav.run()
-
+    pg = st.navigation(allowed_pages, position="sidebar")
+    pg.run()
