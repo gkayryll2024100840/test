@@ -1,8 +1,18 @@
 import os
 import hashlib
+import uuid
 import streamlit as st
 import mysql.connector
-from db_connect import get_db_connection
+from dotenv import load_dotenv
+from db_connect import get_db_connection, format_mysql_error
+from system_log import log_sync_attempt_local
+
+load_dotenv()
+
+#creates session ID
+#for us-16. Used to track sync attempts and log the errors in local_logs.db
+if "session_id" not in st.session_state:
+    st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
 
 MAX_FAILED_ATTEMPTS = 3
 
@@ -38,10 +48,14 @@ def verify_login(user_id, password):
     - On success: (True, user_dict)
     - On failure: (False, error_message)
     """
+    session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
+
     try:
         connection = get_db_connection()
     except mysql.connector.Error as e:
-        return False, f"Database connection error: {e}"
+        msg = format_mysql_error(e)
+        log_sync_attempt_local(status="FAILED", error_message=msg, login_id=session_id)
+        return False, msg
 
     try:
         with connection.cursor(dictionary=True) as cursor:
@@ -77,6 +91,7 @@ def verify_login(user_id, password):
                 
 
     except mysql.connector.Error as er:
+        log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
         return False, f"Database error: {er}"
     finally:
         connection.close()
@@ -96,16 +111,20 @@ if not st.session_state.get('user'):
             success, result = verify_login(input_id, input_pass)
             if success:
                 st.session_state.user = result
-                st.rerun()               # re-run; the nav block below will now execute
+                st.rerun()           # re-run; the nav block below will now execute
             else:
                 st.error(result)
 
-    st.stop()                            # stop the login render here
+    st.stop()       # stop the login render here
 
 
 # --- If LOGGED IN: build navigation and run the current page ---
 user = st.session_state.user
 role = user['role']
+
+#ensures that session id exists if page is refreshed while logged in
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(user.get('UserID', 'default_admin'))
 
 dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
 exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")

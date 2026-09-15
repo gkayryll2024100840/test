@@ -47,7 +47,6 @@ def log_sync_attempt_local(status, error_message=None, login_id=None):
     conn.commit()
     conn.close()
 
-
 def get_system_logs_local():
     """Fetches system logs from the local SQLite database for the admin screen."""
     init_local_log_db() #checks to make sure database and table exist before trying to read them
