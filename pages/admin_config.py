@@ -11,6 +11,9 @@ st.markdown("---")
 
 st.subheader("System Sync Logs")
 
+if "session_id" not in st.session_state:
+    st.session_state.session_id = "default_admin"
+
 active_login_id = st.session_state.session_id
 st.info(f"Active Session ID for this browser: **{active_login_id}**")
 
