@@ -113,13 +113,13 @@ roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Ro
 profile_page = st.Page("dashboard_views/student_profile.py", title="Student Profile")
 config_page = st.Page("dashboard_views/admin_config.py", title="Admin Config")
 
-if role in {"IT/Admin", "Dean"}:
-    allowed = [dashboard, exec_page, roster_page, profile_page]
-elif role in {"IT/Admin"}:
+if role == "Dean":
+    allowed = [dashboard, exec_page, roster_page, profile_page, config_page]
+elif role == "IT/Admin":
     allowed = [dashboard, config_page]    
-elif role in {"Program_Chair"}:
-    allowed = [dashboard, roster_page, profile_page]
-elif role in {"Faculty_Advisor"}:
+elif role == "Program_Chair":
+    allowed = [dashboard, exec_page, roster_page, profile_page]
+elif role == "Faculty_Advisor":
     allowed = [dashboard, roster_page, exec_page]
 else:
     allowed = []
