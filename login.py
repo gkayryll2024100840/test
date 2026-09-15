@@ -82,10 +82,11 @@ def verify_login(user_id, password):
         connection.close()
 
 #-------------------------------------Streamlit Ui-----------------------------------------------------
+# --- If NOT logged in: show the login form ---
 if not st.session_state.get('user'):
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
-    input_pass = st.text_input("Password", type = "password")
+    input_pass = st.text_input("Password", type="password")
     button_login = st.button("Log in")
 
     if button_login:
@@ -93,44 +94,35 @@ if not st.session_state.get('user'):
             st.warning("Please enter both User ID and Password.")
         else:
             success, result = verify_login(input_id, input_pass)
-
             if success:
                 st.session_state.user = result
-                st.write("DEBUG A — login succeeded, user set:", st.session_state.user)
-                st.rerun()
+                st.rerun()               # re-run; the nav block below will now execute
             else:
-                success, result = verify_login(input_id, input_pass)
+                st.error(result)
 
-                if success:
-                    st.session_state.user = result
-                    st.rerun()
-                else:
-                    st.error(result)
+    st.stop()                            # stop the login render here
+
+
+# --- If LOGGED IN: build navigation and run the current page ---
+user = st.session_state.user
+role = user['role']
+
+dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
+exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
+roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
+
+if role in {"IT/Admin", "Dean"}:
+    allowed = [dashboard, exec_page, roster_page]
+elif role in {"Program_Chair", "Faculty_Advisor"}:
+    allowed = [dashboard, roster_page]
+else:
+    allowed = []
+
+if not allowed:
+    st.error("No pages assigned to your role. Contact IT/Admin.")
     st.stop()
 
-
-    user = st.session_state.user
-    role = user['role']
-
-    # Define available pages
-    exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
-    roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
-    dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
-
-    # Role → allowed pages
-    if role in {"IT/Admin", "Dean"}:
-        allowed = [dashboard, exec_page, roster_page]
-    elif role in {"Program_Chair", "Faculty_Advisor"}:
-        allowed = [dashboard, roster_page]
-    else:
-        allowed = []
-
-    if not allowed:
-        st.error("No pages assigned to your role. Contact IT/Admin.")
-        st.stop()
-
-    st.write("DEBUG B — reached navigation block. user =", st.session_state.get('user'))
-    pg = st.navigation(allowed, position="sidebar")
-    st.write("DEBUG C — navigation built, running page")
-
-    pg.run()
+st.write("DEBUG B — user:", user.get('UserID'), "role:", role)
+pg = st.navigation(allowed, position="sidebar")
+st.write("DEBUG C — about to run page")
+pg.run()
