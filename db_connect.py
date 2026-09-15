@@ -5,10 +5,10 @@ from datetime import datetime
 from dotenv import load_dotenv 
 from system_log import log_sync_attempt_local, get_system_logs_local, get_max_retry_count_local
 
-#Load database credentials from .env file into memory 
+#load database credentials from .env file into memory 
 load_dotenv(override=True)  
 
-# Dictionary mappping environment variables. Reused when connecting to MySQL database.
+#dictionary mappping for env details
 db_config = {
     "host": os.getenv("DB_HOST"),
     "user": os.getenv("DB_USER"),
@@ -40,7 +40,7 @@ def trigger_data_sync(login_id=None):
             f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return True  
 
-    # Handle MySQL-specific errors and log them locally    
+    #Handle MySQL errors  
     except mysql.connector.Error as err:
         error_code = err.errno
 
@@ -205,3 +205,33 @@ def get_available_cohorts():
     except Exception as e:
         print(f"Failed to fetch cohorts: {e}")
         return []
+
+def check_column_exists(full_column_path):
+    """Parses a path like 'Student.StudentID' or 'dbo.Student.StudentID'
+
+    and checks if it exists in the MySQL database.
+    """
+    parts = full_column_path.strip().split(".")
+    if len(parts) < 2:
+        return False
+
+    #extracts table name and column name from my sql
+    table_name = parts[-2]
+    column_name = parts[-1]
+
+    try:
+        conn = get_db_connection() 
+        cursor = conn.cursor()
+        query = """
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = %s AND COLUMN_NAME = %s
+            """
+        cursor.execute(query, (table_name, column_name))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return result[0] > 0
+    
+    except Exception:
+        return False
