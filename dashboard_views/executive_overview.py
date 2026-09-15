@@ -1,6 +1,9 @@
 import streamlit as st
 from db_connect import get_enrollment_count
 
+st.write("DEBUG — executive_overview is running") #DEBUGGING ONLY WILL DELETE
+st.write("DEBUG — user:", st.session_state.get('user')) #DEBUGGING ONLY WILL DELETE
+
 st.set_page_config(page_title="Executive Overview", layout="wide")
 
 st.title("Executive Overview — MBA Program")
