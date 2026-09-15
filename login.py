@@ -95,14 +95,8 @@ if button_login:
         success, result = verify_login(input_id, input_pass)
 
         if success:
-            user = result
-            st.success(f"Welcome, {user['FirstName']} {user['LastName']}!")
-            st.info(f"Your role is: **{user['role']}**")
-            # Optionally display more info (for testing only)
-            with st.expander("Account details"):
-                st.write(f"**User ID:** {user['UserID']}")
-                st.write(f"**Email:** {user['email']}")
-                st.write(f"**Role:** {user['role']}")
+            st.session_state.user = result
+            st.switch_page("app.py")
         else:
             st.error(result)
 
