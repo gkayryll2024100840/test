@@ -1,11 +1,6 @@
 import streamlit as st
 
-# Guard: if not logged in, send back to login page
-if not st.session_state.get('user'):
-    st.error("Please log in first.")
-    st.stop()
-
-user = st.session_state.user
+user = st.session_state.get('user',{})
 
 st.title("Project PULSE Dashboard")
 
