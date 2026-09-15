@@ -21,4 +21,4 @@ with st.expander("Account details"):
 if st.button("Log out"):
     st.session_state.user = None
     st.session_state.failed_attempts = 0
-    st.switch_page("login.py")
+    st.rerun()
