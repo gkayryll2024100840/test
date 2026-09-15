@@ -6,7 +6,7 @@ from db_connect import get_db_connection
 
 MAX_FAILED_ATTEMPTS = 3
 
-#Logs unauthorized access attempts
+# Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
@@ -30,7 +30,7 @@ def log_failed_attempt(user_id, ip_address=None):
     finally:
         connection.close()
 
-#login verify
+# Login verify
 def verify_login(user_id, password):
     """Verify user credentials against the database.
     
@@ -74,18 +74,17 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
-                
 
     except mysql.connector.Error as er:
         return False, f"Database error: {er}"
     finally:
         connection.close()
 
-#-------------------------------------Streamlit Ui-----------------------------------------------------
-if not st.session_state.get('user'):
+# -------------------------------------Streamlit UI & Routing-----------------------------------------------------
+if not st.session_state.get('logged_in'):
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
-    input_pass = st.text_input("Password", type = "password")
+    input_pass = st.text_input("Password", type="password")
     button_login = st.button("Log in")
 
     if button_login:
@@ -95,27 +94,28 @@ if not st.session_state.get('user'):
             success, result = verify_login(input_id, input_pass)
 
             if success:
-                st.session_state.user = result
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = result
+                st.session_state["session_id"] = result["UserID"]
+                st.rerun()
             else:
-                success, result = verify_login(input_id, input_pass)
-
-                if success:
-                    st.session_state.user = result
-                    st.rerun()
-                else:
-                    st.error(result)
-    st.stop()
-
-
+                st.error(result)
+else:
+    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
     user = st.session_state.user
-    role = user['role']
+    role = user.get('role')
+
+    # Sidebar Logout Button
+    if st.sidebar.button("Log Out"):
+        st.session_state.clear()
+        st.rerun()
 
     # Define available pages
     exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
     dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
 
-    # Role → allowed pages
+    # Role -> allowed pages
     if role in {"IT/Admin", "Dean"}:
         allowed = [dashboard, exec_page, roster_page]
     elif role in {"Program_Chair", "Faculty_Advisor"}:
@@ -126,11 +126,6 @@ if not st.session_state.get('user'):
     if not allowed:
         st.error("No pages assigned to your role. Contact IT/Admin.")
         st.stop()
-
-    pg = st.navigation(allowed, position="sidebar")
-    st.sidebar.write("DEBUG — user:", st.session_state.get('user', {}).get('UserID'))
-    st.sidebar.write("DEBUG — allowed:", [p.title for p in allowed])
-    st.sidebar.write("DEBUG — about to run nav")
 
     pg = st.navigation(allowed, position="sidebar")
     pg.run()
