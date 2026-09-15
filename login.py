@@ -128,4 +128,9 @@ if not st.session_state.get('user'):
         st.stop()
 
     pg = st.navigation(allowed, position="sidebar")
+    st.sidebar.write("DEBUG — user:", st.session_state.get('user', {}).get('UserID'))
+    st.sidebar.write("DEBUG — allowed:", [p.title for p in allowed])
+    st.sidebar.write("DEBUG — about to run nav")
+
+    pg = st.navigation(allowed, position="sidebar")
     pg.run()
