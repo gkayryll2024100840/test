@@ -11,6 +11,35 @@ st.title("Project PULSE Dashboard")
 st.success(f"Welcome, {user['FirstName']} {user['LastName']}!")
 st.info(f"Your role is: **{user['role']}**")
 
+# Define which pages each role can access
+ROLE_PERMISSIONS = {
+    "IT/Admin": [
+        ("Executive Overview", "pages/executive_overview.py"),
+        ("Student Roster", "pages/student_roster.py"),
+    ],
+    "Program_Chair": [
+        ("Student Roster", "pages/student_roster.py"),
+    ],
+    # Fallback for other roles (Dean, Faculty_Advisor)
+    "Dean": [
+        ("Executive Overview", "pages/executive_overview.py"),
+        ("Student Roster", "pages/student_roster.py"),
+    ],
+    "Faculty_Advisor": [
+        ("Student Roster", "pages/student_roster.py"),
+    ],
+}
+
+allowed_pages = ROLE_PERMISSIONS.get(role, [])
+
+st.subheader("Menu")
+
+cols = st.columns(len(allowed_pages))
+for col, (label, page_path) in zip(cols, allowed_pages):
+    with col:
+        if st.button(label, use_container_width=True):
+            st.switch_page(page_path)
+
 with st.expander("Account details"):
     st.write(f"**User ID:** {user['UserID']}")
     st.write(f"**Email:** {user['email']}")
