@@ -96,7 +96,6 @@ if not st.session_state.get('user'):
 
             if success:
                 st.session_state.user = result
-                st.switch_page("dashboard_views/app.py")
             else:
                 success, result = verify_login(input_id, input_pass)
 
