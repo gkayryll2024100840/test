@@ -1,0 +1,10 @@
+//this makes last_sync.txt and local_logs.db hiddem
+{
+    "files.exclude": {
+        "**/*.db": false,
+        "**/*.txt": false
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system"
+}
+//to make it visible again, just change the true to false
+

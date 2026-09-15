@@ -1,0 +1,9 @@
+python -m streamlit run app.py
+
+git pull origin main --rebase
+git add student_roster.py last_sync.txt local_logs.db
+git commit -m "Update student roster and sync files"
+
+type sa terminal to get updated files sa github
+git stash
+git pull origin main
