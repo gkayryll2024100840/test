@@ -122,7 +122,5 @@ if not allowed:
     st.error("No pages assigned to your role. Contact IT/Admin.")
     st.stop()
 
-st.write("DEBUG B — user:", user.get('UserID'), "role:", role)
 pg = st.navigation(allowed, position="sidebar")
-st.write("DEBUG C — about to run page")
 pg.run()
