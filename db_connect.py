@@ -203,32 +203,50 @@ def get_available_cohorts():
         return []
 
 def check_column_exists(full_column_path):
-    """Parses a path like 'Student.StudentID' or 'dbo.Student.StudentID'
-
-    and checks if it exists in the MySQL database.
+    """Parses single or comma-separated paths (e.g. 'dbo.Students.FirstName, dbo.Students.LastName')
+    and checks if ALL columns exist in the MySQL database.
     """
-    parts = full_column_path.strip().split(".")
-    if len(parts) < 2:
+    if not full_column_path or not full_column_path.strip():
         return False
 
-    #extracts table name and column name from my sql
-    table_name = parts[-2]
-    column_name = parts[-1]
+    # Split by comma to handle concatenated fields like FirstName + LastName
+    raw_paths = [path.strip() for path in full_column_path.split(",") if path.strip()]
+
+    if not raw_paths:
+        return False
 
     try:
-        conn = get_db_connection() 
+        conn = get_db_connection()
         cursor = conn.cursor()
+
         query = """
-                SELECT COUNT(*) 
-                FROM INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_NAME = %s AND COLUMN_NAME = %s
-            """
-        cursor.execute(query, (table_name, column_name))
-        result = cursor.fetchone()
+            SELECT COUNT(*) 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = %s AND COLUMN_NAME = %s
+        """
+
+        for single_path in raw_paths:
+            parts = single_path.split(".")
+            if len(parts) < 2:
+                cursor.close()
+                conn.close()
+                return False
+
+            table_name = parts[-2]
+            column_name = parts[-1]
+
+            cursor.execute(query, (table_name, column_name))
+            result = cursor.fetchone()
+
+            # If any individual column in the list doesn't exist, fail validation
+            if not result or result[0] == 0:
+                cursor.close()
+                conn.close()
+                return False
+
         cursor.close()
         conn.close()
-        return result[0] > 0
-    
+        return True
+
     except Exception:
         return False
-

@@ -1,0 +1,9 @@
+{
+    "Student ID": "dbo.Students.StudentNumber",
+    "Student Name": "dbo.Students.FirstName, dbo.Students.LastName",
+    "Cohort": "dbo.Students.Cohort",
+    "Coursework Status": "dbo.Student_Lifecycle.CourseworkStatus",
+    "Comprehensive Exam Status": "dbo.Student_Lifecycle.CompExamStatus",
+    "Capstone Status": "dbo.Student_Lifecycle.CapstoneStatus",
+    "Assigned Advisor": "dbo.Advisor.AdvisorName"
+}

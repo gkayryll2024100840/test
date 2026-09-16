@@ -67,19 +67,16 @@ for field_label, db_column in st.session_state["current_mappings"].items():
 
     with col3:
         typed_path = new_column.strip()
-
         column_exists = check_column_exists(typed_path) if typed_path else False
 
         toggle_key = f"toggle_{field_label}"
-        if toggle_key not in st.session_state:
-            st.session_state[toggle_key] = column_exists
-        else:
-            if not column_exists:
-                st.session_state[toggle_key] = False
+
+        st.session_state[toggle_key] = column_exists
 
         is_active = st.toggle(
             "Mapped",
             key=toggle_key,
+            disabled=True
         )
 
         if not is_active or not column_exists:
