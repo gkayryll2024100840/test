@@ -1,19 +1,17 @@
 import json
 import os
 
-
 CONFIG_FILE = "field_mappings.json"
 
 DEFAULT_MAPPINGS = {
-    "Student ID": "dbo.Student.StudentID",
-    "Student Name": "dbo.Student.FullName",
-    "Cohort": "dbo.Enrollment.CohortLabel",
-    "Coursework Status": "dbo.CourseworkTracking.Status",
-    "Comprehensive Exam Status": "dbo.CompExamTracking.Status",
-    "Capstone Status": "dbo.CapstoneTracking.Status",
-    "Assigned Advisor": "dbo.AdvisorAssignment.AdvisorName",
+    "Student ID": "dbo.Students.StudentNumber",
+    "Student Name": "dbo.Students.FirstName, dbo.Students.LastName",
+    "Cohort": "dbo.Students.Cohort",
+    "Coursework Status": "dbo.Student_Lifecycle.CourseworkStatus",
+    "Comprehensive Exam Status": "dbo.Student_Lifecycle.CompExamStatus",
+    "Capstone Status": "dbo.Student_Lifecycle.CapstoneStatus",
+    "Assigned Advisor": "dbo.Advisor.AdvisorName",
 }
-
 
 def load_mappings():
   """Loads field mappings from persistent storage."""

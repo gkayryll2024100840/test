@@ -38,41 +38,38 @@ def get_db_connection():
     """
     return mysql.connector.connect(**db_config)
 
-# Can python successfully talk to SQL DB?
+def format_mysql_error(err):
+    """Translates MySQL error codes into clean error messages."""
+    error_code = err.errno
+
+    if error_code == 1045:
+        return "Authentication failed: Check database username or password in .env"
+    elif error_code == 1049:
+        return "Database not found: Verify DB_NAME in your environment configuration"
+    elif error_code == 1146:
+        return "Schema error: Required database table is missing"
+    elif error_code in (2003, 2026):
+        return "Connection timeout to SQL Server host"
+    elif error_code in (2013, 2006):
+        return "Network socket closed unexpectedly during bulk data transfer"
+    else:
+        return f"Database error ({error_code}): {err.msg}"
+
 def trigger_data_sync(login_id=None):
-    """Attempts data sync with Aiven MySQL, logging failures locally if connection fails."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        # Tests the connection to the cloud database by running this query
         cursor.execute("SELECT * FROM Students LIMIT 1")
         cursor.fetchall()
         cursor.close()
         conn.close()
-        
-        # Successful sync updates last_sync.txt and returns true
+
         with open("last_sync.txt", "w") as f:
             f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         return True  
 
-    # Handle MySQL errors  
     except mysql.connector.Error as err:
-        error_code = err.errno
-
-        if error_code == 1045:
-            msg = "Authentication failed: Check database username or password in .env"
-        elif error_code == 1049:
-            msg = "Database not found: Verify DB_NAME in your environment configuration"
-        elif error_code == 1146:
-            msg = "Schema error: Required database table is missing"
-        elif error_code in (2003, 2026):
-            msg = "Connection timeout to SQL Server host"
-        elif error_code in (2013, 2006):
-            msg = "Network socket closed unexpected during bulk data transfer"
-        else:
-            msg = f"Database error ({error_code}): {err.msg}"
-            
-        # If sync fails, log to local SQLite
+        msg = format_mysql_error(err)
         log_sync_attempt_local("FAILED", error_message=msg, login_id=login_id)
         return False
 
@@ -215,28 +212,45 @@ def get_available_cohorts():
         return []
 
 def check_column_exists(full_column_path):
-    """Parses a path like 'Student.StudentID' or 'dbo.Student.StudentID'
-    and checks if it exists in the MySQL database.
+    """Parses single or comma-separated paths (e.g. 'dbo.Students.FirstName, dbo.Students.LastName')
+    and checks if ALL columns exist in the MySQL database.
     """
-    parts = full_column_path.strip().split(".")
-    if len(parts) < 2:
+    if not full_column_path or not full_column_path.strip():
         return False
 
-    table_name = parts[-2]
-    column_name = parts[-1]
+    # Split by comma to handle concatenated fields like FirstName + LastName
 
     try:
-        conn = get_db_connection() 
+        conn = get_db_connection()
         cursor = conn.cursor()
         query = """
             SELECT COUNT(*) 
             FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_NAME = %s AND COLUMN_NAME = %s
         """
-        cursor.execute(query, (table_name, column_name))
-        result = cursor.fetchone()
+
+        for single_path in raw_paths:
+            parts = single_path.split(".")
+            if len(parts) < 2:
+                cursor.close()
+                conn.close()
+                return False
+
+            table_name = parts[-2]
+            column_name = parts[-1]
+
+            cursor.execute(query, (table_name, column_name))
+            result = cursor.fetchone()
+
+            # If any individual column in the list doesn't exist, fail validation
+            if not result or result[0] == 0:
+                cursor.close()
+                conn.close()
+                return False
+
         cursor.close()
         conn.close()
-        return result[0] > 0
+        return True
+
     except Exception:
         return False

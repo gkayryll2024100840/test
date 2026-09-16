@@ -1,8 +1,18 @@
 import os
 import hashlib
+import uuid
 import streamlit as st
 import mysql.connector
-from db_connect import get_db_connection
+from dotenv import load_dotenv
+from db_connect import get_db_connection, format_mysql_error
+from system_log import log_sync_attempt_local
+
+load_dotenv()
+
+#creates session ID
+#for us-16. Used to track sync attempts and log the errors in local_logs.db
+if "session_id" not in st.session_state:
+    st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
 
 MAX_FAILED_ATTEMPTS = 3
 
@@ -38,10 +48,14 @@ def verify_login(user_id, password):
     - On success: (True, user_dict)
     - On failure: (False, error_message)
     """
+    session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
+
     try:
         connection = get_db_connection()
     except mysql.connector.Error as e:
-        return False, f"Database connection error: {e}"
+        msg = format_mysql_error(e)
+        log_sync_attempt_local(status="FAILED", error_message=msg, login_id=session_id)
+        return False, msg
 
     try:
         with connection.cursor(dictionary=True) as cursor:
@@ -76,6 +90,7 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Verify using email."
 
     except mysql.connector.Error as er:
+        log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
         return False, f"Database error: {er}"
     finally:
         connection.close()
@@ -92,11 +107,10 @@ if not st.session_state.get('logged_in'):
             st.warning("Please enter both User ID and Password.")
         else:
             success, result = verify_login(input_id, input_pass)
-
             if success:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = result
-                st.session_state["session_id"] = result["UserID"]
+                st.session_state["session_id"] = str(result.get("UserID", "default_admin"))
                 st.rerun()
             else:
                 st.error(result)
@@ -105,21 +119,26 @@ else:
     user = st.session_state.user
     role = user.get('role')
 
-    # Sidebar Logout Button
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
 
-    # Define available pages
-    exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
-    roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
-    dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
+    # Define all available pages
+    dashboard    = st.Page("dashboard_views/app.py",                title="Dashboard")
+    exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
+    roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
+    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile")
+    config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
 
-    # Role -> allowed pages
-    if role in {"IT/Admin", "Dean"}:
-        allowed = [dashboard, exec_page, roster_page]
-    elif role in {"Program_Chair", "Faculty_Advisor"}:
-        allowed = [dashboard, roster_page]
+    # Role-based page access control
+    if role == "Dean":
+        allowed = [dashboard, exec_page, roster_page, profile_page, config_page]
+    elif role == "IT/Admin":
+        allowed = [dashboard, config_page]
+    elif role == "Program_Chair":
+        allowed = [dashboard, exec_page, roster_page, profile_page]
+    elif role == "Faculty_Advisor":
+        allowed = [dashboard, roster_page, exec_page]
     else:
         allowed = []
 
