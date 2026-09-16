@@ -4,7 +4,7 @@ import uuid
 import streamlit as st
 import mysql.connector
 from dotenv import load_dotenv
-from db_connect import get_db_connection, format_mysql_error
+from db_connect import get_db_connection
 from system_log import log_sync_attempt_local
 
 load_dotenv()
