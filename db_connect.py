@@ -84,7 +84,8 @@ def get_student_roster_data():
                 a.AdvisorName AS Advisor,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
-                sl.CapstoneStatus
+                sl.CapstoneStatus,
+                sl.LastUpdated
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
             LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID

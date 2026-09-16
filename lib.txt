@@ -15,3 +15,9 @@ how to create .venv
 
 activate venv
     .venv\Scripts\Activate.ps1
+
+#getting back to branch
+.\.venv\Scripts\Activate
+pip install -r requirements.txt
+git branch
+git checkout <your-branch-name>
