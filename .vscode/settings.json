@@ -1,3 +1,16 @@
+<<<<<<< HEAD
 {
     "python-envs.defaultEnvManager": "ms-python.python:system"
 }
+=======
+//this makes last_sync.txt and local_logs.db hiddem
+{
+    "files.exclude": {
+        "**/*.db": false,
+        "**/*.txt": false
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system"
+}
+//to make it visible again, just change the true to false
+
+>>>>>>> e67ed423950d8133be4812a6ff5392c5e6c0759d

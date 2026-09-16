@@ -1,47 +1,41 @@
 import os
 import hashlib
-import pymysql
+import uuid
 import streamlit as st
+import mysql.connector
 from dotenv import load_dotenv
+from db_connect import get_db_connection, format_mysql_error
+from system_log import log_sync_attempt_local
 
 load_dotenv()
-timeout = 10
 
-#connect to database
-DB_CONFIG = {
-    'charset': "utf8mb4",
-    'connect_timeout': 10,
-    'cursorclass': pymysql.cursors.DictCursor,
-    'database': "defaultdb",
-    'host': os.getenv('DB_HOST'),
-    'password': os.getenv('DB_PASSWORD'),
-    'read_timeout': 10,
-    'port': int(os.getenv('DB_PORT', 25535)),
-    'user': os.getenv('DB_USER'),
-    'write_timeout': 10,
-}
+#creates session ID
+#for us-16. Used to track sync attempts and log the errors in local_logs.db
+if "session_id" not in st.session_state:
+    st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
 
 MAX_FAILED_ATTEMPTS = 3
 
+#Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
 def log_failed_attempt(user_id, ip_address=None):
     """Insert a wrong-password attempt into login_logs."""
     try:
-        connection = pymysql.connect(**DB_CONFIG)
-    except pymysql.Error:
+        connection = get_db_connection()
+    except mysql.connector.Error:
         return
 
     try:
-        with connection.cursor() as cursor:
+        with connection.cursor(dictionary=True) as cursor:
             sql = """
                 INSERT INTO login_logs (UserID, ip_address, attempted_at)
                 VALUES (%s, %s, NOW())
             """
             cursor.execute(sql, (user_id, ip_address))
             connection.commit()
-    except pymysql.Error as e:
+    except mysql.connector.Error as e:
         st.warning(f"⚠️ Log failed: {e}")
     finally:
         connection.close()
@@ -54,13 +48,17 @@ def verify_login(user_id, password):
     - On success: (True, user_dict)
     - On failure: (False, error_message)
     """
-    try:
-        connection = pymysql.connect(**DB_CONFIG)
-    except pymysql.Error as e:
-        return False, f"Database connection error: {e}"
+    session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
 
     try:
-        with connection.cursor() as cursor:
+        connection = get_db_connection()
+    except mysql.connector.Error as e:
+        msg = format_mysql_error(e)
+        log_sync_attempt_local(status="FAILED", error_message=msg, login_id=session_id)
+        return False, msg
+
+    try:
+        with connection.cursor(dictionary=True) as cursor:
             sql = """
                 SELECT UserID, FirstName, LastName, password_hash, salt, role, email
                 FROM Users
@@ -92,33 +90,62 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Verify using email."
                 
 
-    except pymysql.Error as er:
+    except mysql.connector.Error as er:
+        log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
         return False, f"Database error: {er}"
     finally:
         connection.close()
 
 #-------------------------------------Streamlit Ui-----------------------------------------------------
+# --- If NOT logged in: show the login form ---
+if not st.session_state.get('user'):
+    st.title("Project PULSE Login Page")
+    input_id = st.text_input("User ID")
+    input_pass = st.text_input("Password", type="password")
+    button_login = st.button("Log in")
 
-st.title("Project PULSE Login Page")
-input_id = st.text_input("User ID")
-input_pass = st.text_input("Password", type = "password")
-button_login = st.button("Log in")
-
-if button_login:
-    if not input_id or not input_pass:
-        st.warning("Please enter both User ID and Password.")
-    else:
-        success, result = verify_login(input_id, input_pass)
-
-        if success:
-            user = result
-            st.success(f"Welcome, {user['FirstName']} {user['LastName']}!")
-            st.info(f"Your role is: **{user['role']}**")
-            # Optionally display more info (for testing only)
-            with st.expander("Account details"):
-                st.write(f"**User ID:** {user['UserID']}")
-                st.write(f"**Email:** {user['email']}")
-                st.write(f"**Role:** {user['role']}")
+    if button_login:
+        if not input_id or not input_pass:
+            st.warning("Please enter both User ID and Password.")
         else:
-            st.error(result)
+            success, result = verify_login(input_id, input_pass)
+            if success:
+                st.session_state.user = result
+                st.rerun()           # re-run; the nav block below will now execute
+            else:
+                st.error(result)
 
+    st.stop()       # stop the login render here
+
+
+# --- If LOGGED IN: build navigation and run the current page ---
+user = st.session_state.user
+role = user['role']
+
+#ensures that session id exists if page is refreshed while logged in
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(user.get('UserID', 'default_admin'))
+
+dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
+exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
+roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
+profile_page = st.Page("dashboard_views/student_profile.py", title="Student Profile")
+config_page = st.Page("dashboard_views/admin_config.py", title="Admin Config")
+
+if role == "Dean":
+    allowed = [dashboard, exec_page, roster_page, profile_page, config_page]
+elif role == "IT/Admin":
+    allowed = [dashboard, config_page]    
+elif role == "Program_Chair":
+    allowed = [dashboard, exec_page, roster_page, profile_page]
+elif role == "Faculty_Advisor":
+    allowed = [dashboard, roster_page, exec_page]
+else:
+    allowed = []
+
+if not allowed:
+    st.error("No pages assigned to your role. Contact IT/Admin.")
+    st.stop()
+
+pg = st.navigation(allowed, position="sidebar")
+pg.run()
