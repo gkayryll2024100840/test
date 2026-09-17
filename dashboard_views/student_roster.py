@@ -103,7 +103,7 @@ if not df.empty:
     # Using st.page_link keeps navigation inside Streamlit's SPA router so session state is preserved
     col_widths = [1.2, 2.2, 0.9, 1.8, 1.2, 1.2, 1.6, 1.1]
 
-    header_cols = st.columns(col_widths)
+    header_cols = st.columns(col_widths, vertical_alignment="center")
     header_labels = [
         "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
         "COURSEWORK", "COMP EXAM", "CAPSTONE", "RISK STATUS"
@@ -132,7 +132,7 @@ if not df.empty:
             risk_text = calculate_risk_status(cw_status, ce_status, cp_status)
             risk_pill = render_status_pill(risk_text)
 
-            r_cols = st.columns(col_widths)
+            r_cols = st.columns(col_widths, vertical_alignment="center")
             r_cols[0].markdown(f'<span class="roster-cell-id">{s_id}</span>', unsafe_allow_html=True)
             r_cols[1].page_link(
                 "dashboard_views/student_profile.py",
