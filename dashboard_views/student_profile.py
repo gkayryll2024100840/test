@@ -102,23 +102,23 @@ if not df.empty:
         ce_pill = render_status_pill(current_ce)
         cp_pill = render_status_pill(current_cp)
 
-        lifecycle_markup = (
-            '<div class="lifecycle-cards-container">'
-            '<div class="lifecycle-card">'
-            '<div class="lifecycle-card-title">Coursework</div>'
-            f'{cw_pill}'
-            '</div>'
-            '<div class="lifecycle-card">'
-            '<div class="lifecycle-card-title">Comprehensive Exam</div>'
-            f'{ce_pill}'
-            '</div>'
-            '<div class="lifecycle-card">'
-            '<div class="lifecycle-card-title">Capstone Paper</div>'
-            f'{cp_pill}'
-            '</div>'
-            '</div>'
-        )
-        st.markdown(lifecycle_markup, unsafe_allow_html=True)
+        cards_html = f"""
+        <div class="lifecycle-row">
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">COURSEWORK STATUS</div>
+                {cw_pill}
+            </div>
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">COMPREHENSIVE EXAM STATUS</div>
+                {ce_pill}
+            </div>
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">CAPSTONE PAPER STATUS</div>
+                {cp_pill}
+            </div>
+        </div>
+        """
+        st.markdown(cards_html, unsafe_allow_html=True)
 
 else:
     st.info("No student records available. Please ensure database connection is established.")

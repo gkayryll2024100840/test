@@ -551,31 +551,33 @@ div[data-testid="stPageLink"] a:focus {{
     outline: none !important;
 }}
 
-/* Student Profile Cards - Matched to Reference Spec */
+/* Student Profile Cards - Lifecycle Row & Cards */
+.lifecycle-row,
 .lifecycle-cards-container {{
     display: flex !important;
     flex-direction: row !important;
-    flex-wrap: wrap !important;
-    align-items: stretch !important;
     gap: 16px !important;
-    width: 100% !important;
-    margin-top: 14px !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    margin-top: 8px !important;
     margin-bottom: 24px !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
 }}
 
 .lifecycle-card {{
-    flex: 0 0 auto !important;
-    width: fit-content !important;
+    min-width: 220px !important;
+    width: auto !important;
     box-sizing: border-box !important;
     background-color: var(--lifecycle-card-bg, #232E42) !important;
     border: 1px solid var(--lifecycle-card-border, rgba(255, 255, 255, 0.06)) !important;
-    border-radius: 22px !important;
-    padding: 20px 24px !important;
+    border-radius: 20px !important;
+    padding: 18px 24px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
-    justify-content: space-between !important;
-    gap: 14px !important;
+    justify-content: center !important;
+    gap: 12px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }}
 
