@@ -110,7 +110,6 @@ if not st.session_state.get('logged_in'):
             if success:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = result
-                st.session_state["session_id"] = str(result.get("UserID", "default_admin"))
                 st.rerun()
             else:
                 st.error(result)
