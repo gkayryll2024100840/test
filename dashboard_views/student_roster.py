@@ -1,11 +1,12 @@
+from attrs import field
 import streamlit as st
 import pandas as pd
 from db_connect import (
-    get_student_roster_data, 
-    get_last_updated_time, 
-    trigger_data_sync, 
+    get_student_roster_data,
+    get_last_updated_time,
+    trigger_data_sync,
     get_max_retry_count,
-    get_available_cohorts  
+    get_available_cohorts
 )
 from dashboard_views.components import (
     DARK_MODE_CSS, 
@@ -25,6 +26,36 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 
 active_login_id = getattr(st.session_state, "session_id", None)
 
+    # Yellow — in progress / attention
+    "In-Progress":             "background-color: #E69F00; color: black;",
+
+    # Red — cancelled / incomplete / pending
+    "Cancelled":               "background-color: #D55E00; color: white;",
+    "Incomplete":              "background-color: #D55E00; color: white;",
+    "Pending":                 "background-color: #D55E00; color: white;",
+}
+
+# Source column names as returned by db_connect.get_student_roster_data()
+LIFECYCLE_COLUMNS = ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]
+
+def _rename_header(col_name: str) -> str:
+    """Convert CamelCase to UPPERCASE WITH SPACES (e.g. CourseworkStatus → COURSEWORK STATUS)."""
+    return re.sub(r"(?<!^)(?=[A-Z])", " ", col_name).upper()
+
+# Precompute renamed lifecycle headers (post-rename names used in the Styler subset)
+RENAMED_LIFECYCLE_COLS = [_rename_header(c) for c in LIFECYCLE_COLUMNS]
+
+def color_status(val):
+    """Return CSS for a lifecycle status value."""
+    return STATUS_COLORS.get(str(val).strip(), "")
+
+
+# ---------------------------------------------------------------
+# session_state defined safely
+# ---------------------------------------------------------------
+active_login_id = st.session_state.get("session_id", None)
+
+# Check repeated failures specifically for THIS session
 if active_login_id:
     retry_count = get_max_retry_count(active_login_id)
     if retry_count > 1:
@@ -36,6 +67,7 @@ col_title, col_action = st.columns([2.5, 1.5])
 with col_title:
     st.title("Student Roster")
 
+# refresh button and last sync timestamp
 with col_action:
     last_sync = get_last_updated_time()
     st.caption(f"Last Refreshed: {last_sync}")
@@ -50,6 +82,7 @@ with col_action:
 
 st.markdown("---")
 
+# displays student roster in table format
 df = get_student_roster_data()
 
 if not df.empty:
@@ -68,11 +101,13 @@ if not df.empty:
         cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
 
     with col_sort:
+        # sorting map (only these columns can be the basis of sorting the table)
         sort_map = {
             "Student Name": "Student",
             "Student ID": "StudentNumber",
             "Cohort": "Cohort",
         }
+        # dropdown selector
         sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
 
     # Apply Filters
@@ -161,4 +196,6 @@ if not df.empty:
                     st.switch_page("dashboard_views/student_profile.py")
 
 else:
-    st.info("No student records found in the database or connection issue occurred.")
+    st.info(
+        "No student records found in the database or connection issue occurred."
+    )
