@@ -130,7 +130,7 @@ else:
     has_student_target = bool(st.query_params.get("student_id") or st.session_state.get("selected_student_override"))
 
     # Define all available pages
-    home    = st.Page("dashboard_views/app.py",                title="Dashboard",        default=not has_student_target)
+    home    = st.Page("dashboard_views/app.py",                title="Home",        default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
     profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",  default=has_student_target)
