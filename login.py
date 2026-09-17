@@ -121,6 +121,7 @@ else:
 
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
+        st.session_state.failed_attempts = 0
         st.rerun()
 
     # Define all available pages
