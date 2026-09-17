@@ -10,11 +10,10 @@ from db_connect import (
 )
 
 # Only import these if dashboard_views/components.py actually exists.
-# If it doesn't, delete this block and the three references to it below.
+# If it doesn't, delete this block and the two references to it below.
 from dashboard_views.components import (
     DARK_MODE_CSS,
     render_status_pill,
-    calculate_risk_status
 )
 
 st.set_page_config(page_title="Student Roster", layout="wide")
@@ -26,37 +25,6 @@ st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to access the student roster.")
     st.stop()
-
-# ---------------------------------------------------------------
-# Colorblind-safe status -> CSS mapping (Okabe-Ito palette)
-# Only used if you fall back to a styled st.dataframe.
-# With the pill-based layout, render_status_pill handles colors.
-# ---------------------------------------------------------------
-STATUS_COLORS = {
-    "Completed":               "background-color: #009E73; color: white;",
-    "Passed":                  "background-color: #009E73; color: white;",
-    "Defended for Completion": "background-color: #009E73; color: white;",
-    "In-Progress":             "background-color: #E69F00; color: black;",
-    "Cancelled":               "background-color: #D55E00; color: white;",
-    "Incomplete":              "background-color: #D55E00; color: white;",
-    "Pending":                 "background-color: #D55E00; color: white;",
-}
-
-LIFECYCLE_COLUMNS = ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]
-
-
-def _rename_header(col_name: str) -> str:
-    """CamelCase -> UPPERCASE WITH SPACES (CourseworkStatus -> COURSEWORK STATUS)."""
-    return re.sub(r"(?<!^)(?=[A-Z])", " ", col_name).upper()
-
-
-RENAMED_LIFECYCLE_COLS = [_rename_header(c) for c in LIFECYCLE_COLUMNS]
-
-
-def color_status(val):
-    """Return CSS for a lifecycle status value."""
-    return STATUS_COLORS.get(str(val).strip(), "")
-
 
 # ---------------------------------------------------------------
 # Session state
@@ -139,12 +107,13 @@ if not df.empty:
     )
 
     # ----------------- Enterprise Roster Grid -----------------
-    col_widths = [1.2, 2.2, 0.9, 1.8, 1.2, 1.2, 1.6, 1.1]
+    # Column widths tuned for 7 columns (was 8 with Risk Status)
+    col_widths = [1.2, 2.4, 1.0, 2.0, 1.3, 1.3, 1.3]
 
     header_cols = st.columns(col_widths, vertical_alignment="center")
     header_labels = [
         "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
-        "COURSEWORK", "COMP EXAM", "CAPSTONE", "RISK STATUS"
+        "COURSEWORK", "COMP EXAM", "CAPSTONE"
     ]
     for col, label in zip(header_cols, header_labels):
         col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
@@ -167,9 +136,6 @@ if not df.empty:
             ce_pill = render_status_pill(ce_status)
             cp_pill = render_status_pill(cp_status)
 
-            risk_text = calculate_risk_status(cw_status, ce_status, cp_status)
-            risk_pill = render_status_pill(risk_text)
-
             r_cols = st.columns(col_widths)
             r_cols[0].markdown(
                 f'<span class="roster-cell-id">{s_id}</span>',
@@ -191,7 +157,6 @@ if not df.empty:
             r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
             r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
             r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
-            r_cols[7].markdown(risk_pill, unsafe_allow_html=True)
             st.markdown(
                 '<div class="roster-row-divider"></div>',
                 unsafe_allow_html=True
