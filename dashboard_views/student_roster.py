@@ -69,7 +69,7 @@ if not df.empty:
     with col_search:
         search_query = st.text_input(
             "SEARCH:",
-            placeholder="Search by student name or ID...",
+            placeholder="Student name or ID...",
             label_visibility="visible"
         )
 
