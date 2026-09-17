@@ -64,7 +64,7 @@ df = get_student_roster_data()
 
 if not df.empty:
     # ----------------- Clean Filter & Search Rhythm -----------------
-    col_search, col_cohort, col_sort = st.columns([3, 2, 2])
+    col_search, col_cohort, col_sort = st.columns([3.5, 2, 2])
 
     with col_search:
         search_query = st.text_input(
