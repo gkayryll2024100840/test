@@ -26,35 +26,6 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 
 active_login_id = getattr(st.session_state, "session_id", None)
 
-    # Yellow — in progress / attention
-    "In-Progress":             "background-color: #E69F00; color: black;",
-
-    # Red — cancelled / incomplete / pending
-    "Cancelled":               "background-color: #D55E00; color: white;",
-    "Incomplete":              "background-color: #D55E00; color: white;",
-    "Pending":                 "background-color: #D55E00; color: white;",
-}
-
-# Source column names as returned by db_connect.get_student_roster_data()
-LIFECYCLE_COLUMNS = ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]
-
-def _rename_header(col_name: str) -> str:
-    """Convert CamelCase to UPPERCASE WITH SPACES (e.g. CourseworkStatus → COURSEWORK STATUS)."""
-    return re.sub(r"(?<!^)(?=[A-Z])", " ", col_name).upper()
-
-# Precompute renamed lifecycle headers (post-rename names used in the Styler subset)
-RENAMED_LIFECYCLE_COLS = [_rename_header(c) for c in LIFECYCLE_COLUMNS]
-
-def color_status(val):
-    """Return CSS for a lifecycle status value."""
-    return STATUS_COLORS.get(str(val).strip(), "")
-
-
-# ---------------------------------------------------------------
-# session_state defined safely
-# ---------------------------------------------------------------
-active_login_id = st.session_state.get("session_id", None)
-
 # Check repeated failures specifically for THIS session
 if active_login_id:
     retry_count = get_max_retry_count(active_login_id)
