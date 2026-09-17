@@ -5,16 +5,31 @@ from datetime import datetime
 from dotenv import load_dotenv 
 from system_log import log_sync_attempt_local, get_system_logs_local, get_max_retry_count_local
 
-#load database credentials from .env file into memory 
+# Load database credentials from .env file into memory 
 load_dotenv(override=True)  
 
-#dictionary mappping for env details
+# Dictionary mapping for env details
 db_config = {
     "host": os.getenv("DB_HOST"),
     "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
     "database": os.getenv("DB_NAME"),
     "port": int(os.getenv("DB_PORT", 3306))
+}
+
+# Standardized status mapping for US-07, US-08, and US-09
+LIFECYCLE_STATUS_MAP = {
+    # US-07: Pending, Cancelled, Completed
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "completed": "Completed",
+    # US-08: In-Progress, Incomplete, Passed
+    "in-progress": "In-Progress",
+    "incomplete": "Incomplete",
+    "passed": "Passed",
+    # US-09: In-Progress, Defended for Completion
+    "defended for completion": "Defended for Completion",
+    "defended": "Defended for Completion"
 }
 
 def get_db_connection():
@@ -62,7 +77,7 @@ def trigger_data_sync(login_id=None):
         log_sync_attempt_local("FAILED", error_message=str(e), login_id=login_id)
         return False
 
-# Retrieve system_logs.py for admin view. usueful for centralized retrieval 
+# Retrieve system_logs.py for admin view
 def get_system_logs():
     """Wrapper to pull logs from local SQLite storage for admin view."""
     return get_system_logs_local()
@@ -71,7 +86,7 @@ def get_max_retry_count(login_id):
     """Wrapper to check retry count from local storage."""
     return get_max_retry_count_local(login_id)
 
-#connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
+# Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
 def get_student_roster_data():
     try:
         conn = mysql.connector.connect(**db_config)
@@ -92,27 +107,24 @@ def get_student_roster_data():
         df = pd.read_sql(query, conn)
         conn.close()
 
-        # Format casing to match US-08 acceptance criteria
-        status_map = {
-            'in-progress': 'In-Progress',
-            'incomplete': 'Incomplete',
-            'passed': 'Passed'
-        }
-        if 'CompExamStatus' in df.columns:
-            df['CompExamStatus'] = (
-                df['CompExamStatus']
-                .astype(str)
-                .str.lower()
-                .map(status_map)
-                .fillna(df['CompExamStatus'])
-            )
+        # Normalize lifecycle columns for US-07, US-08, and US-09
+        for col in ['CourseworkStatus', 'CompExamStatus', 'CapstoneStatus']:
+            if col in df.columns:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .map(LIFECYCLE_STATUS_MAP)
+                    .fillna(df[col])
+                )
 
         return df
     except Exception as e:
         print(f"Failed to fetch roster data: {e}")
         return pd.DataFrame()
 
-#checks last_sync.txt for the last successful sync timestamp. Returns "No sync recorded" if file doesn't exist or is empty.
+# Checks last_sync.txt for the last successful sync timestamp
 def get_last_updated_time():
     try:
         if os.path.exists("last_sync.txt"):
@@ -123,12 +135,7 @@ def get_last_updated_time():
         return "Unavailable"
 
 def get_student_profile_data(student_number):
-    """
-    Fetches full student details, lifecycle statuses, assigned advisor, 
-    and enrollment status for a specific student number. 
-    
-    Used for the Student Profile page.
-    """
+    """Fetches full student details for a specific student number."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
@@ -154,6 +161,13 @@ def get_student_profile_data(student_number):
         
         cursor.close()
         conn.close()
+
+        # Normalize single record values if present
+        if student_data:
+            for col in ['CourseworkStatus', 'CompExamStatus', 'CapstoneStatus']:
+                val = str(student_data.get(col, "")).strip().lower()
+                if val in LIFECYCLE_STATUS_MAP:
+                    student_data[col] = LIFECYCLE_STATUS_MAP[val]
         
         return student_data
 
@@ -161,11 +175,8 @@ def get_student_profile_data(student_number):
         print(f"Failed to fetch student details: {e}")
         return None
 
-
 def get_enrollment_count(status_filter="All"):
-    """
-    Fetches the total count of MBA students based on EnrollmentStatus filter.
-    """
+    """Fetches the total count of MBA students based on EnrollmentStatus filter."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -186,9 +197,7 @@ def get_enrollment_count(status_filter="All"):
         return 0
 
 def get_available_cohorts():
-    """
-    Fetches distinct cohort values for the Student Roster dropdown filter.
-    """
+    """Fetches distinct cohort values for the Student Roster dropdown filter."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -210,15 +219,10 @@ def check_column_exists(full_column_path):
         return False
 
     # Split by comma to handle concatenated fields like FirstName + LastName
-    raw_paths = [path.strip() for path in full_column_path.split(",") if path.strip()]
-
-    if not raw_paths:
-        return False
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
         query = """
             SELECT COUNT(*) 
             FROM INFORMATION_SCHEMA.COLUMNS 

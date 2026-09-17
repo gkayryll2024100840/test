@@ -16,8 +16,3 @@ with st.expander("Account details"):
     st.write(f"**Email:** {user['email']}")
     st.write(f"**Role:** {user['role']}")
 
-#cleans up session id when logging out
-if st.button("Log out"):
-    st.session_state.user = None
-    st.session_state.failed_attempts = 0
-    st.rerun()

@@ -16,7 +16,7 @@ if "session_id" not in st.session_state:
 
 MAX_FAILED_ATTEMPTS = 3
 
-#Logs unauthorized access attempts
+# Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
@@ -40,7 +40,7 @@ def log_failed_attempt(user_id, ip_address=None):
     finally:
         connection.close()
 
-#login verify
+# Login verify
 def verify_login(user_id, password):
     """Verify user credentials against the database.
     
@@ -88,7 +88,6 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else: 
                     return False, "Invalid User ID or password. Verify using email."
-                
 
     except mysql.connector.Error as er:
         log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
@@ -96,9 +95,8 @@ def verify_login(user_id, password):
     finally:
         connection.close()
 
-#-------------------------------------Streamlit Ui-----------------------------------------------------
-# --- If NOT logged in: show the login form ---
-if not st.session_state.get('user'):
+# -------------------------------------Streamlit UI & Routing-----------------------------------------------------
+if not st.session_state.get('logged_in'):
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
     input_pass = st.text_input("Password", type="password")
@@ -110,42 +108,44 @@ if not st.session_state.get('user'):
         else:
             success, result = verify_login(input_id, input_pass)
             if success:
-                st.session_state.user = result
-                st.rerun()           # re-run; the nav block below will now execute
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = result
+                st.session_state["session_id"] = str(result.get("UserID", "default_admin"))
+                st.rerun()
             else:
                 st.error(result)
-
-    st.stop()       # stop the login render here
-
-
-# --- If LOGGED IN: build navigation and run the current page ---
-user = st.session_state.user
-role = user['role']
-
-#ensures that session id exists if page is refreshed while logged in
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(user.get('UserID', 'default_admin'))
-
-dashboard   = st.Page("dashboard_views/app.py",                title="Dashboard")
-exec_page   = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
-roster_page = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
-profile_page = st.Page("dashboard_views/student_profile.py", title="Student Profile")
-config_page = st.Page("dashboard_views/admin_config.py", title="Admin Config")
-
-if role == "Dean":
-    allowed = [dashboard, exec_page, roster_page, profile_page, config_page]
-elif role == "IT/Admin":
-    allowed = [dashboard, config_page]    
-elif role == "Program_Chair":
-    allowed = [dashboard, exec_page, roster_page, profile_page]
-elif role == "Faculty_Advisor":
-    allowed = [dashboard, roster_page, exec_page]
 else:
-    allowed = []
+    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
+    user = st.session_state.user
+    role = user.get('role')
 
-if not allowed:
-    st.error("No pages assigned to your role. Contact IT/Admin.")
-    st.stop()
+    if st.sidebar.button("Log Out"):
+        st.session_state.clear()
+        st.session_state.failed_attempts = 0
+        st.rerun()
 
-pg = st.navigation(allowed, position="sidebar")
-pg.run()
+    # Define all available pages
+    dashboard    = st.Page("dashboard_views/app.py",                title="Dashboard")
+    exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
+    roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
+    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile")
+    config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
+
+    # Role-based page access control
+    if role == "Dean":
+        allowed = [dashboard, exec_page, roster_page, profile_page, config_page]
+    elif role == "IT/Admin":
+        allowed = [dashboard, config_page]
+    elif role == "Program_Chair":
+        allowed = [dashboard, exec_page, roster_page, profile_page]
+    elif role == "Faculty_Advisor":
+        allowed = [dashboard, roster_page, exec_page]
+    else:
+        allowed = []
+
+    if not allowed:
+        st.error("No pages assigned to your role. Contact IT/Admin.")
+        st.stop()
+
+    pg = st.navigation(allowed, position="sidebar")
+    pg.run()
