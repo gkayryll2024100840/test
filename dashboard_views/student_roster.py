@@ -197,25 +197,6 @@ if not df.empty:
                 unsafe_allow_html=True
             )
 
-    # ----------------- Quick Jump Navigation -----------------
-    if not df_filtered.empty:
-        with st.expander("Quick Jump by Student Dropdown", expanded=False):
-            col_jump_sel, col_jump_btn = st.columns([3, 1])
-            student_dict = {
-                f"{r['StudentNumber']} - {r['Student']}": str(r['StudentNumber'])
-                for _, r in df_filtered.iterrows()
-            }
-            with col_jump_sel:
-                jump_target = st.selectbox(
-                    "SELECT STUDENT:",
-                    list(student_dict.keys()),
-                    label_visibility="collapsed"
-                )
-            with col_jump_btn:
-                if st.button("Open Selected Profile", use_container_width=True):
-                    st.session_state["selected_student_override"] = student_dict[jump_target]
-                    st.switch_page("dashboard_views/student_profile.py")
-
 else:
     st.info(
         "No student records found in the database or connection issue occurred."
