@@ -19,9 +19,6 @@ from dashboard_views.components import (
 
 st.set_page_config(page_title="Student Roster", layout="wide")
 
-# Inject unified dark mode styling
-st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
-
 # Defensive session check
 if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to access the student roster.")
