@@ -1,60 +1,134 @@
 import streamlit as st
+import pandas as pd
 from db_connect import get_student_roster_data
+from dashboard_views.components import (
+    DARK_MODE_CSS, 
+    render_status_pill, 
+    calculate_risk_status
+)
 
 st.set_page_config(page_title="Student Profile", layout="wide")
+
+# Inject unified dark mode styling
+st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
+
+# Defensive session check
+if not st.session_state.get("logged_in") and not st.session_state.get("user"):
+    st.warning("Please log in to view student profile.")
+    st.stop()
 
 st.title("Student Profile")
 st.markdown("---")
 
-current_user = st.session_state.get("user", {})
-user_role = current_user.get("role", "")
 df = get_student_roster_data()
 
 if not df.empty:
     student_options = {
-        f"{row['StudentNumber']} - {row['Student']}": row['StudentNumber']
+        f"{row['StudentNumber']} - {row['Student']}": str(row['StudentNumber'])
         for _, row in df.iterrows()
     }
 
     student_ids = list(student_options.values())
     default_index = 0
 
-    if "selected_student_override" in st.session_state:
-        target_id = st.session_state["selected_student_override"]
-        if target_id in student_ids:
-            default_index = student_ids.index(target_id)
-        # Clear the override so manual selections work normally afterwards
-        del st.session_state["selected_student_override"]
+    # 1. Check query parameter navigation from Student Roster (student_profile?student_id=...)
+    target_student_id = st.query_params.get("student_id") or st.session_state.get("selected_student_override")
+    if target_student_id:
+        target_str = str(target_student_id).strip()
+        if target_str in student_ids:
+            default_index = student_ids.index(target_str)
+        if "selected_student_override" in st.session_state:
+            del st.session_state["selected_student_override"]
 
-    selected_label = st.selectbox("Select Student:", list(student_options.keys()), index=default_index)
+    # Student Selector Dropdown
+    selected_label = st.selectbox(
+        "SELECT STUDENT:",
+        list(student_options.keys()),
+        index=default_index
+    )
 
     if selected_label:
         selected_id = student_options[selected_label]
-        student = df[df["StudentNumber"] == selected_id].iloc[0]
+        student = df[df["StudentNumber"].astype(str) == selected_id].iloc[0]
 
-        # Student Details Banner
-        st.subheader(f"{student['Student']} (`{student['StudentNumber']}`)")
-        st.write(
-            f"**Cohort:** {student.get('Cohort', 'N/A')} | "
-            f"**Enrollment Status:** {student.get('EnrollmentStatus', 'N/A')} | "
-            f"**Assigned Advisor:** {student.get('Advisor', 'None Assigned')}"
-        )
-
-        st.markdown("### Program Lifecycle Status")
-        col_cw, col_ce, col_cp = st.columns(3)
+        student_name = student.get("Student", "Unknown")
+        student_num = student.get("StudentNumber", selected_id)
+        cohort = student.get("Cohort", "N/A")
+        enrollment_status = student.get("EnrollmentStatus", "N/A")
+        advisor = student.get("Advisor", "None Assigned")
 
         current_cw = student.get("CourseworkStatus", "Pending")
         current_ce = student.get("CompExamStatus", "In-Progress")
         current_cp = student.get("CapstoneStatus", "In-Progress")
 
+        overall_risk = calculate_risk_status(current_cw, current_ce, current_cp)
+
+        enrollment_pill = render_status_pill(enrollment_status)
+        risk_pill = render_status_pill(overall_risk)
+
+        # ----------------- Student Metadata Header Card -----------------
+        header_markup = (
+            '<div class="profile-meta-card">'
+            '<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">'
+            f'<h2 style="margin: 0; color: #F1F5F9; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">{student_name}</h2>'
+            f'<span style="font-family: monospace; font-size: 13px; color: #94A3B8; background: #0F172A; border: 1px solid #263044; padding: 2px 8px; border-radius: 4px;">{student_num}</span>'
+            '</div>'
+            '<div class="profile-meta-row">'
+            '<div class="meta-field">'
+            '<span>Cohort:</span>'
+            f'<strong>{cohort}</strong>'
+            '</div>'
+            '<div class="meta-field">'
+            '<span>Enrollment Status:</span>'
+            f'{enrollment_pill}'
+            '</div>'
+            '<div class="meta-field">'
+            '<span>Assigned Advisor:</span>'
+            f'<strong>{advisor}</strong>'
+            '</div>'
+            '<div class="meta-field">'
+            '<span>Overall Risk:</span>'
+            f'{risk_pill}'
+            '</div>'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(header_markup, unsafe_allow_html=True)
+
+        # ----------------- Lifecycle Status Cards -----------------
+        st.markdown("<h3 style='font-size: 16px; font-weight: 600; color: #F1F5F9; margin-top: 16px; margin-bottom: 12px;'>Program Lifecycle Status</h3>", unsafe_allow_html=True)
+        col_cw, col_ce, col_cp = st.columns(3)
+
+        cw_pill = render_status_pill(current_cw)
+        ce_pill = render_status_pill(current_ce)
+        cp_pill = render_status_pill(current_cp)
+
         with col_cw:
-            st.info(f"**Coursework**\n\n### {current_cw}")
+            cw_card = (
+                '<div class="lifecycle-card">'
+                '<div class="lifecycle-card-title">Coursework</div>'
+                f'<div>{cw_pill}</div>'
+                '</div>'
+            )
+            st.markdown(cw_card, unsafe_allow_html=True)
 
         with col_ce:
-            st.info(f"**Comprehensive Exam**\n\n### {current_ce}")
+            ce_card = (
+                '<div class="lifecycle-card">'
+                '<div class="lifecycle-card-title">Comprehensive Exam</div>'
+                f'<div>{ce_pill}</div>'
+                '</div>'
+            )
+            st.markdown(ce_card, unsafe_allow_html=True)
 
         with col_cp:
-            st.info(f"**Capstone Paper**\n\n### {current_cp}")
+            cp_card = (
+                '<div class="lifecycle-card">'
+                '<div class="lifecycle-card-title">Capstone Paper</div>'
+                f'<div>{cp_pill}</div>'
+                '</div>'
+            )
+            st.markdown(cp_card, unsafe_allow_html=True)
 
 else:
     st.info("No student records available. Please ensure database connection is established.")

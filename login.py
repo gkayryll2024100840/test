@@ -110,6 +110,9 @@ if not st.session_state.get('logged_in'):
             if success:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = result
+                # Preserve student_id if user followed a direct link
+                if st.query_params.get("student_id"):
+                    st.session_state["selected_student_override"] = str(st.query_params.get("student_id")).strip()
                 st.rerun()
             else:
                 st.error(result)
@@ -123,11 +126,14 @@ else:
         st.session_state.failed_attempts = 0
         st.rerun()
 
+    # Route directly to student profile if a student target was requested
+    has_student_target = bool(st.query_params.get("student_id") or st.session_state.get("selected_student_override"))
+
     # Define all available pages
-    dashboard    = st.Page("dashboard_views/app.py",                title="Dashboard")
+    dashboard    = st.Page("dashboard_views/app.py",                title="Dashboard",        default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
-    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile")
+    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",  default=has_student_target)
     config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
 
     # Role-based page access control

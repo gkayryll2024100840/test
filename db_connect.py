@@ -52,6 +52,8 @@ def format_mysql_error(err):
         return "Connection timeout to SQL Server host"
     elif error_code in (2013, 2006):
         return "Network socket closed unexpectedly during bulk data transfer"
+    elif error_code == 2017:
+        return "Cannot connect to database host (Named pipe error): Check if .env exists and DB_HOST is configured properly"
     else:
         return f"Database error ({error_code}): {err.msg}"
 
