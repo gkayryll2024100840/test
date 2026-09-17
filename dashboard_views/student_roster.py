@@ -64,16 +64,15 @@ df = get_student_roster_data()
 
 if not df.empty:
     # ----------------- Clean Filter & Search Rhythm -----------------
-    # Search bar gets its own row and spans the full width
-    search_query = st.text_input(
-        "SEARCH:",
-        placeholder="Search by student name or ID...",
-        label_visibility="visible",
-        use_container_width=True
-    )
+    col_search, col_cohort, col_sort = st.columns([3.5, 2, 2])
 
-    # Cohort and Sort share the row below the search bar
-    col_cohort, col_sort = st.columns([1, 1])
+    with col_search:
+        search_query = st.text_input(
+            "SEARCH:",
+            placeholder="Search by student name or ID...",
+            label_visibility="visible",
+            use_container_width=True
+        )
 
     with col_cohort:
         available_cohorts = ["All Cohorts"] + get_available_cohorts()
