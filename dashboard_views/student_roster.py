@@ -1,6 +1,6 @@
-from attrs import field
 import streamlit as st
-import pandas as pd
+import re
+
 from db_connect import (
     get_student_roster_data,
     get_last_updated_time,
@@ -8,9 +8,12 @@ from db_connect import (
     get_max_retry_count,
     get_available_cohorts
 )
+
+# Only import these if dashboard_views/components.py actually exists.
+# If it doesn't, delete this block and the three references to it below.
 from dashboard_views.components import (
-    DARK_MODE_CSS, 
-    render_status_pill, 
+    DARK_MODE_CSS,
+    render_status_pill,
     calculate_risk_status
 )
 
@@ -24,13 +27,49 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to access the student roster.")
     st.stop()
 
-active_login_id = getattr(st.session_state, "session_id", None)
+# ---------------------------------------------------------------
+# Colorblind-safe status -> CSS mapping (Okabe-Ito palette)
+# Only used if you fall back to a styled st.dataframe.
+# With the pill-based layout, render_status_pill handles colors.
+# ---------------------------------------------------------------
+STATUS_COLORS = {
+    "Completed":               "background-color: #009E73; color: white;",
+    "Passed":                  "background-color: #009E73; color: white;",
+    "Defended for Completion": "background-color: #009E73; color: white;",
+    "In-Progress":             "background-color: #E69F00; color: black;",
+    "Cancelled":               "background-color: #D55E00; color: white;",
+    "Incomplete":              "background-color: #D55E00; color: white;",
+    "Pending":                 "background-color: #D55E00; color: white;",
+}
 
-# Check repeated failures specifically for THIS session
+LIFECYCLE_COLUMNS = ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]
+
+
+def _rename_header(col_name: str) -> str:
+    """CamelCase -> UPPERCASE WITH SPACES (CourseworkStatus -> COURSEWORK STATUS)."""
+    return re.sub(r"(?<!^)(?=[A-Z])", " ", col_name).upper()
+
+
+RENAMED_LIFECYCLE_COLS = [_rename_header(c) for c in LIFECYCLE_COLUMNS]
+
+
+def color_status(val):
+    """Return CSS for a lifecycle status value."""
+    return STATUS_COLORS.get(str(val).strip(), "")
+
+
+# ---------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------
+active_login_id = st.session_state.get("session_id", None)
+
 if active_login_id:
     retry_count = get_max_retry_count(active_login_id)
     if retry_count > 1:
-        st.warning(f"Warning: Repeated sync failures detected for your session ({retry_count} attempts). Check Admin logs.")
+        st.warning(
+            f"Warning: Repeated sync failures detected for your session "
+            f"({retry_count} attempts). Check Admin logs."
+        )
 
 # Header & Sync Controls
 col_title, col_action = st.columns([2.5, 1.5])
@@ -38,7 +77,6 @@ col_title, col_action = st.columns([2.5, 1.5])
 with col_title:
     st.title("Student Roster")
 
-# refresh button and last sync timestamp
 with col_action:
     last_sync = get_last_updated_time()
     st.caption(f"Last Refreshed: {last_sync}")
@@ -53,7 +91,7 @@ with col_action:
 
 st.markdown("---")
 
-# displays student roster in table format
+# Displays student roster in table format
 df = get_student_roster_data()
 
 if not df.empty:
@@ -72,13 +110,11 @@ if not df.empty:
         cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
 
     with col_sort:
-        # sorting map (only these columns can be the basis of sorting the table)
         sort_map = {
             "Student Name": "Student",
             "Student ID": "StudentNumber",
             "Cohort": "Cohort",
         }
-        # dropdown selector
         sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
 
     # Apply Filters
@@ -88,7 +124,7 @@ if not df.empty:
         q = search_query.strip().lower()
         df_filtered = df_filtered[
             df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False) |
-            df_filtered["StudentNumber"].astype(str).contains(q, na=False)
+            df_filtered["StudentNumber"].astype(str).str.contains(q, na=False)
         ]
 
     if cohort_choice != "All Cohorts":
@@ -97,10 +133,12 @@ if not df.empty:
     df_filtered = df_filtered.sort_values(by=sort_map[sort_choice])
 
     # Total Count Bar
-    st.caption(f"Showing {len(df_filtered)} of {len(df)} students. Click any student name to view their profile.")
+    st.caption(
+        f"Showing {len(df_filtered)} of {len(df)} students. "
+        f"Click any student name to view their profile."
+    )
 
-    # ----------------- Enterprise Roster Grid with Native Page Links -----------------
-    # Using st.page_link keeps navigation inside Streamlit's SPA router so session state is preserved
+    # ----------------- Enterprise Roster Grid -----------------
     col_widths = [1.2, 2.2, 0.9, 1.8, 1.2, 1.2, 1.6, 1.1]
 
     header_cols = st.columns(col_widths)
@@ -133,19 +171,31 @@ if not df.empty:
             risk_pill = render_status_pill(risk_text)
 
             r_cols = st.columns(col_widths)
-            r_cols[0].markdown(f'<span class="roster-cell-id">{s_id}</span>', unsafe_allow_html=True)
+            r_cols[0].markdown(
+                f'<span class="roster-cell-id">{s_id}</span>',
+                unsafe_allow_html=True
+            )
             r_cols[1].page_link(
                 "dashboard_views/student_profile.py",
                 label=s_name,
                 query_params={"student_id": s_id}
             )
-            r_cols[2].markdown(f'<span class="roster-cell-text">{cohort}</span>', unsafe_allow_html=True)
-            r_cols[3].markdown(f'<span class="roster-cell-text">{advisor}</span>', unsafe_allow_html=True)
+            r_cols[2].markdown(
+                f'<span class="roster-cell-text">{cohort}</span>',
+                unsafe_allow_html=True
+            )
+            r_cols[3].markdown(
+                f'<span class="roster-cell-text">{advisor}</span>',
+                unsafe_allow_html=True
+            )
             r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
             r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
             r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
             r_cols[7].markdown(risk_pill, unsafe_allow_html=True)
-            st.markdown('<div class="roster-row-divider"></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="roster-row-divider"></div>',
+                unsafe_allow_html=True
+            )
 
     # ----------------- Quick Jump Navigation -----------------
     if not df_filtered.empty:
