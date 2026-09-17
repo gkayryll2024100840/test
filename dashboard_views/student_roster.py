@@ -30,17 +30,6 @@ STATUS_COLORS = {
     "Pending":                 "background-color: #D55E00; color: white;",
 }
 
-# Optional redundant symbols for accessibility (colorblind users)
-STATUS_SYMBOLS = {
-    "Completed":               "🟢",
-    "Passed":                  "🟢",
-    "Defended for Completion": "🟢",
-    "In-Progress":             "🟡",
-    "Cancelled":               "🔴",
-    "Incomplete":              "🔴",
-    "Pending":                 "🔴",
-}
-
 # Source column names as returned by db_connect.get_student_roster_data()
 LIFECYCLE_COLUMNS = ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]
 
@@ -52,13 +41,8 @@ def _rename_header(col_name: str) -> str:
 RENAMED_LIFECYCLE_COLS = [_rename_header(c) for c in LIFECYCLE_COLUMNS]
 
 def color_status(val):
-    """Return CSS for a lifecycle status value (strips any leading emoji)."""
-    clean = (
-        str(val)
-        .replace("🟢", "").replace("🟡", "").replace("🔴", "")
-        .strip()
-    )
-    return STATUS_COLORS.get(clean, "")
+    """Return CSS for a lifecycle status value."""
+    return STATUS_COLORS.get(str(val).strip(), "")
 
 
 # ---------------------------------------------------------------
@@ -129,14 +113,7 @@ if not df.empty:
     # formatted column headers (ex: StudentNumber -> STUDENT NUMBER)
     df_display = df_filtered.rename(columns=_rename_header).copy()
 
-    # --- Optional: prefix statuses with symbols for accessibility ---
-    for col in RENAMED_LIFECYCLE_COLS:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(
-                lambda v: f"{STATUS_SYMBOLS.get(str(v).strip(), '')} {v}".strip()
-            )
-
-    # --- Apply color coding to lifecycle columns only ---
+    # Apply color coding to lifecycle columns only
     lifecycle_subset = [c for c in RENAMED_LIFECYCLE_COLS if c in df_display.columns]
     styled = df_display.style.map(color_status, subset=lifecycle_subset)
 
