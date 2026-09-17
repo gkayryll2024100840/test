@@ -65,9 +65,9 @@ def get_theme_css() -> str:
     --pill-danger-bg: rgba(239, 68, 68, 0.14) !important;
     --pill-danger-border: rgba(239, 68, 68, 0.3) !important;
     --pill-danger-text: #FCA5A5 !important;
-    --pill-active-bg: rgba(59, 130, 246, 0.14) !important;
-    --pill-active-border: rgba(59, 130, 246, 0.28) !important;
-    --pill-active-text: #93C5FD !important;
+    --pill-active-bg: rgba(245, 158, 11, 0.14) !important;
+    --pill-active-border: rgba(245, 158, 11, 0.3) !important;
+    --pill-active-text: #FCD34D !important;
     --pill-warning-bg: rgba(245, 158, 11, 0.14) !important;
     --pill-warning-border: rgba(245, 158, 11, 0.3) !important;
     --pill-warning-text: #FCD34D !important;
@@ -85,9 +85,9 @@ def get_theme_css() -> str:
     --lifecycle-pill-danger-bg: #451D24 !important;
     --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35) !important;
     --lifecycle-pill-danger-text: #FCA5A5 !important;
-    --lifecycle-pill-active-bg: #1E3A5F !important;
-    --lifecycle-pill-active-border: rgba(96, 165, 250, 0.35) !important;
-    --lifecycle-pill-active-text: #93C5FD !important;
+    --lifecycle-pill-active-bg: #422E15 !important;
+    --lifecycle-pill-active-border: rgba(251, 191, 36, 0.35) !important;
+    --lifecycle-pill-active-text: #FCD34D !important;
     --lifecycle-pill-warning-bg: #422E15 !important;
     --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35) !important;
     --lifecycle-pill-warning-text: #FCD34D !important;
@@ -139,9 +139,9 @@ def get_theme_css() -> str:
     --pill-danger-bg: #FDE8E8 !important;
     --pill-danger-border: #FCD4D4 !important;
     --pill-danger-text: #9C0006 !important;
-    --pill-active-bg: #E1E8F7 !important;
-    --pill-active-border: #CBD8F4 !important;
-    --pill-active-text: #233876 !important;
+    --pill-active-bg: #FEF3C7 !important;
+    --pill-active-border: #FDE68A !important;
+    --pill-active-text: #92400E !important;
     --pill-warning-bg: #FEF3C7 !important;
     --pill-warning-border: #FDE68A !important;
     --pill-warning-text: #92400E !important;
@@ -159,9 +159,9 @@ def get_theme_css() -> str:
     --lifecycle-pill-danger-bg: #FDE8E8 !important;
     --lifecycle-pill-danger-border: #FCD4D4 !important;
     --lifecycle-pill-danger-text: #9C0006 !important;
-    --lifecycle-pill-active-bg: #E1E8F7 !important;
-    --lifecycle-pill-active-border: #CBD8F4 !important;
-    --lifecycle-pill-active-text: #233876 !important;
+    --lifecycle-pill-active-bg: #FEF3C7 !important;
+    --lifecycle-pill-active-border: #FDE68A !important;
+    --lifecycle-pill-active-text: #92400E !important;
     --lifecycle-pill-warning-bg: #FEF3C7 !important;
     --lifecycle-pill-warning-border: #FDE68A !important;
     --lifecycle-pill-warning-text: #92400E !important;
@@ -227,9 +227,9 @@ def get_theme_css() -> str:
     --pill-danger-border: #FCD4D4;
     --pill-danger-text: #9C0006;
     
-    --pill-active-bg: #E1E8F7;
-    --pill-active-border: #CBD8F4;
-    --pill-active-text: #233876;
+    --pill-active-bg: #FEF3C7;
+    --pill-active-border: #FDE68A;
+    --pill-active-text: #92400E;
     
     --pill-warning-bg: #FEF3C7;
     --pill-warning-border: #FDE68A;
@@ -249,9 +249,9 @@ def get_theme_css() -> str:
     --lifecycle-pill-danger-bg: #FDE8E8;
     --lifecycle-pill-danger-border: #FCD4D4;
     --lifecycle-pill-danger-text: #9C0006;
-    --lifecycle-pill-active-bg: #E1E8F7;
-    --lifecycle-pill-active-border: #CBD8F4;
-    --lifecycle-pill-active-text: #233876;
+    --lifecycle-pill-active-bg: #FEF3C7;
+    --lifecycle-pill-active-border: #FDE68A;
+    --lifecycle-pill-active-text: #92400E;
     --lifecycle-pill-warning-bg: #FEF3C7;
     --lifecycle-pill-warning-border: #FDE68A;
     --lifecycle-pill-warning-text: #92400E;
@@ -310,9 +310,9 @@ def get_theme_css() -> str:
         --pill-danger-border: rgba(239, 68, 68, 0.3);
         --pill-danger-text: #FCA5A5;
         
-        --pill-active-bg: rgba(59, 130, 246, 0.14);
-        --pill-active-border: rgba(59, 130, 246, 0.28);
-        --pill-active-text: #93C5FD;
+        --pill-active-bg: rgba(245, 158, 11, 0.14);
+        --pill-active-border: rgba(245, 158, 11, 0.3);
+        --pill-active-text: #FCD34D;
         
         --pill-warning-bg: rgba(245, 158, 11, 0.14);
         --pill-warning-border: rgba(245, 158, 11, 0.3);
@@ -332,9 +332,9 @@ def get_theme_css() -> str:
         --lifecycle-pill-danger-bg: #451D24;
         --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35);
         --lifecycle-pill-danger-text: #FCA5A5;
-        --lifecycle-pill-active-bg: #1E3A5F;
-        --lifecycle-pill-active-border: rgba(96, 165, 250, 0.35);
-        --lifecycle-pill-active-text: #93C5FD;
+        --lifecycle-pill-active-bg: #422E15;
+        --lifecycle-pill-active-border: rgba(251, 191, 36, 0.35);
+        --lifecycle-pill-active-text: #FCD34D;
         --lifecycle-pill-warning-bg: #422E15;
         --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35);
         --lifecycle-pill-warning-text: #FCD34D;
@@ -568,25 +568,25 @@ div[data-testid="stPageLink"] a:focus {{
 .lifecycle-card {{
     min-width: 220px !important;
     width: auto !important;
+    flex: 1 1 220px !important;
     box-sizing: border-box !important;
     background-color: var(--card-bg) !important;
     border: 1px solid var(--card-border) !important;
     box-shadow: var(--card-shadow) !important;
-    border-radius: 20px !important;
-    padding: 18px 24px !important;
+    border-radius: 8px !important;
+    padding: 20px 24px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
     justify-content: center !important;
-    gap: 12px !important;
+    gap: 10px !important;
 }}
 
 .lifecycle-card-title {{
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Geist", sans-serif !important;
-    font-size: 20px !important;
-    font-weight: 600 !important;
-    color: var(--text-primary) !important;
-    letter-spacing: -0.01em !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
+    letter-spacing: 0.02em !important;
     white-space: nowrap !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -594,10 +594,10 @@ div[data-testid="stPageLink"] a:focus {{
 }}
 
 .lifecycle-card .status-pill {{
-    height: 34px !important;
-    padding: 0 16px !important;
-    font-size: 14px !important;
-    font-weight: 600 !important;
+    height: 26px !important;
+    padding: 0 11px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
     border-radius: 9999px !important;
     line-height: 1 !important;
     letter-spacing: 0.01em !important;
@@ -620,9 +620,9 @@ div[data-testid="stPageLink"] a:focus {{
 }}
 
 .lifecycle-card .status-pill.pill-active {{
-    background-color: var(--lifecycle-pill-active-bg, #1E3A5F) !important;
-    border: 1px solid var(--lifecycle-pill-active-border, rgba(96, 165, 250, 0.35)) !important;
-    color: var(--lifecycle-pill-active-text, #93C5FD) !important;
+    background-color: var(--lifecycle-pill-active-bg, #422E15) !important;
+    border: 1px solid var(--lifecycle-pill-active-border, rgba(251, 191, 36, 0.35)) !important;
+    color: var(--lifecycle-pill-active-text, #FCD34D) !important;
 }}
 
 .lifecycle-card .status-pill.pill-warning {{
@@ -788,12 +788,8 @@ def render_status_pill(status) -> str:
     elif status_lower in ["cancelled", "canceled", "incomplete", "at risk", "high risk", "critical", "failed", "abs/failed"]:
         pill_class = "pill-danger"
 
-    # Active / In-Progress: soft periwinkle blue (light) / slate blue neon (dark)
-    elif status_lower in ["in-progress", "in progress"]:
-        pill_class = "pill-active"
-
-    # Conditionally Enrolled / Pending: soft amber (light) / warm amber neon (dark)
-    elif status_lower in ["conditionally enrolled", "pending"]:
+    # Warning / Pending / In-Progress: soft amber (light) / warm amber neon (dark)
+    elif status_lower in ["conditionally enrolled", "pending", "in-progress", "in progress"]:
         pill_class = "pill-warning"
 
     else:
