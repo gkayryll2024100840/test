@@ -141,7 +141,7 @@ if not df.empty:
     # ----------------- Enterprise Roster Grid -----------------
     col_widths = [1.2, 2.2, 0.9, 1.8, 1.2, 1.2, 1.6, 1.1]
 
-    header_cols = st.columns(col_widths)
+    header_cols = st.columns(col_widths, vertical_alignment="center")
     header_labels = [
         "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
         "COURSEWORK", "COMP EXAM", "CAPSTONE", "RISK STATUS"

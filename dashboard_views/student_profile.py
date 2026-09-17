@@ -70,8 +70,8 @@ if not df.empty:
         header_markup = (
             '<div class="profile-meta-card">'
             '<div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">'
-            f'<h2 style="margin: 0; color: #F1F5F9; font-size: 22px; font-weight: 600; letter-spacing: -0.01em;">{student_name}</h2>'
-            f'<span style="font-family: monospace; font-size: 13px; color: #94A3B8; background: #0F172A; border: 1px solid #263044; padding: 2px 8px; border-radius: 4px;">{student_num}</span>'
+            f'<h2 class="profile-name">{student_name}</h2>'
+            f'<span class="profile-id-badge">{student_num}</span>'
             '</div>'
             '<div class="profile-meta-row">'
             '<div class="meta-field">'
@@ -96,39 +96,29 @@ if not df.empty:
         st.markdown(header_markup, unsafe_allow_html=True)
 
         # ----------------- Lifecycle Status Cards -----------------
-        st.markdown("<h3 style='font-size: 16px; font-weight: 600; color: #F1F5F9; margin-top: 16px; margin-bottom: 12px;'>Program Lifecycle Status</h3>", unsafe_allow_html=True)
-        col_cw, col_ce, col_cp = st.columns(3)
+        st.markdown("<h3 class='section-title'>Program Lifecycle Status</h3>", unsafe_allow_html=True)
 
         cw_pill = render_status_pill(current_cw)
         ce_pill = render_status_pill(current_ce)
         cp_pill = render_status_pill(current_cp)
 
-        with col_cw:
-            cw_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Coursework</div>'
-                f'<div>{cw_pill}</div>'
-                '</div>'
-            )
-            st.markdown(cw_card, unsafe_allow_html=True)
-
-        with col_ce:
-            ce_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Comprehensive Exam</div>'
-                f'<div>{ce_pill}</div>'
-                '</div>'
-            )
-            st.markdown(ce_card, unsafe_allow_html=True)
-
-        with col_cp:
-            cp_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Capstone Paper</div>'
-                f'<div>{cp_pill}</div>'
-                '</div>'
-            )
-            st.markdown(cp_card, unsafe_allow_html=True)
+        cards_html = f"""
+        <div class="lifecycle-row">
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">COURSEWORK STATUS</div>
+                {cw_pill}
+            </div>
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">COMPREHENSIVE EXAM STATUS</div>
+                {ce_pill}
+            </div>
+            <div class="lifecycle-card">
+                <div class="lifecycle-card-title">CAPSTONE PAPER STATUS</div>
+                {cp_pill}
+            </div>
+        </div>
+        """
+        st.markdown(cards_html, unsafe_allow_html=True)
 
 else:
     st.info("No student records available. Please ensure database connection is established.")
