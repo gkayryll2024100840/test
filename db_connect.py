@@ -220,22 +220,25 @@ def check_column_exists(full_column_path):
     if not full_column_path or not full_column_path.strip():
         return False
 
-    # Split by comma to handle concatenated fields like FirstName + LastName
+    # Split on commas and strip whitespace so "FirstName, LastName" works
+    raw_paths = [p.strip() for p in full_column_path.split(",") if p.strip()]
 
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
         query = """
-            SELECT COUNT(*) 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_NAME = %s AND COLUMN_NAME = %s
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE LOWER(TABLE_NAME) = LOWER(%s)
+              AND LOWER(COLUMN_NAME) = LOWER(%s)
         """
 
         for single_path in raw_paths:
             parts = single_path.split(".")
             if len(parts) < 2:
-                cursor.close()
-                conn.close()
                 return False
 
             table_name = parts[-2]
@@ -244,15 +247,27 @@ def check_column_exists(full_column_path):
             cursor.execute(query, (table_name, column_name))
             result = cursor.fetchone()
 
-            # If any individual column in the list doesn't exist, fail validation
+            # If ANY individual column in the list doesn't exist, fail validation
             if not result or result[0] == 0:
-                cursor.close()
-                conn.close()
+                print(f"[check_column_exists] NOT FOUND: {table_name}.{column_name}")
                 return False
 
-        cursor.close()
-        conn.close()
         return True
 
-    except Exception:
+    except Exception as e:
+        # Visible error so silent failures don't happen anymore
+        print(f"[check_column_exists] error for '{full_column_path}': {e}")
         return False
+
+    finally:
+        # Always clean up, even on early return
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
