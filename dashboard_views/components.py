@@ -75,10 +75,10 @@ def get_theme_css() -> str:
     --pill-neutral-border: rgba(148, 163, 184, 0.24) !important;
     --pill-neutral-text: #CBD5E1 !important;
     
-    /* Lifecycle Status Cards (Dark Mode Reference Spec) */
-    --lifecycle-card-bg: #232E42 !important;
-    --lifecycle-card-border: rgba(255, 255, 255, 0.06) !important;
-    --lifecycle-card-title: #FFFFFF !important;
+    /* Lifecycle Status Cards (Matched to Profile Card) */
+    --lifecycle-card-bg: #161D2B !important;
+    --lifecycle-card-border: #263044 !important;
+    --lifecycle-card-title: #F1F5F9 !important;
     --lifecycle-pill-success-bg: #16433C !important;
     --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35) !important;
     --lifecycle-pill-success-text: #34D399 !important;
@@ -322,10 +322,10 @@ def get_theme_css() -> str:
         --pill-neutral-border: rgba(148, 163, 184, 0.24);
         --pill-neutral-text: #CBD5E1;
         
-        /* Lifecycle Status Cards (Dark Mode Reference Spec) */
-        --lifecycle-card-bg: #232E42;
-        --lifecycle-card-border: rgba(255, 255, 255, 0.06);
-        --lifecycle-card-title: #FFFFFF;
+        /* Lifecycle Status Cards (Matched to Profile Card) */
+        --lifecycle-card-bg: #161D2B;
+        --lifecycle-card-border: #263044;
+        --lifecycle-card-title: #F1F5F9;
         --lifecycle-pill-success-bg: #16433C;
         --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35);
         --lifecycle-pill-success-text: #34D399;
@@ -569,8 +569,9 @@ div[data-testid="stPageLink"] a:focus {{
     min-width: 220px !important;
     width: auto !important;
     box-sizing: border-box !important;
-    background-color: var(--lifecycle-card-bg, #232E42) !important;
-    border: 1px solid var(--lifecycle-card-border, rgba(255, 255, 255, 0.06)) !important;
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    box-shadow: var(--card-shadow) !important;
     border-radius: 20px !important;
     padding: 18px 24px !important;
     display: flex !important;
@@ -578,15 +579,14 @@ div[data-testid="stPageLink"] a:focus {{
     align-items: flex-start !important;
     justify-content: center !important;
     gap: 12px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }}
 
 .lifecycle-card-title {{
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Geist", sans-serif !important;
     font-size: 20px !important;
-    font-weight: 700 !important;
-    color: var(--lifecycle-card-title, #FFFFFF) !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.02em !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    letter-spacing: -0.01em !important;
     white-space: nowrap !important;
     margin: 0 !important;
     padding: 0 !important;
