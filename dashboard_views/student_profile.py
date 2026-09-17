@@ -107,7 +107,7 @@ if not df.empty:
             cw_card = (
                 '<div class="lifecycle-card">'
                 '<div class="lifecycle-card-title">Coursework</div>'
-                f'<div>{cw_pill}</div>'
+                f'{cw_pill}'
                 '</div>'
             )
             st.markdown(cw_card, unsafe_allow_html=True)
@@ -116,7 +116,7 @@ if not df.empty:
             ce_card = (
                 '<div class="lifecycle-card">'
                 '<div class="lifecycle-card-title">Comprehensive Exam</div>'
-                f'<div>{ce_pill}</div>'
+                f'{ce_pill}'
                 '</div>'
             )
             st.markdown(ce_card, unsafe_allow_html=True)
@@ -125,7 +125,7 @@ if not df.empty:
             cp_card = (
                 '<div class="lifecycle-card">'
                 '<div class="lifecycle-card-title">Capstone Paper</div>'
-                f'<div>{cp_pill}</div>'
+                f'{cp_pill}'
                 '</div>'
             )
             st.markdown(cp_card, unsafe_allow_html=True)

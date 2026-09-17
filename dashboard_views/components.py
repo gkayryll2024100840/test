@@ -74,6 +74,26 @@ def get_theme_css() -> str:
     --pill-neutral-bg: rgba(148, 163, 184, 0.12) !important;
     --pill-neutral-border: rgba(148, 163, 184, 0.24) !important;
     --pill-neutral-text: #CBD5E1 !important;
+    
+    /* Lifecycle Status Cards (Dark Mode Reference Spec) */
+    --lifecycle-card-bg: #232E42 !important;
+    --lifecycle-card-border: rgba(255, 255, 255, 0.06) !important;
+    --lifecycle-card-title: #FFFFFF !important;
+    --lifecycle-pill-success-bg: #16433C !important;
+    --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35) !important;
+    --lifecycle-pill-success-text: #34D399 !important;
+    --lifecycle-pill-danger-bg: #451D24 !important;
+    --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35) !important;
+    --lifecycle-pill-danger-text: #FCA5A5 !important;
+    --lifecycle-pill-active-bg: #1E3A5F !important;
+    --lifecycle-pill-active-border: rgba(96, 165, 250, 0.35) !important;
+    --lifecycle-pill-active-text: #93C5FD !important;
+    --lifecycle-pill-warning-bg: #422E15 !important;
+    --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35) !important;
+    --lifecycle-pill-warning-text: #FCD34D !important;
+    --lifecycle-pill-neutral-bg: #1E293B !important;
+    --lifecycle-pill-neutral-border: rgba(148, 163, 184, 0.3) !important;
+    --lifecycle-pill-neutral-text: #CBD5E1 !important;
     background-color: #0B0F17 !important;
     color: #F1F5F9 !important;
 }
@@ -128,6 +148,26 @@ def get_theme_css() -> str:
     --pill-neutral-bg: #F1F5F9 !important;
     --pill-neutral-border: #E2E8F0 !important;
     --pill-neutral-text: #475569 !important;
+    
+    /* Lifecycle Status Cards (Light Mode) */
+    --lifecycle-card-bg: #F8FAFC !important;
+    --lifecycle-card-border: #E2E8F0 !important;
+    --lifecycle-card-title: #0F172A !important;
+    --lifecycle-pill-success-bg: #D4F8D3 !important;
+    --lifecycle-pill-success-border: #B8F3B7 !important;
+    --lifecycle-pill-success-text: #0E6251 !important;
+    --lifecycle-pill-danger-bg: #FDE8E8 !important;
+    --lifecycle-pill-danger-border: #FCD4D4 !important;
+    --lifecycle-pill-danger-text: #9C0006 !important;
+    --lifecycle-pill-active-bg: #E1E8F7 !important;
+    --lifecycle-pill-active-border: #CBD8F4 !important;
+    --lifecycle-pill-active-text: #233876 !important;
+    --lifecycle-pill-warning-bg: #FEF3C7 !important;
+    --lifecycle-pill-warning-border: #FDE68A !important;
+    --lifecycle-pill-warning-text: #92400E !important;
+    --lifecycle-pill-neutral-bg: #F1F5F9 !important;
+    --lifecycle-pill-neutral-border: #E2E8F0 !important;
+    --lifecycle-pill-neutral-text: #475569 !important;
     background-color: #FFFFFF !important;
     color: #0F172A !important;
 }
@@ -198,6 +238,26 @@ def get_theme_css() -> str:
     --pill-neutral-bg: #F1F5F9;
     --pill-neutral-border: #E2E8F0;
     --pill-neutral-text: #475569;
+    
+    /* Lifecycle Status Cards (Light Mode) */
+    --lifecycle-card-bg: #F8FAFC;
+    --lifecycle-card-border: #E2E8F0;
+    --lifecycle-card-title: #0F172A;
+    --lifecycle-pill-success-bg: #D4F8D3;
+    --lifecycle-pill-success-border: #B8F3B7;
+    --lifecycle-pill-success-text: #0E6251;
+    --lifecycle-pill-danger-bg: #FDE8E8;
+    --lifecycle-pill-danger-border: #FCD4D4;
+    --lifecycle-pill-danger-text: #9C0006;
+    --lifecycle-pill-active-bg: #E1E8F7;
+    --lifecycle-pill-active-border: #CBD8F4;
+    --lifecycle-pill-active-text: #233876;
+    --lifecycle-pill-warning-bg: #FEF3C7;
+    --lifecycle-pill-warning-border: #FDE68A;
+    --lifecycle-pill-warning-text: #92400E;
+    --lifecycle-pill-neutral-bg: #F1F5F9;
+    --lifecycle-pill-neutral-border: #E2E8F0;
+    --lifecycle-pill-neutral-text: #475569;
 }}
 
 /* System / Browser Dark Mode */
@@ -261,6 +321,26 @@ def get_theme_css() -> str:
         --pill-neutral-bg: rgba(148, 163, 184, 0.12);
         --pill-neutral-border: rgba(148, 163, 184, 0.24);
         --pill-neutral-text: #CBD5E1;
+        
+        /* Lifecycle Status Cards (Dark Mode Reference Spec) */
+        --lifecycle-card-bg: #232E42;
+        --lifecycle-card-border: rgba(255, 255, 255, 0.06);
+        --lifecycle-card-title: #FFFFFF;
+        --lifecycle-pill-success-bg: #16433C;
+        --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35);
+        --lifecycle-pill-success-text: #34D399;
+        --lifecycle-pill-danger-bg: #451D24;
+        --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35);
+        --lifecycle-pill-danger-text: #FCA5A5;
+        --lifecycle-pill-active-bg: #1E3A5F;
+        --lifecycle-pill-active-border: rgba(96, 165, 250, 0.35);
+        --lifecycle-pill-active-text: #93C5FD;
+        --lifecycle-pill-warning-bg: #422E15;
+        --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35);
+        --lifecycle-pill-warning-text: #FCD34D;
+        --lifecycle-pill-neutral-bg: #1E293B;
+        --lifecycle-pill-neutral-border: rgba(148, 163, 184, 0.3);
+        --lifecycle-pill-neutral-text: #CBD5E1;
     }}
 }}
 
@@ -471,36 +551,84 @@ div[data-testid="stPageLink"] a:focus {{
     outline: none !important;
 }}
 
-/* Student Profile Cards */
+/* Student Profile Cards - Matched to Reference Spec */
+div[data-testid="stColumn"]:has(.lifecycle-card),
+div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stElementContainer"],
+div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stMarkdownContainer"] {{
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+}}
+
 .lifecycle-card {{
-    background-color: var(--card-bg);
-    border: 1px solid var(--card-border);
-    box-shadow: var(--card-shadow);
-    border-radius: 10px;
-    padding: 22px 24px;
-    min-height: 116px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    background-color: var(--lifecycle-card-bg, #232E42) !important;
+    border: 1px solid var(--lifecycle-card-border, rgba(255, 255, 255, 0.06)) !important;
+    border-radius: 22px !important;
+    padding: 20px 24px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }}
 
 .lifecycle-card-title {{
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 14px;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: var(--lifecycle-card-title, #FFFFFF) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.02em !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
 }}
 
 .lifecycle-card .status-pill {{
     height: 34px !important;
     padding: 0 16px !important;
-    font-size: 14.5px !important;
+    font-size: 14px !important;
     font-weight: 600 !important;
     border-radius: 9999px !important;
     line-height: 1 !important;
     letter-spacing: 0.01em !important;
+    width: fit-content !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}
+
+.lifecycle-card .status-pill.pill-success {{
+    background-color: var(--lifecycle-pill-success-bg, #16433C) !important;
+    border: 1px solid var(--lifecycle-pill-success-border, rgba(52, 211, 153, 0.35)) !important;
+    color: var(--lifecycle-pill-success-text, #34D399) !important;
+}}
+
+.lifecycle-card .status-pill.pill-danger {{
+    background-color: var(--lifecycle-pill-danger-bg, #451D24) !important;
+    border: 1px solid var(--lifecycle-pill-danger-border, rgba(248, 113, 113, 0.35)) !important;
+    color: var(--lifecycle-pill-danger-text, #FCA5A5) !important;
+}}
+
+.lifecycle-card .status-pill.pill-active {{
+    background-color: var(--lifecycle-pill-active-bg, #1E3A5F) !important;
+    border: 1px solid var(--lifecycle-pill-active-border, rgba(96, 165, 250, 0.35)) !important;
+    color: var(--lifecycle-pill-active-text, #93C5FD) !important;
+}}
+
+.lifecycle-card .status-pill.pill-warning {{
+    background-color: var(--lifecycle-pill-warning-bg, #422E15) !important;
+    border: 1px solid var(--lifecycle-pill-warning-border, rgba(251, 191, 36, 0.35)) !important;
+    color: var(--lifecycle-pill-warning-text, #FCD34D) !important;
+}}
+
+.lifecycle-card .status-pill.pill-neutral {{
+    background-color: var(--lifecycle-pill-neutral-bg, #1E293B) !important;
+    border: 1px solid var(--lifecycle-pill-neutral-border, rgba(148, 163, 184, 0.3)) !important;
+    color: var(--lifecycle-pill-neutral-text, #CBD5E1) !important;
 }}
 
 .profile-meta-card {{
