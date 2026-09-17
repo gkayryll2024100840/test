@@ -71,6 +71,7 @@ if not df.empty:
             "SEARCH:",
             placeholder="Search by student name or ID...",
             label_visibility="visible"
+            use_container_width=True
         )
 
     with col_cohort:
