@@ -70,8 +70,7 @@ if not df.empty:
         search_query = st.text_input(
             "SEARCH:",
             placeholder="Search by student name or ID...",
-            label_visibility="visible",
-            use_container_width=True
+            label_visibility="visible"
         )
 
     with col_cohort:
