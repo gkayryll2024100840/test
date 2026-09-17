@@ -552,17 +552,20 @@ div[data-testid="stPageLink"] a:focus {{
 }}
 
 /* Student Profile Cards - Matched to Reference Spec */
-div[data-testid="stColumn"]:has(.lifecycle-card),
-div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stElementContainer"],
-div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stMarkdownContainer"] {{
-    width: 100% !important;
+.lifecycle-cards-container {{
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
     align-items: stretch !important;
+    gap: 16px !important;
+    width: 100% !important;
+    margin-top: 14px !important;
+    margin-bottom: 24px !important;
 }}
 
 .lifecycle-card {{
-    width: 100% !important;
+    flex: 0 0 auto !important;
+    width: fit-content !important;
     box-sizing: border-box !important;
     background-color: var(--lifecycle-card-bg, #232E42) !important;
     border: 1px solid var(--lifecycle-card-border, rgba(255, 255, 255, 0.06)) !important;
@@ -571,17 +574,18 @@ div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stMarkdownCont
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
-    justify-content: flex-start !important;
-    gap: 12px !important;
+    justify-content: space-between !important;
+    gap: 14px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }}
 
 .lifecycle-card-title {{
-    font-size: 16px !important;
+    font-size: 20px !important;
     font-weight: 700 !important;
     color: var(--lifecycle-card-title, #FFFFFF) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.02em !important;
+    white-space: nowrap !important;
     margin: 0 !important;
     padding: 0 !important;
     line-height: 1.2 !important;
@@ -679,12 +683,15 @@ div[data-testid="stColumn"]:has(.lifecycle-card) div[data-testid="stMarkdownCont
     font-weight: 500;
 }}
 
-.section-title {{
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-top: 16px;
-    margin-bottom: 12px;
+.section-title,
+h3.section-title,
+div[data-testid="stMarkdownContainer"] h3.section-title {{
+    font-size: 20px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    margin-top: 24px !important;
+    margin-bottom: 14px !important;
+    line-height: 1.3 !important;
 }}
 
 /* Unified Status Pill Styles */

@@ -97,38 +97,28 @@ if not df.empty:
 
         # ----------------- Lifecycle Status Cards -----------------
         st.markdown("<h3 class='section-title'>Program Lifecycle Status</h3>", unsafe_allow_html=True)
-        col_cw, col_ce, col_cp = st.columns(3)
 
         cw_pill = render_status_pill(current_cw)
         ce_pill = render_status_pill(current_ce)
         cp_pill = render_status_pill(current_cp)
 
-        with col_cw:
-            cw_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Coursework</div>'
-                f'{cw_pill}'
-                '</div>'
-            )
-            st.markdown(cw_card, unsafe_allow_html=True)
-
-        with col_ce:
-            ce_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Comprehensive Exam</div>'
-                f'{ce_pill}'
-                '</div>'
-            )
-            st.markdown(ce_card, unsafe_allow_html=True)
-
-        with col_cp:
-            cp_card = (
-                '<div class="lifecycle-card">'
-                '<div class="lifecycle-card-title">Capstone Paper</div>'
-                f'{cp_pill}'
-                '</div>'
-            )
-            st.markdown(cp_card, unsafe_allow_html=True)
+        lifecycle_markup = (
+            '<div class="lifecycle-cards-container">'
+            '<div class="lifecycle-card">'
+            '<div class="lifecycle-card-title">Coursework</div>'
+            f'{cw_pill}'
+            '</div>'
+            '<div class="lifecycle-card">'
+            '<div class="lifecycle-card-title">Comprehensive Exam</div>'
+            f'{ce_pill}'
+            '</div>'
+            '<div class="lifecycle-card">'
+            '<div class="lifecycle-card-title">Capstone Paper</div>'
+            f'{cp_pill}'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(lifecycle_markup, unsafe_allow_html=True)
 
 else:
     st.info("No student records available. Please ensure database connection is established.")
