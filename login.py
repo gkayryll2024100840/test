@@ -157,103 +157,116 @@ if not st.session_state.get('logged_in'):
                 st.error(result)
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
-   
+
     st.markdown("""
 <style>
+    /* Fixed top bar — offset to the right of the sidebar */
     .navbar {
         position: fixed;
-        top: 0 ;
-        left: 0px ;
-        width: 100% ;
-        height: 100px ;
-        background-color: #b91b21 ;
-        z-index: 150 ;
-        display: flex ;
-        align-items: center ;
+        top: 0;
+        left: 260px;                              /* width of Streamlit sidebar */
+        width: calc(100% - 260px);
+        height: 72px;
+        background-color: #b91b21;
+        z-index: 999;                             /* below sidebar, above content */
+        display: flex;
+        align-items: center;
         justify-content: space-between;
-        padding: 0 30px ;
-        box-sizing: border-box ;
+        padding: 0 28px;
+        box-sizing: border-box;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
     }
- 
-    [data-testid="stHeader"] {
-        z-index: 0;
-    }
- 
-    [data-testid="stSidebar"] {
-        z-index: 200;
-    }
- 
+
     .navbar-content {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
     }
- 
+
     .navbar-breadcrumbs {
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.8px;
-        color: #b0c0d8;
+        color: #f5d5d7;
         text-transform: uppercase;
     }
- 
+
     .navbar-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 700;
-        color: white;
+        color: #ffffff;
         letter-spacing: 0.2px;
     }
- 
+
     .navbar-program {
-        font-size: 14px;
-        color: #d0dbe9;
+        font-size: 13px;
+        color: #f5d5d7;
     }
- 
+
     .navbar-program strong {
-        color: white;
+        color: #ffffff;
         font-weight: 700;
+    }
+
+    /* Streamlit's own header: keep it out of the way */
+    [data-testid="stHeader"] {
+        z-index: 0;
+        background: transparent;
+    }
+
+    /* Sidebar: keep it above the navbar so it never gets covered */
+    [data-testid="stSidebar"] {
+        z-index: 1000;
+    }
+
+    /* Push page content below the fixed navbar */
+    .block-container {
+        padding-top: 90px !important;
+    }
+
+    /* When the sidebar is collapsed, shift the navbar back to the left */
+    body:has([data-testid="stSidebar"][aria-expanded="false"]) .navbar {
+        left: 0;
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
- 
- 
-# Keep the HTML tags flush against the left margin of the string
-    st.markdown("""
+
+    # Pull the active program from session state (falls back to "MBA" for now)
+    program_code = st.session_state.get("active_program_code", "MBA")
+
+    st.markdown(f"""
 <nav class="navbar">
-<div class="navbar-content">
-<div class="navbar-breadcrumbs">
-MAPÚA UNIVERSITY · ASU PATHWAYS
-</div>
-<div class="navbar-title">
-ETYSB Dashboard — MBA Program
-</div>
-</div>
-<div class="navbar-program">
-Program: <strong>MBA</strong>
-</div>
+  <div class="navbar-content">
+    <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
+    <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
+  </div>
+  <div class="navbar-program">
+    Program: <strong>{program_code}</strong>
+  </div>
 </nav>
 """, unsafe_allow_html=True)
- 
-   
+
     user = st.session_state.user
     role = user.get('role')
- 
+
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
-        st.session_state.failed_attempts = 0
         st.rerun()
-        show_empty_navbar()
- 
+
     # Route directly to student profile if a student target was requested
-    has_student_target = bool(st.query_params.get("student_id") or st.session_state.get("selected_student_override"))
- 
+    has_student_target = bool(
+        st.query_params.get("student_id")
+        or st.session_state.get("selected_student_override")
+    )
+
     # Define all available pages
-    home    = st.Page("dashboard_views/app.py",                title="Home",        default=not has_student_target)
+    home         = st.Page("dashboard_views/app.py",                title="Home",               default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
-    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",  default=has_student_target)
+    profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",    default=has_student_target)
     config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
- 
+
     # Role-based page access control
     if role == "Dean":
         allowed = [home, exec_page, roster_page, profile_page, config_page]
@@ -265,10 +278,10 @@ Program: <strong>MBA</strong>
         allowed = [home, roster_page, exec_page]
     else:
         allowed = []
- 
+
     if not allowed:
         st.error("No pages assigned to your role. Contact IT/Admin.")
         st.stop()
- 
+
     pg = st.navigation(allowed, position="sidebar")
     pg.run()
