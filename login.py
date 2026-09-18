@@ -216,7 +216,7 @@ else:
     if role == "Dean":
         allowed = [home, exec_page, roster_page, profile_page, config_page]
     elif role == "IT/Admin":
-        allowed = [home, config_page]
+        allowed = [home, exec_page, roster_page, profile_page, config_page]
     elif role == "Program_Chair":
         allowed = [home, exec_page, roster_page, profile_page]
     elif role == "Faculty_Advisor":
