@@ -177,20 +177,28 @@ def get_student_profile_data(student_number):
         print(f"Failed to fetch student details: {e}")
         return None
 
-def get_enrollment_count(status_filter="All"):
-    """Fetches the total count of MBA students based on EnrollmentStatus filter."""
+def get_enrollment_count(status: str, cohort: str = "All Cohorts"):
+    """Fetches the total count of MBA students based on EnrollmentStatus and Cohort filters."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
         
-        if status_filter == "All":
-            query = "SELECT COUNT(*) FROM Students"
-            cursor.execute(query)
-        else:
-            query = "SELECT COUNT(*) FROM Students WHERE EnrollmentStatus = %s"
-            cursor.execute(query, (status_filter,))
+        query = "SELECT COUNT(*) FROM Students WHERE 1=1"
+        params = []
+        
+        # Only filter by status if it's NOT "All Students" or "All"
+        if status and status not in ["All Students", "All"]:
+            query += " AND EnrollmentStatus = %s"
+            params.append(status)
             
+        # Filter by cohort if it's not "All Cohorts"
+        if cohort and cohort != "All Cohorts":
+            query += " AND Cohort = %s"
+            params.append(cohort)
+            
+        cursor.execute(query, tuple(params) if params else None)
         count = cursor.fetchone()[0]
+        
         cursor.close()
         conn.close()
         return count
