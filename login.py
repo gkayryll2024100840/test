@@ -120,9 +120,6 @@ if not st.session_state.get('logged_in'):
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
-    program_code = st.session_state.get("active_program_code", "MBA")
-
-    # ----- Style Streamlit's built-in header into our red navbar -----
     st.markdown(f"""
 <style>
     /* Restyle Streamlit's header — it already respects the sidebar */
@@ -137,7 +134,7 @@ else:
 
     /* Give the header its own content via a pseudo-element */
     [data-testid="stHeader"]::before {{
-        content: "MAPÚA UNIVERSITY · ASU PATHWAYS\\A ETYSB Dashboard — {program_code} Program";
+        content: "MAPÚA UNIVERSITY · ASU PATHWAYS\\A ETYSB Dashboard";
         white-space: pre;
         color: #ffffff !important;
         font-family: "Source Sans Pro", sans-serif;
@@ -155,7 +152,6 @@ else:
 
     /* Program label on the right */
     [data-testid="stHeader"]::after {{
-        content: "Program: {program_code}";
         position: absolute;
         right: 120px;
         top: 50%;
