@@ -157,18 +157,17 @@ if not st.session_state.get('logged_in'):
                 st.error(result)
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
-
     st.markdown("""
 <style>
     /* Fixed top bar — offset to the right of the sidebar */
     .navbar {
         position: fixed;
         top: 0;
-        left: 260px;                              /* width of Streamlit sidebar */
-        width: calc(100% - 260px);
+        left: 260px;                       /* start where the sidebar ends */
+        right: 0;                          /* extend to the right edge */
         height: 72px;
         background-color: #b91b21;
-        z-index: 999;                             /* below sidebar, above content */
+        z-index: 100;                      /* above content, below sidebar */
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -208,31 +207,14 @@ else:
         font-weight: 700;
     }
 
-    /* Streamlit's own header: keep it out of the way */
-    [data-testid="stHeader"] {
-        z-index: 0;
-        background: transparent;
-    }
-
-    /* Sidebar: keep it above the navbar so it never gets covered */
-    [data-testid="stSidebar"] {
-        z-index: 1000;
-    }
-
     /* Push page content below the fixed navbar */
     .block-container {
         padding-top: 90px !important;
     }
-
-    /* When the sidebar is collapsed, shift the navbar back to the left */
-    body:has([data-testid="stSidebar"][aria-expanded="false"]) .navbar {
-        left: 0;
-        width: 100%;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-    # Pull the active program from session state (falls back to "MBA" for now)
+    # Pull the active program from session state (falls back to "MBA")
     program_code = st.session_state.get("active_program_code", "MBA")
 
     st.markdown(f"""
@@ -250,24 +232,22 @@ else:
     user = st.session_state.user
     role = user.get('role')
 
+    # Sidebar logout button
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
 
-    # Route directly to student profile if a student target was requested
     has_student_target = bool(
         st.query_params.get("student_id")
         or st.session_state.get("selected_student_override")
     )
 
-    # Define all available pages
     home         = st.Page("dashboard_views/app.py",                title="Home",               default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
     profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",    default=has_student_target)
     config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
 
-    # Role-based page access control
     if role == "Dean":
         allowed = [home, exec_page, roster_page, profile_page, config_page]
     elif role == "IT/Admin":
