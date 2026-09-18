@@ -5,10 +5,9 @@ user = st.session_state.get('user',{})
 #grab active id session
 active_session_id = st.session_state.get('session_id', 'default_admin')
 
-st.title("Project PULSE Dashboard")
+st.title(f"Welcome, {user['FirstName']} {user['LastName']}!")
 
 st.info(f"Active Session ID for this browser: **{active_session_id}**")
-st.success(f"Welcome, {user['FirstName']} {user['LastName']}!")
 st.info(f"Your role is: **{user['role']}**")
 
 with st.expander("Account details"):
