@@ -157,23 +157,25 @@ if not st.session_state.get('logged_in'):
                 st.error(result)
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
+
     st.markdown("""
 <style>
-    /* Fixed top bar — offset to the right of the sidebar */
+    /* Fixed top bar — offset to the right of the sidebar by default */
     .navbar {
         position: fixed;
         top: 0;
-        left: 260px;                       /* start where the sidebar ends */
-        right: 0;                          /* extend to the right edge */
+        left: 260px;
+        width: calc(100% - 260px);
         height: 72px;
         background-color: #b91b21;
-        z-index: 100;                      /* above content, below sidebar */
+        z-index: 100;
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 0 28px;
         box-sizing: border-box;
         box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        transition: left 0.25s ease, width 0.25s ease;
     }
 
     .navbar-content {
@@ -211,10 +213,17 @@ else:
     .block-container {
         padding-top: 90px !important;
     }
+
+    /* When the sidebar is collapsed, slide the navbar to full width */
+    [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .navbar,
+    [data-testid="stSidebar"][aria-expanded="false"] ~ .navbar {
+        left: 0;
+        width: 100%;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-    # Pull the active program from session state (falls back to "MBA")
+    # Program label from session state
     program_code = st.session_state.get("active_program_code", "MBA")
 
     st.markdown(f"""
@@ -232,7 +241,6 @@ else:
     user = st.session_state.user
     role = user.get('role')
 
-    # Sidebar logout button
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
