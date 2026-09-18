@@ -106,23 +106,25 @@ def verify_login(user_id, password):
 def render_navbar(program_code="MBA"):
     """Render the fixed top bar and JS that keeps it aligned with the sidebar."""
 
-    st.markdown("""
+        st.markdown("""
 <style>
+    /* Fixed top bar — floats above everything except the sidebar */
     .navbar {
-        position: fixed;
-        top: 0;
-        left: 260px;
-        width: calc(100% - 260px);
-        height: 72px;
-        background-color: #b91b21;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 28px;
-        box-sizing: border-box;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-        transition: left 0.25s ease, width 0.25s ease;
+        position: fixed !important;
+        top: 0 !important;
+        left: 260px !important;
+        width: calc(100% - 260px) !important;
+        height: 72px !important;
+        background-color: #b91b21 !important;
+        z-index: 999999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0 28px !important;
+        box-sizing: border-box !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+        transition: left 0.25s ease, width 0.25s ease !important;
+        pointer-events: auto !important;
     }
 
     .navbar-content {
@@ -156,60 +158,23 @@ def render_navbar(program_code="MBA"):
         font-weight: 700;
     }
 
+    /* Push Streamlit's own top bar out of the way */
+    [data-testid="stHeader"] {
+        z-index: 0 !important;
+        background: transparent !important;
+    }
+
+    /* Sidebar stays above the navbar */
+    [data-testid="stSidebar"] {
+        z-index: 1000000 !important;
+    }
+
     /* Push page content below the fixed navbar */
     .block-container {
         padding-top: 90px !important;
     }
 </style>
 """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-<nav class="navbar" id="pulse-navbar">
-  <div class="navbar-content">
-    <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
-    <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
-  </div>
-  <div class="navbar-program">
-    Program: <strong>{program_code}</strong>
-  </div>
-</nav>
-""", unsafe_allow_html=True)
-
-    # JS runs inside a tiny iframe and reaches into the parent document
-    components.html("""
-<script>
-(function() {
-    function adjustNavbar() {
-        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-        const navbar  = window.parent.document.getElementById('pulse-navbar');
-        if (!sidebar || !navbar) return;
-
-        // Measure the sidebar's actual rendered width (0 if collapsed)
-        const rect = sidebar.getBoundingClientRect();
-        const w = rect.width > 50 ? rect.width : 0;   // >50 avoids the collapsed mini-rail
-
-        navbar.style.left  = w + 'px';
-        navbar.style.width = 'calc(100% - ' + w + 'px)';
-    }
-
-    // Run once immediately
-    adjustNavbar();
-
-    // Observe sidebar attribute changes (style/class/aria-expanded)
-    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-    if (sidebar) {
-        const observer = new MutationObserver(adjustNavbar);
-        observer.observe(sidebar, {
-            attributes: true,
-            attributeFilter: ['style', 'class', 'aria-expanded']
-        });
-    }
-
-    // Safety net: re-check periodically in case Streamlit re-renders the sidebar
-    setInterval(adjustNavbar, 400);
-})();
-</script>
-""", height=0)
 
 
 # ============================================================
