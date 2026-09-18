@@ -170,22 +170,29 @@ else:
 </style>
 """, unsafe_allow_html=True)
 
-    # ----- Sidebar position (added as requested) -----
+    # ----- Sidebar position (updated per request) -----
     st.markdown("""
 <style>
 [data-testid="stSidebarCollapseButton"] {
     position: fixed;
-    center: 20px;
-    top: auto;
+    top: 50%;
+    left: 20px; /* Adjust left offset if needed (e.g., left: 20px;) */
+    transform: translateY(-50%);
+    z-index: 999; /* Keeps it on top of other content */
 }
 
 [data-testid="stExpandSidebarButton"] {
     position: fixed;
-    center: 20px;
-    top: auto;
-    left: 20px;
+    top: 50%;
+    left: 20px; /* Adjust left offset if needed (e.g., left: 20px;) */
+    transform: translateY(-50%);
+    z-index: 999; /* Keeps it on top of other content */
 }
+
+
 </style>
+
+
 """, unsafe_allow_html=True)
 
     user = st.session_state.user
