@@ -2,7 +2,6 @@ import os
 import hashlib
 import uuid
 import streamlit as st
-import streamlit.components.v1 as components
 import mysql.connector
 import pandas as pd
 from dotenv import load_dotenv
@@ -101,14 +100,43 @@ def verify_login(user_id, password):
 
 
 # ============================================================
-# HEADER + SIDEBAR-AWARE LAYOUT (rendered only when logged in)
+# ROUTING
 # ============================================================
-def render_navbar(program_code="MBA"):
-    """Render the fixed top bar and JS that keeps it aligned with the sidebar."""
+if not st.session_state.get('logged_in'):
+    # --- LOGIN SCREEN (no navbar) ---
+    st.title("Project PULSE Login Page")
+    input_id = st.text_input("User ID")
+    input_pass = st.text_input("Password", type="password")
+    button_login = st.button("Log in")
+
+    if button_login:
+        if not input_id or not input_pass:
+            st.warning("Please enter both User ID and Password.")
+        else:
+            success, result = verify_login(input_id, input_pass)
+            if success:
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = result
+                # Preserve student_id if user followed a direct link
+                if st.query_params.get("student_id"):
+                    st.session_state["selected_student_override"] = str(
+                        st.query_params.get("student_id")
+                    ).strip()
+                st.rerun()
+            else:
+                st.error(result)
+
+else:
+    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
     st.markdown("""
 <style>
-    /* Fixed top bar — floats above everything except the sidebar */
+    /* Hide Streamlit's default top bar entirely */
+    [data-testid="stHeader"] {
+        display: none !important;
+    }
+
+    /* Fixed top bar — offset to the right of the sidebar by default */
     .navbar {
         position: fixed !important;
         top: 0 !important;
@@ -124,7 +152,6 @@ def render_navbar(program_code="MBA"):
         box-sizing: border-box !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
         transition: left 0.25s ease, width 0.25s ease !important;
-        pointer-events: auto !important;
     }
 
     .navbar-content {
@@ -158,13 +185,7 @@ def render_navbar(program_code="MBA"):
         font-weight: 700;
     }
 
-    /* Push Streamlit's own top bar out of the way */
-    [data-testid="stHeader"] {
-        z-index: 0 !important;
-        background: transparent !important;
-    }
-
-    /* Sidebar stays above the navbar */
+    /* Sidebar stays above the navbar so it's never covered */
     [data-testid="stSidebar"] {
         z-index: 1000000 !important;
     }
@@ -176,46 +197,24 @@ def render_navbar(program_code="MBA"):
 </style>
 """, unsafe_allow_html=True)
 
-
-# ============================================================
-# ROUTING
-# ============================================================
-if not st.session_state.get('logged_in'):
-    # --- LOGIN SCREEN (no navbar) ---
-    st.title("Project PULSE Login Page")
-    input_id = st.text_input("User ID")
-    input_pass = st.text_input("Password", type="password")
-    button_login = st.button("Log in")
-
-    if button_login:
-        if not input_id or not input_pass:
-            st.warning("Please enter both User ID and Password.")
-        else:
-            success, result = verify_login(input_id, input_pass)
-            if success:
-                st.session_state["logged_in"] = True
-                st.session_state["user"] = result
-                # Preserve student_id if user followed a direct link
-                if st.query_params.get("student_id"):
-                    st.session_state["selected_student_override"] = str(
-                        st.query_params.get("student_id")
-                    ).strip()
-                st.rerun()
-            else:
-                st.error(result)
-
-else:
-    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
-    user = st.session_state.user
-    role = user.get('role')
-
     # Program label from session state
     program_code = st.session_state.get("active_program_code", "MBA")
 
-    # Render the fixed header (with JS keeping it aligned to the sidebar)
-    render_navbar(program_code=program_code)
+    st.markdown(f"""
+<nav class="navbar" id="pulse-navbar">
+  <div class="navbar-content">
+    <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
+    <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
+  </div>
+  <div class="navbar-program">
+    Program: <strong>{program_code}</strong>
+  </div>
+</nav>
+""", unsafe_allow_html=True)
 
-    # Sidebar logout button
+    user = st.session_state.user
+    role = user.get('role')
+
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
@@ -225,14 +224,12 @@ else:
         or st.session_state.get("selected_student_override")
     )
 
-    # Define all available pages
     home         = st.Page("dashboard_views/app.py",                title="Home",               default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
     profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",    default=has_student_target)
     config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
 
-    # Role-based page access control
     if role == "Dean":
         allowed = [home, exec_page, roster_page, profile_page, config_page]
     elif role == "IT/Admin":
