@@ -163,8 +163,8 @@ else:
     .navbar {
         position: fixed;
         top: 0 ;
-        left: 50px ;
-        width: 0% ;
+        left: 0px ;
+        width: 100% ;
         height: 100px ;
         background-color: #b91b21 ;
         z-index: 150 ;
