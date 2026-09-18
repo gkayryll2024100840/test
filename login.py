@@ -143,7 +143,7 @@ else:
         z-index: 1000;
         display: flex;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: space-between;
         padding: 0 28px;
         box-sizing: border-box;
         box-shadow: 0 2px 6px rgba(0,0,0,0.12);
@@ -171,6 +171,16 @@ else:
         letter-spacing: 0.2px;
     }
 
+    .navbar-program {
+        font-size: 13px;
+        color: #f5d5d7;
+    }
+
+    .navbar-program strong {
+        color: #ffffff;
+        font-weight: 700;
+    }
+
     /* Push page content below the fixed navbar */
     .block-container {
         padding-top: 90px !important;
@@ -184,7 +194,10 @@ else:
 <nav class="navbar" id="pulse-navbar">
   <div class="navbar-content">
     <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
-    <div class="navbar-title">ETYSB Dashboard</div>
+    <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
+  </div>
+  <div class="navbar-program">
+    Program: <strong>{program_code}</strong>
   </div>
 </nav>
 """, unsafe_allow_html=True)
