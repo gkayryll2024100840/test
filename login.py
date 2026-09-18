@@ -129,29 +129,25 @@ if not st.session_state.get('logged_in'):
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
+    import streamlit.components.v1 as components
+
     st.markdown("""
 <style>
-    /* Hide Streamlit's default top bar entirely */
-    [data-testid="stHeader"] {
-        display: none !important;
-    }
-
-    /* Fixed top bar — offset to the right of the sidebar by default */
     .navbar {
-        position: fixed !important;
-        top: 0 !important;
-        left: 260px !important;
-        width: calc(100% - 260px) !important;
-        height: 72px !important;
-        background-color: #b91b21 !important;
-        z-index: 999999 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        padding: 0 28px !important;
-        box-sizing: border-box !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
-        transition: left 0.25s ease, width 0.25s ease !important;
+        position: fixed;
+        top: 0;
+        left: 260px;
+        width: calc(100% - 260px);
+        height: 72px;
+        background-color: #b91b21;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 28px;
+        box-sizing: border-box;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        transition: left 0.25s ease, width 0.25s ease;
     }
 
     .navbar-content {
@@ -185,11 +181,6 @@ else:
         font-weight: 700;
     }
 
-    /* Sidebar stays above the navbar so it's never covered */
-    [data-testid="stSidebar"] {
-        z-index: 1000000 !important;
-    }
-
     /* Push page content below the fixed navbar */
     .block-container {
         padding-top: 90px !important;
@@ -197,7 +188,6 @@ else:
 </style>
 """, unsafe_allow_html=True)
 
-    # Program label from session state
     program_code = st.session_state.get("active_program_code", "MBA")
 
     st.markdown(f"""
@@ -211,6 +201,38 @@ else:
   </div>
 </nav>
 """, unsafe_allow_html=True)
+
+    # JS: keep the navbar aligned with the sidebar's current width
+    components.html("""
+<script>
+(function() {
+    function adjustNavbar() {
+        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        const navbar  = window.parent.document.getElementById('pulse-navbar');
+        if (!sidebar || !navbar) return;
+
+        const rect = sidebar.getBoundingClientRect();
+        // Treat anything <= 50px as "collapsed"
+        const w = rect.width > 50 ? rect.width : 0;
+
+        navbar.style.left  = w + 'px';
+        navbar.style.width = 'calc(100% - ' + w + 'px)';
+    }
+
+    adjustNavbar();
+
+    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+    if (sidebar) {
+        const obs = new MutationObserver(adjustNavbar);
+        obs.observe(sidebar, {
+            attributes: true,
+            attributeFilter: ['style', 'class', 'aria-expanded']
+        });
+    }
+    setInterval(adjustNavbar, 400);
+})();
+</script>
+""", height=0)
 
     user = st.session_state.user
     role = user.get('role')
