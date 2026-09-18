@@ -220,7 +220,7 @@ else:
     elif role == "Program_Chair":
         allowed = [home, exec_page, roster_page, profile_page]
     elif role == "Faculty_Advisor":
-        allowed = [home, roster_page, exec_page]
+        allowed = [home, profile_page, roster_page, exec_page]
     else:
         allowed = []
 
