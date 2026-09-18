@@ -106,7 +106,7 @@ def verify_login(user_id, password):
 def render_navbar(program_code="MBA"):
     """Render the fixed top bar and JS that keeps it aligned with the sidebar."""
 
-        st.markdown("""
+    st.markdown("""
 <style>
     /* Fixed top bar — floats above everything except the sidebar */
     .navbar {
