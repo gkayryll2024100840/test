@@ -2,6 +2,7 @@ import os
 import hashlib
 import uuid
 import streamlit as st
+import streamlit.components.v1 as components
 import mysql.connector
 import pandas as pd
 from dotenv import load_dotenv
@@ -129,56 +130,66 @@ if not st.session_state.get('logged_in'):
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
-    import streamlit.components.v1 as components
-
+    # ----- CSS: navbar styling only, no sidebar/header interference -----
     st.markdown("""
 <style>
     .navbar {
-        position: fixed;
-        top: 0;
-        left: 260px;
-        width: calc(100% - 260px);
-        height: 72px;
-        background-color: #b91b21;
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 28px;
-        box-sizing: border-box;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-        transition: left 0.25s ease, width 0.25s ease;
+        position: fixed !important;
+        top: 0 !important;
+        left: 260px !important;
+        width: calc(100% - 260px) !important;
+        height: 72px !important;
+        min-height: 72px !important;
+        max-height: 72px !important;
+        background-color: #b91b21 !important;
+        z-index: 1000 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0 28px !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+        transition: left 0.25s ease, width 0.25s ease !important;
     }
 
     .navbar-content {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+        height: auto !important;
     }
 
     .navbar-breadcrumbs {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.8px;
-        color: #f5d5d7;
-        text-transform: uppercase;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.8px !important;
+        color: #f5d5d7 !important;
+        text-transform: uppercase !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
     }
 
     .navbar-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #ffffff;
-        letter-spacing: 0.2px;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        letter-spacing: 0.2px !important;
+        line-height: 1.3 !important;
+        margin: 0 !important;
     }
 
     .navbar-program {
-        font-size: 13px;
-        color: #f5d5d7;
+        font-size: 13px !important;
+        color: #f5d5d7 !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
     }
 
     .navbar-program strong {
-        color: #ffffff;
-        font-weight: 700;
+        color: #ffffff !important;
+        font-weight: 700 !important;
     }
 
     /* Push page content below the fixed navbar */
@@ -188,6 +199,7 @@ else:
 </style>
 """, unsafe_allow_html=True)
 
+    # ----- Navbar HTML -----
     program_code = st.session_state.get("active_program_code", "MBA")
 
     st.markdown(f"""
@@ -202,25 +214,42 @@ else:
 </nav>
 """, unsafe_allow_html=True)
 
-    # JS: keep the navbar aligned with the sidebar's current width
+    # ----- JS: move navbar to <body>, then keep it aligned with the sidebar -----
     components.html("""
 <script>
 (function() {
     function adjustNavbar() {
-        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-        const navbar  = window.parent.document.getElementById('pulse-navbar');
-        if (!sidebar || !navbar) return;
+        // Reach into the parent Streamlit document
+        const doc = window.parent.document;
+        const navbar  = doc.getElementById('pulse-navbar');
+        const sidebar = doc.querySelector('[data-testid="stSidebar"]');
 
+        if (!navbar) return;
+
+        // Move the navbar out of Streamlit's flex/transform context
+        if (navbar.parentNode !== doc.body) {
+            doc.body.appendChild(navbar);
+        }
+
+        if (!sidebar) {
+            // No sidebar present — navbar spans the full width
+            navbar.style.left  = '0px';
+            navbar.style.width = '100%';
+            return;
+        }
+
+        // Measure the sidebar's actual width (0 if collapsed)
         const rect = sidebar.getBoundingClientRect();
-        // Treat anything <= 50px as "collapsed"
         const w = rect.width > 50 ? rect.width : 0;
 
         navbar.style.left  = w + 'px';
         navbar.style.width = 'calc(100% - ' + w + 'px)';
     }
 
+    // Run once immediately
     adjustNavbar();
 
+    // Observe sidebar changes (open / close)
     const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
     if (sidebar) {
         const obs = new MutationObserver(adjustNavbar);
@@ -229,6 +258,8 @@ else:
             attributeFilter: ['style', 'class', 'aria-expanded']
         });
     }
+
+    // Safety net in case Streamlit re-renders the sidebar
     setInterval(adjustNavbar, 400);
 })();
 </script>
