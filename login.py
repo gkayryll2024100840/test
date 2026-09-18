@@ -45,12 +45,7 @@ def log_failed_attempt(user_id, ip_address=None):
 
 # Login verify
 def verify_login(user_id, password):
-    """Verify user credentials against the database.
-
-    Returns a tuple: (success: bool, result: dict or str)
-    - On success: (True, user_dict)
-    - On failure: (False, error_message)
-    """
+    """Verify user credentials against the database."""
     session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
 
     try:
@@ -70,16 +65,13 @@ def verify_login(user_id, password):
             cursor.execute(sql, (user_id,))
             user = cursor.fetchone()
 
-            # User not found
             if not user:
                 return False, "Invalid User ID or password."
 
-            # Recompute the hash using the stored salt
             stored_salt = user['salt']
             combined = password + stored_salt
             computed_hash = hashlib.sha256(combined.encode()).hexdigest()
 
-            # Compare hashes
             if computed_hash == user['password_hash']:
                 st.session_state.failed_attempts = 0
                 return True, user
@@ -103,7 +95,7 @@ def verify_login(user_id, password):
 # ROUTING
 # ============================================================
 if not st.session_state.get('logged_in'):
-    # --- LOGIN SCREEN (no navbar) ---
+    # --- LOGIN SCREEN (no header changes) ---
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
     input_pass = st.text_input("Password", type="password")
@@ -117,7 +109,6 @@ if not st.session_state.get('logged_in'):
             if success:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = result
-                # Preserve student_id if user followed a direct link
                 if st.query_params.get("student_id"):
                     st.session_state["selected_student_override"] = str(
                         st.query_params.get("student_id")
@@ -129,110 +120,62 @@ if not st.session_state.get('logged_in'):
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
-    import streamlit.components.v1 as components
-
-    st.markdown("""
-<style>
-    .navbar {
-        position: fixed;
-        top: 0;
-        left: 260px;
-        width: calc(100% - 260px);
-        height: 72px;
-        background-color: #b91b21;
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 28px;
-        box-sizing: border-box;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-        transition: left 0.25s ease, width 0.25s ease;
-    }
-
-    .navbar-content {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .navbar-breadcrumbs {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.8px;
-        color: #f5d5d7;
-        text-transform: uppercase;
-    }
-
-    .navbar-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #ffffff;
-        letter-spacing: 0.2px;
-    }
-
-    .navbar-program {
-        font-size: 13px;
-        color: #f5d5d7;
-    }
-
-    .navbar-program strong {
-        color: #ffffff;
-        font-weight: 700;
-    }
-
-    /* Push page content below the fixed navbar */
-    .block-container {
-        padding-top: 90px !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
     program_code = st.session_state.get("active_program_code", "MBA")
 
+    # ----- Style Streamlit's built-in header into our red navbar -----
     st.markdown(f"""
-<nav class="navbar" id="pulse-navbar">
-  <div class="navbar-content">
-    <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
-    <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
-  </div>
-  <div class="navbar-program">
-    Program: <strong>{program_code}</strong>
-  </div>
-</nav>
+<style>
+    /* Restyle Streamlit's header — it already respects the sidebar */
+    [data-testid="stHeader"] {{
+        background-color: #b91b21 !important;
+        height: 72px !important;
+        padding: 0 28px !important;
+        display: flex !important;
+        align-items: center !important;
+        z-index: 999990 !important;
+    }}
+
+    /* Give the header its own content via a pseudo-element */
+    [data-testid="stHeader"]::before {{
+        content: "MAPÚA UNIVERSITY · ASU PATHWAYS\\A ETYSB Dashboard — {program_code} Program";
+        white-space: pre;
+        color: #ffffff !important;
+        font-family: "Source Sans Pro", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.5;
+        letter-spacing: 0.3px;
+        text-transform: none;
+        position: absolute;
+        left: 28px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }}
+
+    /* Program label on the right */
+    [data-testid="stHeader"]::after {{
+        content: "Program: {program_code}";
+        position: absolute;
+        right: 120px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #f5d5d7 !important;
+        font-family: "Source Sans Pro", sans-serif;
+        font-size: 13px;
+        font-weight: 600;
+        pointer-events: none;
+    }}
+
+    /* Make the breadcrumb look smaller than the title using a span */
+    /* (Optional — remove if you don't need the two-line effect) */
+
+    /* Push page content below the header */
+    .block-container {{
+        padding-top: 90px !important;
+    }}
+</style>
 """, unsafe_allow_html=True)
-
-    # JS: keep the navbar aligned with the sidebar's current width
-    components.html("""
-<script>
-(function() {
-    function adjustNavbar() {
-        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-        const navbar  = window.parent.document.getElementById('pulse-navbar');
-        if (!sidebar || !navbar) return;
-
-        const rect = sidebar.getBoundingClientRect();
-        // Treat anything <= 50px as "collapsed"
-        const w = rect.width > 50 ? rect.width : 0;
-
-        navbar.style.left  = w + 'px';
-        navbar.style.width = 'calc(100% - ' + w + 'px)';
-    }
-
-    adjustNavbar();
-
-    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-    if (sidebar) {
-        const obs = new MutationObserver(adjustNavbar);
-        obs.observe(sidebar, {
-            attributes: true,
-            attributeFilter: ['style', 'class', 'aria-expanded']
-        });
-    }
-    setInterval(adjustNavbar, 400);
-})();
-</script>
-""", height=0)
 
     user = st.session_state.user
     role = user.get('role')
