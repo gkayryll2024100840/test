@@ -2,70 +2,34 @@ import os
 import hashlib
 import uuid
 import streamlit as st
+import streamlit.components.v1 as components
 import mysql.connector
-import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 from db_connect import get_db_connection, format_mysql_error
 from system_log import log_sync_attempt_local
- 
-def show_empty_navbar():
-    st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">', unsafe_allow_html=True)
- 
-st.markdown("""
-<style>
-    .navbar {
-        position: fixed
-        top: 0 ;
-        left: 0 ;
-        width: 100% ;
-        height: 100px;
-        background-color: #0e1117;
-        z-index: 150;
-    }
- 
-    /* Streamlit header */
-    [data-testid="stHeader"] {
-        z-index: 100;
-    }
- 
-    /* Sidebar stays visible */
-    [data-testid="stSidebar"] {
-        z-index: 1000;
-    }
-</style>
-""", unsafe_allow_html=True)
- 
-st.markdown("""
-<nav class="navbar navbar-expand-lg fixed-top"  
-     style="padding: 0 30px;">
- 
-</nav>
-""", unsafe_allow_html=True)
- 
- 
-show_empty_navbar()
- 
+
 load_dotenv()
- 
-#creates session ID
-#for us-16. Used to track sync attempts and log the errors in local_logs.db
+
+# Creates session ID
+# For US-16. Used to track sync attempts and log errors in local_logs.db
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
- 
+
 MAX_FAILED_ATTEMPTS = 3
- 
+
 # Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
- 
+
+
 def log_failed_attempt(user_id, ip_address=None):
     """Insert a wrong-password attempt into login_logs."""
     try:
         connection = get_db_connection()
     except mysql.connector.Error:
         return
- 
+
     try:
         with connection.cursor(dictionary=True) as cursor:
             sql = """
@@ -78,24 +42,25 @@ def log_failed_attempt(user_id, ip_address=None):
         st.warning(f"⚠️ Log failed: {e}")
     finally:
         connection.close()
- 
+
+
 # Login verify
 def verify_login(user_id, password):
     """Verify user credentials against the database.
-   
+
     Returns a tuple: (success: bool, result: dict or str)
     - On success: (True, user_dict)
     - On failure: (False, error_message)
     """
     session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
- 
+
     try:
         connection = get_db_connection()
     except mysql.connector.Error as e:
         msg = format_mysql_error(e)
         log_sync_attempt_local(status="FAILED", error_message=msg, login_id=session_id)
         return False, msg
- 
+
     try:
         with connection.cursor(dictionary=True) as cursor:
             sql = """
@@ -105,62 +70,44 @@ def verify_login(user_id, password):
             """
             cursor.execute(sql, (user_id,))
             user = cursor.fetchone()
- 
+
             # User not found
             if not user:
                 return False, "Invalid User ID or password."
- 
+
             # Recompute the hash using the stored salt
             stored_salt = user['salt']
             combined = password + stored_salt
             computed_hash = hashlib.sha256(combined.encode()).hexdigest()
- 
+
             # Compare hashes
             if computed_hash == user['password_hash']:
                 st.session_state.failed_attempts = 0
                 return True, user
             else:
                 st.session_state.failed_attempts += 1
-               
+
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
                     log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else:
                     return False, "Invalid User ID or password. Verify using email."
- 
+
     except mysql.connector.Error as er:
         log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
         return False, f"Database error: {er}"
     finally:
         connection.close()
- 
-# -------------------------------------Streamlit UI & Routing-----------------------------------------------------
-if not st.session_state.get('logged_in'):
-    st.title("Project PULSE Login Page")
-    input_id = st.text_input("User ID")
-    input_pass = st.text_input("Password", type="password")
-    button_login = st.button("Log in")
- 
-    if button_login:
-        if not input_id or not input_pass:
-            st.warning("Please enter both User ID and Password.")
-        else:
-            success, result = verify_login(input_id, input_pass)
-            if success:
-                st.session_state["logged_in"] = True
-                st.session_state["user"] = result
-                # Preserve student_id if user followed a direct link
-                if st.query_params.get("student_id"):
-                    st.session_state["selected_student_override"] = str(st.query_params.get("student_id")).strip()
-                st.rerun()
-            else:
-                st.error(result)
-else:
-    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
+
+
+# ============================================================
+# HEADER + SIDEBAR-AWARE LAYOUT (rendered only when logged in)
+# ============================================================
+def render_navbar(program_code="MBA"):
+    """Render the fixed top bar and JS that keeps it aligned with the sidebar."""
 
     st.markdown("""
 <style>
-    /* Fixed top bar — offset to the right of the sidebar by default */
     .navbar {
         position: fixed;
         top: 0;
@@ -213,21 +160,11 @@ else:
     .block-container {
         padding-top: 90px !important;
     }
-
-    /* When the sidebar is collapsed, slide the navbar to full width */
-    [data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="stAppViewContainer"] .navbar,
-    [data-testid="stSidebar"][aria-expanded="false"] ~ .navbar {
-        left: 0;
-        width: 100%;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-    # Program label from session state
-    program_code = st.session_state.get("active_program_code", "MBA")
-
     st.markdown(f"""
-<nav class="navbar">
+<nav class="navbar" id="pulse-navbar">
   <div class="navbar-content">
     <div class="navbar-breadcrumbs">MAPÚA UNIVERSITY · ASU PATHWAYS</div>
     <div class="navbar-title">ETYSB Dashboard — {program_code} Program</div>
@@ -238,9 +175,82 @@ else:
 </nav>
 """, unsafe_allow_html=True)
 
+    # JS runs inside a tiny iframe and reaches into the parent document
+    components.html("""
+<script>
+(function() {
+    function adjustNavbar() {
+        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        const navbar  = window.parent.document.getElementById('pulse-navbar');
+        if (!sidebar || !navbar) return;
+
+        // Measure the sidebar's actual rendered width (0 if collapsed)
+        const rect = sidebar.getBoundingClientRect();
+        const w = rect.width > 50 ? rect.width : 0;   // >50 avoids the collapsed mini-rail
+
+        navbar.style.left  = w + 'px';
+        navbar.style.width = 'calc(100% - ' + w + 'px)';
+    }
+
+    // Run once immediately
+    adjustNavbar();
+
+    // Observe sidebar attribute changes (style/class/aria-expanded)
+    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+    if (sidebar) {
+        const observer = new MutationObserver(adjustNavbar);
+        observer.observe(sidebar, {
+            attributes: true,
+            attributeFilter: ['style', 'class', 'aria-expanded']
+        });
+    }
+
+    // Safety net: re-check periodically in case Streamlit re-renders the sidebar
+    setInterval(adjustNavbar, 400);
+})();
+</script>
+""", height=0)
+
+
+# ============================================================
+# ROUTING
+# ============================================================
+if not st.session_state.get('logged_in'):
+    # --- LOGIN SCREEN (no navbar) ---
+    st.title("Project PULSE Login Page")
+    input_id = st.text_input("User ID")
+    input_pass = st.text_input("Password", type="password")
+    button_login = st.button("Log in")
+
+    if button_login:
+        if not input_id or not input_pass:
+            st.warning("Please enter both User ID and Password.")
+        else:
+            success, result = verify_login(input_id, input_pass)
+            if success:
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = result
+                # Preserve student_id if user followed a direct link
+                if st.query_params.get("student_id"):
+                    st.session_state["selected_student_override"] = str(
+                        st.query_params.get("student_id")
+                    ).strip()
+                st.rerun()
+            else:
+                st.error(result)
+
+else:
+    # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
     user = st.session_state.user
     role = user.get('role')
 
+    # Program label from session state
+    program_code = st.session_state.get("active_program_code", "MBA")
+
+    # Render the fixed header (with JS keeping it aligned to the sidebar)
+    render_navbar(program_code=program_code)
+
+    # Sidebar logout button
     if st.sidebar.button("Log Out"):
         st.session_state.clear()
         st.rerun()
@@ -250,12 +260,14 @@ else:
         or st.session_state.get("selected_student_override")
     )
 
+    # Define all available pages
     home         = st.Page("dashboard_views/app.py",                title="Home",               default=not has_student_target)
     exec_page    = st.Page("dashboard_views/executive_overview.py", title="Executive Overview")
     roster_page  = st.Page("dashboard_views/student_roster.py",     title="Student Roster")
     profile_page = st.Page("dashboard_views/student_profile.py",    title="Student Profile",    default=has_student_target)
     config_page  = st.Page("dashboard_views/admin_config.py",       title="Admin Config")
 
+    # Role-based page access control
     if role == "Dean":
         allowed = [home, exec_page, roster_page, profile_page, config_page]
     elif role == "IT/Admin":
