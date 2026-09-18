@@ -163,13 +163,28 @@ else:
         pointer-events: none;
     }}
 
-    /* Make the breadcrumb look smaller than the title using a span */
-    /* (Optional — remove if you don't need the two-line effect) */
-
     /* Push page content below the header */
     .block-container {{
         padding-top: 90px !important;
     }}
+</style>
+""", unsafe_allow_html=True)
+
+    # ----- Sidebar position (added as requested) -----
+    st.markdown("""
+<style>
+[data-testid="stSidebarCollapseButton"] {
+    position: fixed;
+    center: 20px;
+    top: auto;
+}
+
+[data-testid="stExpandSidebarButton"] {
+    position: fixed;
+    center: 20px;
+    top: auto;
+    left: 20px;
+}
 </style>
 """, unsafe_allow_html=True)
 
