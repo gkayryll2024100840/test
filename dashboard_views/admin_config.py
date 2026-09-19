@@ -67,15 +67,14 @@ col_save, col_status = st.columns([1, 3])
 
 with col_save:
     if st.button("Save Mappings", type="primary"):
+        save_mappings(updated_mappings)
+        st.session_state["current_mappings"] = updated_mappings
+        
         if validation_errors:
-            st.error(
-                f"Cannot save. Missing mapping for: {', '.join(validation_errors)}"
-            )
+            st.warning("Saved with errors! Note: Roster view will be disabled until resolved.")
         else:
-            save_mappings(updated_mappings)
-            st.session_state["current_mappings"] = updated_mappings
             st.success("Configurations successfully saved!")
-            st.rerun()
+        st.rerun()
 
 with col_status:
     if validation_errors:
