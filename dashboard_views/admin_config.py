@@ -1,7 +1,13 @@
 import json
 import os
 import streamlit as st
-from db_connect import get_system_logs, trigger_data_sync, check_column_exists
+from db_connect import (
+    get_system_logs,
+    trigger_data_sync,
+    check_column_exists,
+    refresh_schema_cache,
+    get_schema_load_error,
+)
 from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
 
@@ -19,6 +25,14 @@ CONFIG_FILE = "field_mappings.json"
 
 st.subheader("Field Mapping (US-10)")
 st.markdown("Maps dashboard fields to IFT200's normalized schema — no code changes required to repoint for a new program.")
+
+# The DB schema is cached in db_connect (auto-refreshes every 60s). Use this after changing the database itself.
+if st.button("Re-check schema"):
+    refresh_schema_cache()
+
+schema_error = get_schema_load_error()
+if schema_error:
+    st.error(f"Could not read the database schema, so no mapping can be verified: {schema_error}")
 
 # Load current configuration into session state if not already present
 if "current_mappings" not in st.session_state:
@@ -45,19 +59,19 @@ for field_label, db_column in st.session_state["current_mappings"].items():
 
     with col3:
         typed_path = new_column.strip()
-        column_exists = check_column_exists(typed_path) if typed_path else False
+        column_exists = check_column_exists(typed_path)
 
         toggle_key = f"toggle_{field_label}"
 
         st.session_state[toggle_key] = column_exists
 
-        is_active = st.toggle(
+        st.toggle(
             "Mapped",
             key=toggle_key,
             disabled=True
         )
 
-        if not is_active or not column_exists:
+        if not column_exists:
             validation_errors.append(field_label)
 
 st.markdown("---")
@@ -66,20 +80,24 @@ st.markdown("---")
 col_save, col_status = st.columns([1, 3])
 
 with col_save:
-    if st.button("Save Mappings", type="primary"):
-        save_mappings(updated_mappings)
-        st.session_state["current_mappings"] = updated_mappings
-        
-        if validation_errors:
-            st.warning("Saved with errors! Note: Roster view will be disabled until resolved.")
-        else:
-            st.success("Configurations successfully saved!")
-        st.rerun()
+    save_clicked = st.button("Save Mappings", type="primary")
+
+if save_clicked:
+    save_mappings(updated_mappings)
+    st.session_state["current_mappings"] = updated_mappings
 
 with col_status:
-    if validation_errors:
+    if save_clicked and validation_errors:
         st.warning(
-            "Configuration has errors and cannot go live until resolved.",
+            "Saved with errors! Note: Roster view will be disabled until resolved. "
+            f"Fix: {', '.join(validation_errors)}"
+        )
+    elif save_clicked:
+        st.success("Configurations successfully saved!")
+    elif validation_errors:
+        st.warning(
+            "Configuration has errors and cannot go live until resolved: "
+            f"{', '.join(validation_errors)}"
         )
     else:
         st.success("All mappings valid and ready for production deployment.")
