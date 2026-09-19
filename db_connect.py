@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv 
 from system_log import log_sync_attempt_local, get_system_logs_local, get_max_retry_count_local
+from field_mapping import load_mappings
 
 # Load database credentials from .env file into memory 
 load_dotenv(override=True)  
@@ -91,6 +92,15 @@ def get_max_retry_count(login_id):
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
 def get_student_roster_data():
     try:
+        # 1. Load the mappings from the JSON file
+        mappings = load_mappings()
+        
+        # 2. Loop through EVERY mapped field and check if it actually exists in the database!
+        for field_label, typed_path in mappings.items():
+            if not typed_path or not check_column_exists(typed_path):
+                raise ValueError(f"Invalid or unverified mapping for '{field_label}': '{typed_path}'")
+
+        # 3. If everything is valid, run the database query normally
         conn = mysql.connector.connect(**db_config)
         query = """
             SELECT 
@@ -108,26 +118,14 @@ def get_student_roster_data():
         """
         df = pd.read_sql(query, conn)
         conn.close()
-
-        # Normalize lifecycle columns for US-07, US-08, and US-09
-        for col in ['CourseworkStatus', 'CompExamStatus', 'CapstoneStatus']:
-            if col in df.columns:
-                df[col] = (
-                    df[col]
-                    .astype(str)
-                    .str.strip()
-                    .str.lower()
-                    .map(LIFECYCLE_STATUS_MAP)
-                    .fillna(df[col])
-                )
-
         return df
-    except Exception as e:
-        print(f"Failed to fetch roster data: {e}")
-        return pd.DataFrame()
 
-# Checks last_sync.txt for the last successful sync timestamp
+    except Exception as e:
+        print(f"Mapping validation failed: {e}")
+        raise e  # This passes the error straight to your student roster page!
+
 def get_last_updated_time():
+    """Checks last_sync.txt for the last successful sync timestamp."""
     try:
         if os.path.exists("last_sync.txt"):
             with open("last_sync.txt", "r") as f:
