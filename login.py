@@ -42,18 +42,18 @@ def log_failed_attempt(user_id, ip_address=None):
     finally:
         connection.close()
 
-
-# Login verify
+#login verify
 def verify_login(user_id, password):
-    """Verify user credentials against the database."""
-    session_id = st.session_state.get('session_id', 'UNKNOWN_SESSION')
-
+    """Verify user credentials against the database.
+    
+    Returns a tuple: (success: bool, result: dict or str)
+    - On success: (True, user_dict)
+    - On failure: (False, error_message)
+    """
     try:
         connection = get_db_connection()
     except mysql.connector.Error as e:
-        msg = format_mysql_error(e)
-        log_sync_attempt_local(status="FAILED", error_message=msg, login_id=session_id)
-        return False, msg
+        return False, f"Database connection error: {e}"
 
     try:
         with connection.cursor(dictionary=True) as cursor:
@@ -65,37 +65,37 @@ def verify_login(user_id, password):
             cursor.execute(sql, (user_id,))
             user = cursor.fetchone()
 
+            # User not found
             if not user:
                 return False, "Invalid User ID or password."
 
+            # Recompute the hash using the stored salt
             stored_salt = user['salt']
             combined = password + stored_salt
             computed_hash = hashlib.sha256(combined.encode()).hexdigest()
 
+            # Compare hashes
             if computed_hash == user['password_hash']:
                 st.session_state.failed_attempts = 0
                 return True, user
             else:
-                st.session_state.failed_attempts += 1
-
+                st.session_state.failed_attempts += 1 
+                
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
                     log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
-                else:
+                else: 
                     return False, "Invalid User ID or password. Verify using email."
+                
 
     except mysql.connector.Error as er:
-        log_sync_attempt_local(status="FAILED", error_message=f"Database error: {er}", login_id=session_id)
         return False, f"Database error: {er}"
     finally:
         connection.close()
 
-
-# ============================================================
-# ROUTING
-# ============================================================
-if not st.session_state.get('logged_in'):
-    # --- LOGIN SCREEN (no header changes) ---
+#-------------------------------------Streamlit Ui-----------------------------------------------------
+# --- If NOT logged in: show the login form ---
+if not st.session_state.get('user'):
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
     input_pass = st.text_input("Password", type="password")

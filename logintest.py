@@ -38,11 +38,11 @@ def insert_new_user():
     
     try:
         with connection.cursor() as cursor:
-            user_id = "0987654321"
-            first_name = "Mary Grace"
-            last_name = "Piatos"
+            user_id = "1020304050"
+            first_name = "Maria"
+            last_name = "Clara"
             role = "Dean"
-            email = "mgpiatos@gmail.com"
+            email = "mclara@gmail.com"
             plain_password = "password123"
 
             password_hash, salt = hash_password(plain_password)
