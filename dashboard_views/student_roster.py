@@ -60,109 +60,107 @@ with col_action:
 st.markdown("---")
 
 # Displays student roster in table format
-df = get_student_roster_data()
+try: 
+    df = get_student_roster_data()
 
-if not df.empty:
-    # ----------------- Clean Filter & Search Rhythm -----------------
-    col_search, col_cohort, col_sort = st.columns([3.5, 2, 2])
+    if not df.empty:
+        # ----------------- Clean Filter & Search Rhythm -----------------
+        col_search, col_cohort, col_sort = st.columns([3.5, 2, 2])
 
-    with col_search:
-        search_query = st.text_input(
-            "SEARCH:",
-            placeholder="Student name or ID...",
-            label_visibility="visible"
+        with col_search:
+            search_query = st.text_input(
+                "SEARCH:",
+                placeholder="Student name or ID...",
+                label_visibility="visible"
+            )
+
+        with col_cohort:
+            available_cohorts = ["All Cohorts"] + get_available_cohorts()
+            cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
+
+        with col_sort:
+            sort_map = {
+                "Student Name": "Student",
+                "Student ID": "StudentNumber",
+                "Cohort": "Cohort",
+            }
+            sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
+
+        # Apply Filters
+        df_filtered = df.copy()
+
+        if search_query and search_query.strip():
+            q = search_query.strip().lower()
+            df_filtered = df_filtered[
+                df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False) |
+                df_filtered["StudentNumber"].astype(str).str.contains(q, na=False)
+            ]
+
+        if cohort_choice != "All Cohorts":
+            df_filtered = df_filtered[df_filtered["Cohort"] == cohort_choice]
+
+        df_filtered = df_filtered.sort_values(by=sort_map[sort_choice])
+
+        # Total Count Bar
+        st.caption(
+            f"Showing {len(df_filtered)} of {len(df)} students. "
+            f"Click any student name to view their profile."
         )
 
-    with col_cohort:
-        available_cohorts = ["All Cohorts"] + get_available_cohorts()
-        cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
+        # ----------------- Enterprise Roster Grid -----------------
+        # Column widths tuned for 7 columns (was 8 with Risk Status)
+        col_widths = [1.2, 2.4, 1.0, 2.0, 1.3, 1.3, 1.3]
 
-    with col_sort:
-        sort_map = {
-            "Student Name": "Student",
-            "Student ID": "StudentNumber",
-            "Cohort": "Cohort",
-        }
-        sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
-
-    # Apply Filters
-    df_filtered = df.copy()
-
-    if search_query and search_query.strip():
-        q = search_query.strip().lower()
-        df_filtered = df_filtered[
-            df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False) |
-            df_filtered["StudentNumber"].astype(str).str.contains(q, na=False)
+        header_cols = st.columns(col_widths, vertical_alignment="center")
+        header_labels = [
+            "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
+            "COURSEWORK", "COMP EXAM", "CAPSTONE"
         ]
+        for col, label in zip(header_cols, header_labels):
+            col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
 
-    if cohort_choice != "All Cohorts":
-        df_filtered = df_filtered[df_filtered["Cohort"] == cohort_choice]
+        if df_filtered.empty:
+            st.info("No students match the current filters.")
+        else:
+            for _, row in df_filtered.iterrows():
+                s_id = str(row.get("StudentNumber", ""))
+                s_name = str(row.get("Student", "Unknown"))
+                cohort = str(row.get("Cohort", "N/A"))
+                advisor = str(row.get("Advisor", "None Assigned"))
 
-    df_filtered = df_filtered.sort_values(by=sort_map[sort_choice])
+                cw_status = row.get("CourseworkStatus")
+                ce_status = row.get("CompExamStatus")
+                cp_status = row.get("CapstoneStatus")
 
-    # Total Count Bar
-    st.caption(
-        f"Showing {len(df_filtered)} of {len(df)} students. "
-        f"Click any student name to view their profile."
-    )
+                cw_pill = render_status_pill(cw_status)
+                ce_pill = render_status_pill(ce_status)
+                cp_pill = render_status_pill(cp_status)
 
-    # ----------------- Enterprise Roster Grid -----------------
-    # Column widths tuned for 7 columns (was 8 with Risk Status)
-    col_widths = [1.2, 2.4, 1.0, 2.0, 1.3, 1.3, 1.3]
-
-    header_cols = st.columns(col_widths, vertical_alignment="center")
-    header_labels = [
-        "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
-        "COURSEWORK", "COMP EXAM", "CAPSTONE"
-    ]
-    for col, label in zip(header_cols, header_labels):
-        col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
-
-    if df_filtered.empty:
-        st.info("No students match the current filters.")
-    else:
-        for _, row in df_filtered.iterrows():
-            s_id = str(row.get("StudentNumber", ""))
-            s_name = str(row.get("Student", "Unknown"))
-            cohort = str(row.get("Cohort", "N/A"))
-            advisor = str(row.get("Advisor", "None Assigned"))
-
-            cw_status = row.get("CourseworkStatus")
-            ce_status = row.get("CompExamStatus")
-            cp_status = row.get("CapstoneStatus")
-
-            cw_pill = render_status_pill(cw_status)
-            ce_pill = render_status_pill(ce_status)
-            cp_pill = render_status_pill(cp_status)
-
-            r_cols = st.columns(col_widths)
-            r_cols[0].markdown(
-                f'<span class="roster-cell-id">{s_id}</span>',
-                unsafe_allow_html=True
-            )
-            r_cols[1].page_link(
-                "dashboard_views/student_profile.py",
-                label=s_name,
-                query_params={"student_id": s_id}
-            )
-            r_cols[2].markdown(
-                f'<span class="roster-cell-text">{cohort}</span>',
-                unsafe_allow_html=True
-            )
-            r_cols[3].markdown(
-                f'<span class="roster-cell-text">{advisor}</span>',
-                unsafe_allow_html=True
-            )
-            r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
-            r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
-            r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
-            st.markdown(
-                '<div class="roster-row-divider"></div>',
-                unsafe_allow_html=True
-            )
-
-else:
-    st.info(
-        "No student records found in the database or connection issue occurred."
-    )
+                r_cols = st.columns(col_widths)
+                r_cols[0].markdown(
+                    f'<span class="roster-cell-id">{s_id}</span>',
+                    unsafe_allow_html=True
+                )
+                r_cols[1].page_link(
+                    "dashboard_views/student_profile.py",
+                    label=s_name,
+                    query_params={"student_id": s_id}
+                )
+                r_cols[2].markdown(
+                    f'<span class="roster-cell-text">{cohort}</span>',
+                    unsafe_allow_html=True
+                )
+                r_cols[3].markdown(
+                    f'<span class="roster-cell-text">{advisor}</span>',
+                    unsafe_allow_html=True
+                )
+                r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
+                r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
+                r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="roster-row-divider"></div>',
+                    unsafe_allow_html=True
+                )
+except Exception as e:
+    st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. Please check the Admin Configuration page. ({e})")
