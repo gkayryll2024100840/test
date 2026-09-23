@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 from db_connect import get_student_roster_data
 from dashboard_views.components import (
-    DARK_MODE_CSS, 
-    render_status_pill, 
-    calculate_risk_status
+    DARK_MODE_CSS,
+    render_status_pill,
 )
 
 st.set_page_config(page_title="Student Profile", layout="wide")
@@ -61,10 +60,7 @@ if not df.empty:
         current_ce = student.get("CompExamStatus", "In-Progress")
         current_cp = student.get("CapstoneStatus", "In-Progress")
 
-        overall_risk = calculate_risk_status(current_cw, current_ce, current_cp)
-
         enrollment_pill = render_status_pill(enrollment_status)
-        risk_pill = render_status_pill(overall_risk)
 
         # ----------------- Student Metadata Header Card -----------------
         header_markup = (
@@ -85,10 +81,6 @@ if not df.empty:
             '<div class="meta-field">'
             '<span>Assigned Advisor:</span>'
             f'<strong>{advisor}</strong>'
-            '</div>'
-            '<div class="meta-field">'
-            '<span>Overall Risk:</span>'
-            f'{risk_pill}'
             '</div>'
             '</div>'
             '</div>'
