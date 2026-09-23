@@ -329,6 +329,69 @@ def create_program(program_code, program_name, is_active=1):
         return False, f"Unexpected error: {e}"
 
 
+def set_user_program(user_id, program_id):
+    """Updates Users.CurrentProgramID for a given user.
+
+    Schema confirmed:
+        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Programs.ProgramID)
+
+    Args:
+        user_id:    The UserID of the user to update (required).
+        program_id: The ProgramID to assign. Pass None or "" to clear the
+                    assignment (sets CurrentProgramID = NULL).
+
+    Returns:
+        (True, None) on success
+        (False, error_message) on failure
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return False, "User ID is required."
+
+    user_id = str(user_id).strip()
+
+    # Allow clearing the program by passing None / empty string
+    if program_id is None or str(program_id).strip() == "":
+        program_id_value = None
+    else:
+        try:
+            program_id_value = int(program_id)
+        except (TypeError, ValueError):
+            return False, f"Invalid program ID: {program_id!r}"
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        query = "UPDATE Users SET CurrentProgramID = %s WHERE UserID = %s"
+        cursor.execute(query, (program_id_value, user_id))
+
+        # rowcount may be 0 if the value is already what we're setting it to
+        # AND the user exists — so verify existence separately.
+        if cursor.rowcount == 0:
+            cursor.execute("SELECT 1 FROM Users WHERE UserID = %s", (user_id,))
+            if cursor.fetchone() is None:
+                cursor.close()
+                conn.close()
+                return False, f"No user found with UserID '{user_id}'."
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+
+    except mysql.connector.IntegrityError as e:
+        # 1452 = FK violation: program_id doesn't exist in Programs
+        if e.errno == 1452:
+            return False, f"Program ID {program_id_value} does not exist."
+        return False, f"Integrity error: {e.msg}"
+
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+
 # ------------------------------------------------------------------
 # Field-mapping validation (schema snapshot cache)
 # ------------------------------------------------------------------
