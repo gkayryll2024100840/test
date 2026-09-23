@@ -250,6 +250,33 @@ _SCHEMA_CONNECT_TIMEOUT = 5     # fail fast if the DB host is unreachable
 _schema_lock = threading.Lock()
 _schema_cache = {"columns": frozenset(), "loaded_at": None, "ttl": 0, "error": None}
 
+def get_all_programs():
+    """Fetches distinct programs for dropdown filters.
+
+    Returns a list of dicts like:
+        [{"ProgramID": "...", "ProgramName": "..."}, ...]
+
+    If your Programs table uses different column names, adjust the SELECT.
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ProgramID, ProgramName
+            FROM Programs
+            WHERE ProgramName IS NOT NULL
+            ORDER BY ProgramName ASC
+        """
+        cursor.execute(query)
+        programs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return programs
+
+    except Exception as e:
+        print(f"Failed to fetch programs: {e}")
+        return []
 def _to_str(value):
     """Some connector versions return INFORMATION_SCHEMA text as bytes."""
     return value.decode() if isinstance(value, (bytes, bytearray)) else str(value)
