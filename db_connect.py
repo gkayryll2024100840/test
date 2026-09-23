@@ -106,7 +106,10 @@ def get_student_roster_data():
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. If everything is valid, run the database query normally
+        # 3. If everything is valid, run the database query normally.
+        # FIX: Adviser link lives on the Student_Adviser junction table,
+        #      NOT on Students or Student_Lifecycle.
+        #      Chain: Students -> Student_Adviser -> Adviser
         conn = mysql.connector.connect(**db_config)
         query = """
             SELECT 
@@ -120,7 +123,8 @@ def get_student_roster_data():
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Adviser a ON sl.AdviserID = a.AdviserID
+            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
+            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
         """
         df = pd.read_sql(query, conn)
         conn.close()
@@ -146,6 +150,8 @@ def get_student_profile_data(student_number):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
+        # FIX: Same junction-table routing.
+        #      Chain: Students -> Student_Adviser -> Adviser
         query = """
             SELECT 
                 s.StudentNumber,
@@ -158,7 +164,8 @@ def get_student_profile_data(student_number):
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Adviser a ON sl.AdviserID = a.AdviserID
+            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
+            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
             WHERE s.StudentNumber = %s
         """
 
