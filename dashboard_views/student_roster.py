@@ -39,7 +39,6 @@ role = user.get("role")
 
 with st.expander("Active Program", expanded=not st.session_state.get("active_program_id")):
     programs = get_all_programs()
-    st.write("DEBUG programs:", programs)
     options = {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in programs}
 
     if options:
