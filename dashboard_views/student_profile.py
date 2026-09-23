@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from db_connect import get_student_roster_data
+from db_connect import get_student_roster_data, get_user_program
 from dashboard_views.components import (
     DARK_MODE_CSS,
     render_status_pill,
@@ -16,10 +16,32 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to view student profile.")
     st.stop()
 
-st.title("Student Profile")
+# ---------------------------------------------------------------
+# Resolve the active program (set by Student Roster or by the user's pin)
+# ---------------------------------------------------------------
+user = st.session_state.get("user", {})
+role = user.get("role")
+
+if not st.session_state.get("active_program_id") and role != "IT/Admin":
+    pinned = get_user_program(user.get("UserID"))
+    if pinned:
+        st.session_state["active_program_id"] = pinned["ProgramID"]
+        st.session_state["active_program_code"] = pinned["ProgramCode"]
+
+active_program_id = st.session_state.get("active_program_id")
+active_code = st.session_state.get("active_program_code", "")
+
+if not active_program_id:
+    st.warning("⏳ No active program has been set. Please pick one on the Student Roster page first.")
+    st.stop()
+
+# ---------------------------------------------------------------
+# Page header + data
+# ---------------------------------------------------------------
+st.title(f"Student Profile — {active_code} Program")
 st.markdown("---")
 
-df = get_student_roster_data()
+df = get_student_roster_data(program_id=active_program_id)
 
 if not df.empty:
     student_options = {
@@ -113,4 +135,4 @@ if not df.empty:
         st.markdown(cards_html, unsafe_allow_html=True)
 
 else:
-    st.info("No student records available. Please ensure database connection is established.")
+    st.info(f"No student records available for the {active_code} program.")
