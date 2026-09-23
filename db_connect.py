@@ -114,13 +114,13 @@ def get_student_roster_data():
                 CONCAT(s.FirstName, ' ', s.LastName) AS Student,
                 s.Cohort,
                 s.EnrollmentStatus,
-                a.AdvisorName AS Advisor,
+                a.AdviserName AS Adviser,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID
+            LEFT JOIN Adviser a ON sl.AdviserID = a.AdviserID
         """
         df = pd.read_sql(query, conn)
         conn.close()
@@ -152,13 +152,13 @@ def get_student_profile_data(student_number):
                 CONCAT(s.LastName, ', ', s.FirstName) AS Student,
                 s.Cohort,
                 s.EnrollmentStatus,
-                a.AdvisorName,
+                a.AdviserName,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID
+            LEFT JOIN Adviser a ON sl.AdviserID = a.AdviserID
             WHERE s.StudentNumber = %s
         """
 
