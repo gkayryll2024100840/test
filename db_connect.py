@@ -236,7 +236,7 @@ def get_available_cohorts():
 
 
 # ------------------------------------------------------------------
-# Programs (added for student_roster feature)
+# Program (added for student_roster feature)
 # Schema: ProgramID (int PK, AUTO_INCREMENT), ProgramCode (varchar UNIQUE, NOT NULL),
 #         ProgramName (varchar NOT NULL), IsActive (tinyint DEFAULT 1),
 #         CreatedAt (datetime DEFAULT CURRENT_TIMESTAMP)
@@ -259,7 +259,7 @@ def get_all_programs(active_only=True):
 
         query = """
             SELECT ProgramID, ProgramCode, ProgramName, IsActive, CreatedAt
-            FROM Programs
+            FROM Program
         """
         if active_only:
             query += " WHERE IsActive = 1"
@@ -300,7 +300,7 @@ def get_user_program(user_id):
         query = """
             SELECT p.ProgramID, p.ProgramCode, p.ProgramName, p.IsActive
             FROM Users u
-            JOIN Programs p ON u.CurrentProgramID = p.ProgramID
+            JOIN Program p ON u.CurrentProgramID = p.ProgramID
             WHERE u.UserID = %s
         """
         cursor.execute(query, (user_id,))
@@ -318,7 +318,7 @@ def get_user_program(user_id):
         print(f"Failed to fetch user program: {e}")
         return None
 def create_program(program_code, program_name, is_active=1):
-    """Inserts a new program into the Programs table.
+    """Inserts a new program into the Program table.
 
     Args:
         program_code: Unique code, e.g. "MBA", "BIA" (required, UNIQUE).
@@ -345,7 +345,7 @@ def create_program(program_code, program_name, is_active=1):
 
         # ProgramID auto-increments; CreatedAt uses table default CURRENT_TIMESTAMP.
         query = """
-            INSERT INTO Programs (ProgramCode, ProgramName, IsActive)
+            INSERT INTO Program (ProgramCode, ProgramName, IsActive)
             VALUES (%s, %s, %s)
         """
         cursor.execute(query, (program_code, program_name, is_active))
@@ -374,7 +374,7 @@ def set_user_program(user_id, program_id):
     """Updates Users.CurrentProgramID for a given user.
 
     Schema confirmed:
-        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Programs.ProgramID)
+        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Program.ProgramID)
 
     Args:
         user_id:    The UserID of the user to update (required).
@@ -421,7 +421,7 @@ def set_user_program(user_id, program_id):
         return True, None
 
     except mysql.connector.IntegrityError as e:
-        # 1452 = FK violation: program_id doesn't exist in Programs
+        # 1452 = FK violation: program_id doesn't exist in Program
         if e.errno == 1452:
             return False, f"Program ID {program_id_value} does not exist."
         return False, f"Integrity error: {e.msg}"
