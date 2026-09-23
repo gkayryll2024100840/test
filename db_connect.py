@@ -275,7 +275,48 @@ def get_all_programs(active_only=True):
         print(f"Failed to fetch programs: {e}")
         return []
 
+def get_user_program(user_id):
+    """Fetches the current program assigned to a user.
 
+    Args:
+        user_id: The UserID to look up.
+
+    Returns:
+        dict: {"ProgramID": int, "ProgramCode": str, "ProgramName": str, "IsActive": int}
+              when a program is assigned and found.
+        None: when the user exists but has no CurrentProgramID,
+              OR when the user doesn't exist,
+              OR when the referenced program row is missing.
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return None
+
+    user_id = str(user_id).strip()
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT p.ProgramID, p.ProgramCode, p.ProgramName, p.IsActive
+            FROM Users u
+            JOIN Programs p ON u.CurrentProgramID = p.ProgramID
+            WHERE u.UserID = %s
+        """
+        cursor.execute(query, (user_id,))
+        row = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+        return row  # None if no match
+
+    except mysql.connector.Error as e:
+        print(f"Failed to fetch user program: {format_mysql_error(e)}")
+        return None
+
+    except Exception as e:
+        print(f"Failed to fetch user program: {e}")
+        return None
 def create_program(program_code, program_name, is_active=1):
     """Inserts a new program into the Programs table.
 
