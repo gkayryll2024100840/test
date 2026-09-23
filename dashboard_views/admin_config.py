@@ -1,46 +1,38 @@
 import json
 import os
 import streamlit as st
-from db_connect import get_system_logs, trigger_data_sync, check_column_exists
-from system_log import get_system_logs_local 
+from db_connect import (
+    get_system_logs,
+    trigger_data_sync,
+    check_column_exists,
+    refresh_schema_cache,
+    get_schema_load_error,
+)
+from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
-#get_system_logs(): pull history from local_logs.db
-#trigger_data_sync: to test the connection to MySQL
 
-#st: customize browser's tabs title and layout
+# get_system_logs(): pull history from local_logs.db
+# trigger_data_sync: to test the connection to MySQL
+
+# st: customize browser's tabs title and layout
 st.title("Admin Configuration")
 st.markdown("---")
 
-st.subheader("System Sync Logs")
-
-active_login_id = st.session_state.get("session_id", "default_admin")
-st.info(f"Active Session ID for this browser: **{active_login_id}**")
-
-if st.button("Run Sync Attempt"):
-    #tries connecting to local_log.db
-    success = trigger_data_sync(login_id=active_login_id)
-    if success:
-        st.success("Sync executed successfully!")
-        st.rerun()
-    else:
-        st.error("Sync failed! Error logged to SQL Local_Logs table.")
-        st.rerun()
-
-logs = get_system_logs_local()
-
-#displays your logs on the admin screen using Streamlit
-if logs:
-    st.dataframe(logs, use_container_width=True)
-else:
-    st.info("No system logs found in the local_logs.db")
-
-
-#Field_Mapping Configuration Section
+# ============================================================
+# FIELD MAPPING CONFIGURATION SECTION 
+# ============================================================
 CONFIG_FILE = "field_mappings.json"
 
-st.markdown("---")
 st.subheader("Field Mapping (US-10)")
 st.markdown("Maps dashboard fields to IFT200's normalized schema — no code changes required to repoint for a new program.")
+
+# The DB schema is cached in db_connect (auto-refreshes every 60s). Use this after changing the database itself.
+if st.button("Re-check schema"):
+    refresh_schema_cache()
+
+schema_error = get_schema_load_error()
+if schema_error:
+    st.error(f"Could not read the database schema, so no mapping can be verified: {schema_error}")
 
 # Load current configuration into session state if not already present
 if "current_mappings" not in st.session_state:
@@ -49,7 +41,7 @@ if "current_mappings" not in st.session_state:
 updated_mappings = {}
 validation_errors = []
 
-#Render editable mapping rows
+# Render editable mapping rows
 for field_label, db_column in st.session_state["current_mappings"].items():
     col1, col2, col3 = st.columns([3, 5, 2])
 
@@ -67,19 +59,19 @@ for field_label, db_column in st.session_state["current_mappings"].items():
 
     with col3:
         typed_path = new_column.strip()
-        column_exists = check_column_exists(typed_path) if typed_path else False
+        column_exists = check_column_exists(typed_path)
 
         toggle_key = f"toggle_{field_label}"
 
         st.session_state[toggle_key] = column_exists
 
-        is_active = st.toggle(
+        st.toggle(
             "Mapped",
             key=toggle_key,
             disabled=True
         )
 
-        if not is_active or not column_exists:
+        if not column_exists:
             validation_errors.append(field_label)
 
 st.markdown("---")
@@ -88,21 +80,51 @@ st.markdown("---")
 col_save, col_status = st.columns([1, 3])
 
 with col_save:
-  if st.button("Save Mappings", type="primary"):
-    if validation_errors:
-      st.error(
-          f"Cannot save. Missing mapping for: {', '.join(validation_errors)}"
-      )
-    else:
-      save_mappings(updated_mappings)
-      st.session_state["current_mappings"] = updated_mappings
-      st.success("Configurations successfully saved!")
-      st.rerun()
+    save_clicked = st.button("Save Mappings", type="primary")
+
+if save_clicked:
+    save_mappings(updated_mappings)
+    st.session_state["current_mappings"] = updated_mappings
 
 with col_status:
-  if validation_errors:
-    st.warning(
-        "Configuration has errors and cannot go live until resolved.",
-    )
-  else:
-    st.success("All mappings valid and ready for production deployment.")
+    if save_clicked and validation_errors:
+        st.warning(
+            "Saved with errors! Note: Roster view will be disabled until resolved. "
+            f"Fix: {', '.join(validation_errors)}"
+        )
+    elif save_clicked:
+        st.success("Configurations successfully saved!")
+    elif validation_errors:
+        st.warning(
+            "Configuration has errors and cannot go live until resolved: "
+            f"{', '.join(validation_errors)}"
+        )
+    else:
+        st.success("All mappings valid and ready for production deployment.")
+
+# ============================================================
+# SYSTEM SYNC LOGS SECTION 
+# ============================================================
+st.markdown("---")
+st.subheader("System Sync Logs")
+
+active_login_id = st.session_state.get("session_id", "default_admin")
+st.info(f"Active Session ID for this browser: **{active_login_id}**")
+
+if st.button("Run Sync Attempt"):
+    # tries connecting to local_log.db
+    success = trigger_data_sync(login_id=active_login_id)
+    if success:
+        st.success("Sync executed successfully!")
+        st.rerun()
+    else:
+        st.error("Sync failed! Error logged to SQL Local_Logs table.")
+        st.rerun()
+
+logs = get_system_logs_local()
+
+# displays your logs on the admin screen using Streamlit
+if logs:
+    st.dataframe(logs, use_container_width=True)
+else:
+    st.info("No system logs found in the local_logs.db")
