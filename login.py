@@ -42,12 +42,13 @@ def log_failed_attempt(user_id, ip_address=None):
     finally:
         connection.close()
 
-#login verify
+
+# login verify
 def verify_login(user_id, password):
     """Verify user credentials against the database.
-    
+
     Returns a tuple: (success: bool, result: dict or str)
-    - On success: (True, user_dict)
+    - On success: (True, user_dict) with lowercase keys
     - On failure: (False, error_message)
     """
     try:
@@ -57,8 +58,10 @@ def verify_login(user_id, password):
 
     try:
         with connection.cursor(dictionary=True) as cursor:
+            # FIX: Pull all needed columns from the updated Users schema
             sql = """
-                SELECT UserID, FirstName, LastName, PasswordHash, Salt, Role, Email
+                SELECT UserID, FirstName, LastName, PasswordHash, Salt, Role, Email,
+                       isActive, RolePermission, CurrentProgramID
                 FROM Users
                 WHERE UserID = %s
             """
@@ -76,24 +79,32 @@ def verify_login(user_id, password):
 
             # Compare hashes
             if computed_hash == user['PasswordHash']:
+                # FIX: Block deactivated accounts (isActive == 0 / False)
+                if not user.get('isActive', 1):
+                    return False, "This account has been deactivated. Contact IT/Admin."
+
                 st.session_state.failed_attempts = 0
+
+                # FIX: Normalize all keys to lowercase so downstream code
+                # (e.g. user.get('role')) works regardless of SQL column casing.
+                user = {k.lower(): v for k, v in user.items()}
                 return True, user
             else:
-                st.session_state.failed_attempts += 1 
-                
+                st.session_state.failed_attempts += 1
+
                 if st.session_state.failed_attempts >= MAX_FAILED_ATTEMPTS:
                     log_failed_attempt(user['UserID'], st.session_state.get('client_ip'))
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
-                else: 
+                else:
                     return False, "Invalid User ID or password. Verify using email."
-                
 
     except mysql.connector.Error as er:
         return False, f"Database error: {er}"
     finally:
         connection.close()
 
-#-------------------------------------Streamlit Ui-----------------------------------------------------
+
+# -------------------------------------Streamlit Ui-----------------------------------------------------
 # --- If NOT logged in: show the login form ---
 if not st.session_state.get('user'):
     st.title("Project PULSE Login Page")
@@ -196,6 +207,8 @@ else:
 """, unsafe_allow_html=True)
 
     user = st.session_state.user
+    # FIX: Keys are now lowercase because verify_login() normalizes them.
+    # This works whether you use 'role' or 'Role' — but we read 'role' here.
     role = user.get('role')
 
     if st.sidebar.button("Log Out"):
@@ -226,7 +239,11 @@ else:
         allowed = []
 
     if not allowed:
-        st.error("No pages assigned to your role. Contact IT/Admin.")
+        # FIX: Show the actual returned role value so you can debug mismatches.
+        st.error(
+            f"No pages assigned to your role. Contact IT/Admin. "
+            f"(Detected role: {role!r})"
+        )
         st.stop()
 
     pg = st.navigation(allowed, position="sidebar")
