@@ -107,9 +107,7 @@ def get_student_roster_data():
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
         # 3. If everything is valid, run the database query normally.
-        # FIX: Adviser link lives on the Student_Adviser junction table,
-        #      NOT on Students or Student_Lifecycle.
-        #      Chain: Students -> Student_Adviser -> Adviser
+        #    Adviser link lives on the Student_Adviser junction table.
         conn = mysql.connector.connect(**db_config)
         query = """
             SELECT 
@@ -150,8 +148,7 @@ def get_student_profile_data(student_number):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
-        # FIX: Same junction-table routing.
-        #      Chain: Students -> Student_Adviser -> Adviser
+        # Adviser link lives on the Student_Adviser junction table.
         query = """
             SELECT 
                 s.StudentNumber,
@@ -237,6 +234,101 @@ def get_available_cohorts():
         print(f"Failed to fetch cohorts: {e}")
         return []
 
+
+# ------------------------------------------------------------------
+# Programs (added for student_roster feature)
+# Schema: ProgramID (int PK, AUTO_INCREMENT), ProgramCode (varchar UNIQUE, NOT NULL),
+#         ProgramName (varchar NOT NULL), IsActive (tinyint DEFAULT 1),
+#         CreatedAt (datetime DEFAULT CURRENT_TIMESTAMP)
+# ------------------------------------------------------------------
+
+def get_all_programs(active_only=True):
+    """Fetches programs for dropdown filters.
+
+    Args:
+        active_only: If True, only returns IsActive = 1 rows (default).
+
+    Returns:
+        List of dicts:
+            [{"ProgramID": int, "ProgramCode": str, "ProgramName": str,
+              "IsActive": int, "CreatedAt": datetime}, ...]
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ProgramID, ProgramCode, ProgramName, IsActive, CreatedAt
+            FROM Programs
+        """
+        if active_only:
+            query += " WHERE IsActive = 1"
+        query += " ORDER BY ProgramName ASC"
+
+        cursor.execute(query)
+        programs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return programs
+
+    except Exception as e:
+        print(f"Failed to fetch programs: {e}")
+        return []
+
+
+def create_program(program_code, program_name, is_active=1):
+    """Inserts a new program into the Programs table.
+
+    Args:
+        program_code: Unique code, e.g. "MBA", "BIA" (required, UNIQUE).
+        program_name: Full display name, e.g. "Master of Business Administration" (required).
+        is_active:    1 = active (default), 0 = inactive.
+
+    Returns:
+        (True, new_program_id) on success
+        (False, error_message) on failure
+    """
+    # --- Validate inputs ---
+    if not program_code or not str(program_code).strip():
+        return False, "Program code is required."
+    if not program_name or not str(program_name).strip():
+        return False, "Program name is required."
+
+    program_code = str(program_code).strip()
+    program_name = str(program_name).strip()
+    is_active = 1 if is_active else 0
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # ProgramID auto-increments; CreatedAt uses table default CURRENT_TIMESTAMP.
+        query = """
+            INSERT INTO Programs (ProgramCode, ProgramName, IsActive)
+            VALUES (%s, %s, %s)
+        """
+        cursor.execute(query, (program_code, program_name, is_active))
+
+        new_id = cursor.lastrowid
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return True, new_id
+
+    except mysql.connector.IntegrityError as e:
+        # 1062 = duplicate key (program_code already exists)
+        if e.errno == 1062:
+            return False, f"Program code '{program_code}' already exists."
+        return False, f"Integrity error: {e.msg}"
+
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+
 # ------------------------------------------------------------------
 # Field-mapping validation (schema snapshot cache)
 # ------------------------------------------------------------------
@@ -250,33 +342,6 @@ _SCHEMA_CONNECT_TIMEOUT = 5     # fail fast if the DB host is unreachable
 _schema_lock = threading.Lock()
 _schema_cache = {"columns": frozenset(), "loaded_at": None, "ttl": 0, "error": None}
 
-def get_all_programs():
-    """Fetches distinct programs for dropdown filters.
-
-    Returns a list of dicts like:
-        [{"ProgramID": "...", "ProgramName": "..."}, ...]
-
-    If your Programs table uses different column names, adjust the SELECT.
-    """
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
-        query = """
-            SELECT ProgramID, ProgramName
-            FROM Programs
-            WHERE ProgramName IS NOT NULL
-            ORDER BY ProgramName ASC
-        """
-        cursor.execute(query)
-        programs = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return programs
-
-    except Exception as e:
-        print(f"Failed to fetch programs: {e}")
-        return []
 def _to_str(value):
     """Some connector versions return INFORMATION_SCHEMA text as bytes."""
     return value.decode() if isinstance(value, (bytes, bytearray)) else str(value)
