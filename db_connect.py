@@ -92,12 +92,19 @@ def get_max_retry_count(login_id):
     return get_max_retry_count_local(login_id)
 
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
-def get_student_roster_data():
+def get_student_roster_data(program_id=None):
+    """Fetches the roster filtered by the given program ID.
+
+    If program_id is None, returns an empty DataFrame.
+    """
+    if program_id is None:
+        return pd.DataFrame()
+
     try:
         # 1. Load the mappings from the JSON file
         mappings = load_mappings()
-        
-        # 2. Validate EVERY mapped field against the cached schema snapshot (no per-field DB round trips)
+
+        # 2. Validate EVERY mapped field against the cached schema snapshot
         invalid = find_invalid_mappings(mappings)
         if invalid:
             schema_error = get_schema_load_error()
@@ -106,8 +113,7 @@ def get_student_roster_data():
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. If everything is valid, run the database query normally.
-        #    Adviser link lives on the Student_Adviser junction table.
+        # 3. Run the program-scoped query
         conn = mysql.connector.connect(**db_config)
         query = """
             SELECT 
@@ -123,14 +129,15 @@ def get_student_roster_data():
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
             LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
             LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
+            WHERE s.ProgramID = %s
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=(program_id,))
         conn.close()
         return df
 
     except Exception as e:
         print(f"Mapping validation failed: {e}")
-        raise e  # This passes the error straight to your student roster page!
+        raise e
 
 def get_last_updated_time():
     """Checks last_sync.txt for the last successful sync timestamp."""
@@ -185,17 +192,20 @@ def get_student_profile_data(student_number):
         print(f"Failed to fetch student details: {e}")
         return None
 
-def get_enrollment_count(status_filter="All", cohort=None):
+def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
+    """Returns the count of students matching the filters.
+
+    Requires program_id — returns 0 if it is not provided.
     """
-    Returns the count of MBA students based on EnrollmentStatus filter,
-    optionally narrowed to a specific cohort.
-    """
+    if program_id is None:
+        return 0
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        conditions = []
-        params = []
+        conditions = ["ProgramID = %s"]
+        params = [program_id]
 
         if status_filter not in ("All", "All Students", None, ""):
             conditions.append("EnrollmentStatus = %s")
@@ -205,11 +215,9 @@ def get_enrollment_count(status_filter="All", cohort=None):
             conditions.append("Cohort = %s")
             params.append(cohort)
 
-        query = "SELECT COUNT(*) FROM Students"
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+        query = "SELECT COUNT(*) FROM Students WHERE " + " AND ".join(conditions)
 
-        cursor.execute(query, tuple(params) if params else None)
+        cursor.execute(query, tuple(params))
         count = cursor.fetchone()[0]
         cursor.close()
         conn.close()
@@ -218,14 +226,20 @@ def get_enrollment_count(status_filter="All", cohort=None):
     except Exception as e:
         print(f"Failed to fetch enrollment count: {e}")
         return 0
+def get_available_cohorts(program_id=None):
+    """Fetches distinct cohort values for the given program."""
+    if program_id is None:
+        return []
 
-def get_available_cohorts():
-    """Fetches distinct cohort values for the Student Roster dropdown filter."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        query = "SELECT DISTINCT Cohort FROM Students WHERE Cohort IS NOT NULL ORDER BY Cohort DESC"
-        cursor.execute(query)
+        query = (
+            "SELECT DISTINCT Cohort FROM Students "
+            "WHERE Cohort IS NOT NULL AND ProgramID = %s "
+            "ORDER BY Cohort DESC"
+        )
+        cursor.execute(query, (program_id,))
         cohorts = [row[0] for row in cursor.fetchall()]
         cursor.close()
         conn.close()
@@ -236,7 +250,7 @@ def get_available_cohorts():
 
 
 # ------------------------------------------------------------------
-# Programs (added for student_roster feature)
+# Program (added for student_roster feature)
 # Schema: ProgramID (int PK, AUTO_INCREMENT), ProgramCode (varchar UNIQUE, NOT NULL),
 #         ProgramName (varchar NOT NULL), IsActive (tinyint DEFAULT 1),
 #         CreatedAt (datetime DEFAULT CURRENT_TIMESTAMP)
@@ -259,7 +273,7 @@ def get_all_programs(active_only=True):
 
         query = """
             SELECT ProgramID, ProgramCode, ProgramName, IsActive, CreatedAt
-            FROM Programs
+            FROM Program
         """
         if active_only:
             query += " WHERE IsActive = 1"
@@ -300,7 +314,7 @@ def get_user_program(user_id):
         query = """
             SELECT p.ProgramID, p.ProgramCode, p.ProgramName, p.IsActive
             FROM Users u
-            JOIN Programs p ON u.CurrentProgramID = p.ProgramID
+            JOIN Program p ON u.CurrentProgramID = p.ProgramID
             WHERE u.UserID = %s
         """
         cursor.execute(query, (user_id,))
@@ -318,7 +332,7 @@ def get_user_program(user_id):
         print(f"Failed to fetch user program: {e}")
         return None
 def create_program(program_code, program_name, is_active=1):
-    """Inserts a new program into the Programs table.
+    """Inserts a new program into the Program table.
 
     Args:
         program_code: Unique code, e.g. "MBA", "BIA" (required, UNIQUE).
@@ -345,7 +359,7 @@ def create_program(program_code, program_name, is_active=1):
 
         # ProgramID auto-increments; CreatedAt uses table default CURRENT_TIMESTAMP.
         query = """
-            INSERT INTO Programs (ProgramCode, ProgramName, IsActive)
+            INSERT INTO Program (ProgramCode, ProgramName, IsActive)
             VALUES (%s, %s, %s)
         """
         cursor.execute(query, (program_code, program_name, is_active))
@@ -374,7 +388,7 @@ def set_user_program(user_id, program_id):
     """Updates Users.CurrentProgramID for a given user.
 
     Schema confirmed:
-        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Programs.ProgramID)
+        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Program.ProgramID)
 
     Args:
         user_id:    The UserID of the user to update (required).
@@ -421,7 +435,7 @@ def set_user_program(user_id, program_id):
         return True, None
 
     except mysql.connector.IntegrityError as e:
-        # 1452 = FK violation: program_id doesn't exist in Programs
+        # 1452 = FK violation: program_id doesn't exist in Program
         if e.errno == 1452:
             return False, f"Program ID {program_id_value} does not exist."
         return False, f"Integrity error: {e.msg}"

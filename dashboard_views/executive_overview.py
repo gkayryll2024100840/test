@@ -11,6 +11,8 @@ from db_connect import (
     get_available_cohorts,
     check_column_exists,
     get_all_programs,
+    get_enrollment_count,
+    get_user_program,
 )
 from dashboard_views.components import DARK_MODE_CSS
 
@@ -22,21 +24,39 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to view executive reporting.")
     st.stop()
 
+# ---------------------------------------------------------------
+# Resolve the active program (set by Student Roster or by the user's pin)
+# ---------------------------------------------------------------
+user = st.session_state.get("user", {})
+role = user.get("role")
+
+if not st.session_state.get("active_program_id") and role != "IT/Admin":
+    pinned = get_user_program(user.get("UserID"))
+    if pinned:
+        st.session_state["active_program_id"] = pinned["ProgramID"]
+        st.session_state["active_program_code"] = pinned["ProgramCode"]
+
+active_program_id = st.session_state.get("active_program_id")
+active_code = st.session_state.get("active_program_code", "")
+
+if not active_program_id:
+    st.warning("⏳ No active program has been set. Please pick one on the Student Roster page first.")
+    st.stop()
+
+st.title(f"Executive Overview — {active_code} Program")
 
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
 STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed"]
 
-# Colors taken from the mockup (red, yellow, green, blue)
 STAGE_COLORS = {
-    "Coursework": "#B91B21",
-    "Comprehensive Exam": "#FFCA06",
-    "Capstone": "#4FAE2A",
-    "Completed": "#4A7FEF",
+    "Coursework": "#C0392B",
+    "Comprehensive Exam": "#B8860B",
+    "Capstone": "#1F3864",
+    "Completed": "#2E7D32",
 }
 
-# Per-stage "done" values -- see LIFECYCLE_STATUS_MAP in db_connect.py
 COURSEWORK_DONE = "Completed"
 COMPEXAM_DONE = "Passed"
 CAPSTONE_DONE = "Defended for Completion"
@@ -133,6 +153,56 @@ PILL_CLASS = {
     "Pending": "pill-amber",
     "Incomplete": "pill-amber",
 }
+@st.cache_data(ttl=300)
+def get_executive_lifecycle_data(program_id: int, cohort_filter: str = "All Cohorts") -> pd.DataFrame:
+    """Pulls one row per student in the given program with lifecycle statuses."""
+    try:
+        conn = get_db_connection()
+
+        query = """
+            SELECT
+                s.StudentNumber,
+                s.Cohort,
+                s.EnrollmentStatus,
+                sl.CourseworkStatus,
+                sl.CompExamStatus,
+                sl.CapstoneStatus,
+                sl.GraduateOnTime,
+                sl.GraduateDate
+            FROM Students s
+            LEFT JOIN Student_Lifecycle sl
+                ON s.StudentNumber = sl.StudentNumber
+            WHERE s.ProgramID = %s
+        """
+        params = [program_id]
+
+        if cohort_filter and cohort_filter != "All Cohorts":
+            query += " AND s.Cohort = %s"
+            params.append(cohort_filter)
+
+        df = pd.read_sql(query, conn, params=tuple(params))
+        conn.close()
+
+        # Normalize lifecycle status columns the same way db_connect does
+        for col in ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]:
+            if col in df.columns:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .map(LIFECYCLE_STATUS_MAP)
+                    .fillna(df[col])
+                )
+
+        return df
+
+    except mysql.connector.Error as err:
+        st.error(format_mysql_error(err))
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Failed to fetch executive overview data: {e}")
+        return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +383,19 @@ def cohort_delta(hist: pd.DataFrame, metric: str, cohort: str):
         return None
     return round(hist.loc[idx, metric] - hist.loc[idx - 1, metric], 1)
 
+    total_students = len(df)
+    if total_students == 0:
+        return 0.0
+
+    completed_mask = (
+        (df["CourseworkStatus"] == COURSEWORK_DONE) &
+        (df["CompExamStatus"] == COMPEXAM_DONE) &
+        (df["CapstoneStatus"] == CAPSTONE_DONE)
+    )
+
+    completed_count = completed_mask.sum()
+    return round((completed_count / total_students) * 100, 1)
+
 
 # ---------------------------------------------------------------------------
 # UI PIECES
@@ -334,6 +417,11 @@ def kpi_card(label, value, sub_html="&nbsp;"):
 
 def render_kpi_row(cards):
     st.markdown(f'<div class="eo-kpi-row">{"".join(cards)}</div>', unsafe_allow_html=True)
+def render_kpi_card(header: str, value: str, subtext: str = "", border_color: str = "#1F3864"):
+    if not subtext:
+        subtext_block = '<div style="font-size:12px; opacity:0; margin-top:6px;">placeholder</div>'
+    else:
+        subtext_block = f'<div style="font-size:12px; color:#6b7280; margin-top:6px;">{subtext}</div>'
 
 
 def card_header(title, subtitle):
@@ -438,6 +526,108 @@ def render_student_table(df: pd.DataFrame):
     header = (
         "<tr><th>Student Name &amp; ID</th><th>Current Cohort</th><th>Assigned Adviser</th>"
         "<th>Coursework Status</th><th>Comp. Exam Status</th><th>Last Updated</th></tr>"
+# ---------------------------------------------------------------------------
+# PAGE ASSEMBLY
+# ---------------------------------------------------------------------------
+def render_executive_overview():
+    # ---- Filters ----
+    filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1])
+
+    with filter_col1:
+        status_options = ["All Students", "Enrolled", "Conditionally Enrolled"]
+        selected_status = st.selectbox("Enrollment Status:", status_options)
+
+    with filter_col2:
+        cohorts = get_cohort_dropdown_options(active_program_id)
+        selected_cohort = st.selectbox("Cohort Status:", options=cohorts, index=0)
+
+    # Pull filtered data at once
+    df = get_executive_lifecycle_data(program_id=active_program_id, cohort_filter=selected_cohort)
+
+    # Filter enrollment status
+    if selected_status != "All Students":
+        df = df[df["EnrollmentStatus"].str.lower() == selected_status.lower()]
+
+    total_enrolled = compute_total_enrolled(df)
+    on_time_rate = compute_on_time_graduation_rate(df)
+    overall_completion = compute_overall_completion(df)
+    lifecycle_counts = compute_lifecycle_counts(df)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ---- KPI row ----
+    st.markdown("""
+    <style>
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+        flex: 1 1 0% !important;
+        width: 100% !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    card_header = f"TOTAL {selected_status.upper()}" if selected_status != "All Students" else "TOTAL ENROLLED"
+
+    with col1:
+        render_kpi_card(
+            header=card_header,
+            value=str(get_enrollment_count(selected_status, cohort=selected_cohort, program_id=active_program_id)),
+            subtext=f"{active_code} • {selected_cohort}",
+            border_color="#b91b21",
+        )
+
+    with col2:
+        render_kpi_card(
+            header="ON-TIME GRADUATION RATE",
+            value=f"{on_time_rate}%",
+            border_color="#ffca06"
+        )
+
+    with col3:
+        render_kpi_card(
+            header="OVERALL COMPLETION",
+            value=f"{overall_completion}%",
+            border_color="#1F3864"
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ---- Lifecycle chart ----
+    def classify_lifecycle_stage(row):
+        cw = str(row.get("CourseworkStatus", "")).lower().strip()
+        ce = str(row.get("CompExamStatus", "")).lower().strip()
+        cs = str(row.get("CapstoneStatus", "")).lower().strip()
+
+        if cs in ["defended for completion", "completed", "passed"]:
+            return "Completed"
+
+        if cw in ["pending", "in-progress", "in progress", "enrolled", "active"]:
+            return "Coursework"
+
+        if ce in ["in-progress", "in progress", "incomplete"]:
+            return "Comprehensive Exam"
+
+        if cs in ["in-progress", "in progress"]:
+            return "Capstone"
+
+        return "Coursework"
+
+    df["ActiveStage"] = df.apply(classify_lifecycle_stage, axis=1)
+
+    df_stage = df.groupby("ActiveStage").size().reset_index(name="Count")
+
+    all_stages = pd.DataFrame({"ActiveStage": ["Coursework", "Comprehensive Exam", "Capstone", "Completed"]})
+    df_stage = pd.merge(all_stages, df_stage, on="ActiveStage", how="left").fillna({"Count": 0})
+
+    colors = ["#b91b21", '#ffca06', '#1F3864', "#18A061"]
+
+    fig = px.bar(
+        df_stage,
+        x="ActiveStage",
+        y="Count",
+        color="ActiveStage",
+        color_discrete_sequence=colors
     )
     # Built as one line: blank lines / indentation would break Streamlit's HTML rendering
     st.markdown(
@@ -534,6 +724,7 @@ def render_executive_overview():
 
     # ---- Student table ----
     render_student_table(df)
+
 
 
 if __name__ == "__main__":

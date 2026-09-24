@@ -186,7 +186,7 @@ try:
 
         header_cols = st.columns(col_widths, vertical_alignment="center")
         header_labels = [
-            "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
+            "STUDENT ID", "STUDENT", "COHORT", "ADVISER",
             "COURSEWORK", "COMP EXAM", "CAPSTONE"
         ]
         for col, label in zip(header_cols, header_labels):
@@ -200,7 +200,7 @@ try:
                 s_id = str(row.get("StudentNumber", ""))
                 s_name = str(row.get("Student", "Unknown"))
                 cohort = str(row.get("Cohort", "N/A"))
-                advisor = str(row.get("Advisor", "None Assigned"))
+                adviser = str(row.get("Adviser", "None Assigned"))
 
                 cw_status = row.get("CourseworkStatus")
                 ce_status = row.get("CompExamStatus")
@@ -225,7 +225,7 @@ try:
                     unsafe_allow_html=True
                 )
                 r_cols[3].markdown(
-                    f'<span class="roster-cell-text">{advisor}</span>',
+                    f'<span class="roster-cell-text">{adviser}</span>',
                     unsafe_allow_html=True
                 )
                 r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
