@@ -92,12 +92,19 @@ def get_max_retry_count(login_id):
     return get_max_retry_count_local(login_id)
 
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
-def get_student_roster_data():
+def get_student_roster_data(program_id=None):
+    """Fetches the roster filtered by the given program ID.
+
+    If program_id is None, returns an empty DataFrame.
+    """
+    if program_id is None:
+        return pd.DataFrame()
+
     try:
         # 1. Load the mappings from the JSON file
         mappings = load_mappings()
-        
-        # 2. Validate EVERY mapped field against the cached schema snapshot (no per-field DB round trips)
+
+        # 2. Validate EVERY mapped field against the cached schema snapshot
         invalid = find_invalid_mappings(mappings)
         if invalid:
             schema_error = get_schema_load_error()
@@ -106,7 +113,7 @@ def get_student_roster_data():
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. If everything is valid, run the database query normally
+        # 3. Run the program-scoped query
         conn = mysql.connector.connect(**db_config)
         query = """
             SELECT 
@@ -114,21 +121,23 @@ def get_student_roster_data():
                 CONCAT(s.FirstName, ' ', s.LastName) AS Student,
                 s.Cohort,
                 s.EnrollmentStatus,
-                a.AdvisorName AS Advisor,
+                a.AdviserName AS Adviser,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID
+            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
+            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
+            WHERE s.ProgramID = %s
         """
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params=(program_id,))
         conn.close()
         return df
 
     except Exception as e:
         print(f"Mapping validation failed: {e}")
-        raise e  # This passes the error straight to your student roster page!
+        raise e
 
 def get_last_updated_time():
     """Checks last_sync.txt for the last successful sync timestamp."""
@@ -146,19 +155,21 @@ def get_student_profile_data(student_number):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
         
+        # Adviser link lives on the Student_Adviser junction table.
         query = """
             SELECT 
                 s.StudentNumber,
                 CONCAT(s.LastName, ', ', s.FirstName) AS Student,
                 s.Cohort,
                 s.EnrollmentStatus,
-                a.AdvisorName,
+                a.AdviserName,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Advisor a ON sl.AdvisorID = a.AdvisorID
+            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
+            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
             WHERE s.StudentNumber = %s
         """
 
@@ -181,17 +192,20 @@ def get_student_profile_data(student_number):
         print(f"Failed to fetch student details: {e}")
         return None
 
-def get_enrollment_count(status_filter="All", cohort=None):
+def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
+    """Returns the count of students matching the filters.
+
+    Requires program_id — returns 0 if it is not provided.
     """
-    Returns the count of MBA students based on EnrollmentStatus filter,
-    optionally narrowed to a specific cohort.
-    """
+    if program_id is None:
+        return 0
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        conditions = []
-        params = []
+        conditions = ["ProgramID = %s"]
+        params = [program_id]
 
         if status_filter not in ("All", "All Students", None, ""):
             conditions.append("EnrollmentStatus = %s")
@@ -201,11 +215,9 @@ def get_enrollment_count(status_filter="All", cohort=None):
             conditions.append("Cohort = %s")
             params.append(cohort)
 
-        query = "SELECT COUNT(*) FROM Students"
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+        query = "SELECT COUNT(*) FROM Students WHERE " + " AND ".join(conditions)
 
-        cursor.execute(query, tuple(params) if params else None)
+        cursor.execute(query, tuple(params))
         count = cursor.fetchone()[0]
         cursor.close()
         conn.close()
@@ -214,14 +226,20 @@ def get_enrollment_count(status_filter="All", cohort=None):
     except Exception as e:
         print(f"Failed to fetch enrollment count: {e}")
         return 0
+def get_available_cohorts(program_id=None):
+    """Fetches distinct cohort values for the given program."""
+    if program_id is None:
+        return []
 
-def get_available_cohorts():
-    """Fetches distinct cohort values for the Student Roster dropdown filter."""
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        query = "SELECT DISTINCT Cohort FROM Students WHERE Cohort IS NOT NULL ORDER BY Cohort DESC"
-        cursor.execute(query)
+        query = (
+            "SELECT DISTINCT Cohort FROM Students "
+            "WHERE Cohort IS NOT NULL AND ProgramID = %s "
+            "ORDER BY Cohort DESC"
+        )
+        cursor.execute(query, (program_id,))
         cohorts = [row[0] for row in cursor.fetchall()]
         cursor.close()
         conn.close()
@@ -229,6 +247,205 @@ def get_available_cohorts():
     except Exception as e:
         print(f"Failed to fetch cohorts: {e}")
         return []
+
+
+# ------------------------------------------------------------------
+# Program (added for student_roster feature)
+# Schema: ProgramID (int PK, AUTO_INCREMENT), ProgramCode (varchar UNIQUE, NOT NULL),
+#         ProgramName (varchar NOT NULL), IsActive (tinyint DEFAULT 1),
+#         CreatedAt (datetime DEFAULT CURRENT_TIMESTAMP)
+# ------------------------------------------------------------------
+
+def get_all_programs(active_only=True):
+    """Fetches programs for dropdown filters.
+
+    Args:
+        active_only: If True, only returns IsActive = 1 rows (default).
+
+    Returns:
+        List of dicts:
+            [{"ProgramID": int, "ProgramCode": str, "ProgramName": str,
+              "IsActive": int, "CreatedAt": datetime}, ...]
+    """
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT ProgramID, ProgramCode, ProgramName, IsActive, CreatedAt
+            FROM Program
+        """
+        if active_only:
+            query += " WHERE IsActive = 1"
+        query += " ORDER BY ProgramName ASC"
+
+        cursor.execute(query)
+        programs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return programs
+
+    except Exception as e:
+        print(f"Failed to fetch programs: {e}")
+        return []
+
+def get_user_program(user_id):
+    """Fetches the current program assigned to a user.
+
+    Args:
+        user_id: The UserID to look up.
+
+    Returns:
+        dict: {"ProgramID": int, "ProgramCode": str, "ProgramName": str, "IsActive": int}
+              when a program is assigned and found.
+        None: when the user exists but has no CurrentProgramID,
+              OR when the user doesn't exist,
+              OR when the referenced program row is missing.
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return None
+
+    user_id = str(user_id).strip()
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT p.ProgramID, p.ProgramCode, p.ProgramName, p.IsActive
+            FROM Users u
+            JOIN Program p ON u.CurrentProgramID = p.ProgramID
+            WHERE u.UserID = %s
+        """
+        cursor.execute(query, (user_id,))
+        row = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+        return row  # None if no match
+
+    except mysql.connector.Error as e:
+        print(f"Failed to fetch user program: {format_mysql_error(e)}")
+        return None
+
+    except Exception as e:
+        print(f"Failed to fetch user program: {e}")
+        return None
+def create_program(program_code, program_name, is_active=1):
+    """Inserts a new program into the Program table.
+
+    Args:
+        program_code: Unique code, e.g. "MBA", "BIA" (required, UNIQUE).
+        program_name: Full display name, e.g. "Master of Business Administration" (required).
+        is_active:    1 = active (default), 0 = inactive.
+
+    Returns:
+        (True, new_program_id) on success
+        (False, error_message) on failure
+    """
+    # --- Validate inputs ---
+    if not program_code or not str(program_code).strip():
+        return False, "Program code is required."
+    if not program_name or not str(program_name).strip():
+        return False, "Program name is required."
+
+    program_code = str(program_code).strip()
+    program_name = str(program_name).strip()
+    is_active = 1 if is_active else 0
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # ProgramID auto-increments; CreatedAt uses table default CURRENT_TIMESTAMP.
+        query = """
+            INSERT INTO Program (ProgramCode, ProgramName, IsActive)
+            VALUES (%s, %s, %s)
+        """
+        cursor.execute(query, (program_code, program_name, is_active))
+
+        new_id = cursor.lastrowid
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return True, new_id
+
+    except mysql.connector.IntegrityError as e:
+        # 1062 = duplicate key (program_code already exists)
+        if e.errno == 1062:
+            return False, f"Program code '{program_code}' already exists."
+        return False, f"Integrity error: {e.msg}"
+
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+
+def set_user_program(user_id, program_id):
+    """Updates Users.CurrentProgramID for a given user.
+
+    Schema confirmed:
+        Users.CurrentProgramID  int, NULLABLE, MUL (FK to Program.ProgramID)
+
+    Args:
+        user_id:    The UserID of the user to update (required).
+        program_id: The ProgramID to assign. Pass None or "" to clear the
+                    assignment (sets CurrentProgramID = NULL).
+
+    Returns:
+        (True, None) on success
+        (False, error_message) on failure
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return False, "User ID is required."
+
+    user_id = str(user_id).strip()
+
+    # Allow clearing the program by passing None / empty string
+    if program_id is None or str(program_id).strip() == "":
+        program_id_value = None
+    else:
+        try:
+            program_id_value = int(program_id)
+        except (TypeError, ValueError):
+            return False, f"Invalid program ID: {program_id!r}"
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        query = "UPDATE Users SET CurrentProgramID = %s WHERE UserID = %s"
+        cursor.execute(query, (program_id_value, user_id))
+
+        # rowcount may be 0 if the value is already what we're setting it to
+        # AND the user exists — so verify existence separately.
+        if cursor.rowcount == 0:
+            cursor.execute("SELECT 1 FROM Users WHERE UserID = %s", (user_id,))
+            if cursor.fetchone() is None:
+                cursor.close()
+                conn.close()
+                return False, f"No user found with UserID '{user_id}'."
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+
+    except mysql.connector.IntegrityError as e:
+        # 1452 = FK violation: program_id doesn't exist in Program
+        if e.errno == 1452:
+            return False, f"Program ID {program_id_value} does not exist."
+        return False, f"Integrity error: {e.msg}"
+
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
 
 # ------------------------------------------------------------------
 # Field-mapping validation (schema snapshot cache)
@@ -242,6 +459,126 @@ _SCHEMA_CONNECT_TIMEOUT = 5     # fail fast if the DB host is unreachable
 
 _schema_lock = threading.Lock()
 _schema_cache = {"columns": frozenset(), "loaded_at": None, "ttl": 0, "error": None}
+
+# ------------------------------------------------------------------
+# US-13: View-Only / Edit permissions
+# ------------------------------------------------------------------
+
+def get_user_permission(user_id):
+    """Return 'View Only' or 'Edit' for a user. Fails closed to 'View Only'."""
+    if user_id is None or str(user_id).strip() == "":
+        return "View Only"
+
+    user_id = str(user_id).strip()
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT RolePermission FROM Users WHERE UserID = %s",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not row or not row.get("RolePermission"):
+            return "View Only"
+        return row["RolePermission"]
+
+    except Exception:
+        return "View Only"   # fail closed
+
+
+def can_edit(user_id):
+    """True when the user has 'Edit' permission."""
+    return get_user_permission(user_id) == "Edit"
+
+
+def log_permission_attempt(user_id):
+    """Record a blocked write attempt by a View-Only user."""
+    if user_id is None or str(user_id).strip() == "":
+        return
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO Permission_Audit_Log (UserID) VALUES (%s)",
+            (str(user_id).strip(),)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass   # logging must never break the flow
+
+
+def set_user_permission(user_id, permission):
+    """Set RolePermission ('View Only' | 'Edit') for a user."""
+    if user_id is None or str(user_id).strip() == "":
+        return False, "User ID is required."
+
+    if permission not in ("View Only", "Edit"):
+        return False, f"Invalid permission: {permission!r}"
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE Users SET RolePermission = %s WHERE UserID = %s",
+            (permission, str(user_id).strip())
+        )
+
+        if cursor.rowcount == 0:
+            cursor.execute("SELECT 1 FROM Users WHERE UserID = %s", (str(user_id).strip(),))
+            if cursor.fetchone() is None:
+                cursor.close()
+                conn.close()
+                return False, f"No user found with UserID '{user_id}'."
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def search_users(query):
+    """Search Users by UserID or name (partial, case-insensitive). Returns list of dicts."""
+    if query is None:
+        query = ""
+    query = str(query).strip()
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        if not query:
+            cursor.execute(
+                "SELECT UserID, FirstName, LastName, Role, RolePermission "
+                "FROM Users ORDER BY LastName, FirstName LIMIT 200"
+            )
+        else:
+            like = f"%{query}%"
+            cursor.execute(
+                "SELECT UserID, FirstName, LastName, Role, RolePermission "
+                "FROM Users "
+                "WHERE UserID LIKE %s OR FirstName LIKE %s OR LastName LIKE %s "
+                "   OR CONCAT(FirstName, ' ', LastName) LIKE %s "
+                "ORDER BY LastName, FirstName LIMIT 200",
+                (like, like, like, like)
+            )
+
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+
+    except Exception as e:
+        print(f"Failed to search users: {e}")
+        return []
 
 def _to_str(value):
     """Some connector versions return INFORMATION_SCHEMA text as bytes."""

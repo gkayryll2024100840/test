@@ -1,4 +1,5 @@
 import streamlit as st
+from permissions import require_edit
 import re
 
 from db_connect import (
@@ -6,7 +7,11 @@ from db_connect import (
     get_last_updated_time,
     trigger_data_sync,
     get_max_retry_count,
-    get_available_cohorts
+    get_available_cohorts,
+    get_all_programs,
+    create_program,
+    set_user_program,
+    get_user_program,
 )
 
 # Only import these if dashboard_views/components.py actually exists.
@@ -27,6 +32,71 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.stop()
 
 # ---------------------------------------------------------------
+# Program selection — visible to every role for demonstration.
+# (Will be restricted later when the View-Only role is added.)
+# ---------------------------------------------------------------
+user = st.session_state.get("user", {})
+role = user.get("role")
+
+with st.expander("Active Program", expanded=not st.session_state.get("active_program_id")):
+    programs = get_all_programs()
+    options = {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in programs}
+
+    if options:
+        current_id = st.session_state.get("active_program_id")
+        default_idx = 0
+        if current_id:
+            for i, label in enumerate(options.keys()):
+                if options[label] == current_id:
+                    default_idx = i
+                    break
+
+        selected_label = st.selectbox(
+            "Select program",
+            list(options.keys()),
+            index=default_idx,
+            key="program_select",
+        )
+        if st.button("Set Active Program"):
+            pid = options[selected_label]
+            st.session_state["active_program_id"] = pid
+            st.session_state["active_program_code"] = selected_label.split(" — ")[0]
+            set_user_program(user.get("UserID"), pid)
+            st.success(f"Active program set to {selected_label}.")
+            st.rerun()
+
+    with st.form("create_program_form"):
+        st.write("**Create New Program**")
+        code = st.text_input("Program Code (e.g., BIA)")
+        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
+        if st.form_submit_button("Create Program"):
+            # US-13: block View-Only users and log the attempt
+            require_edit()
+
+            if not code or not name:
+                st.warning("Please enter both Program Code and Name.")
+            else:
+                ok, result = create_program(code.strip().upper(), name.strip())
+                if ok:
+                    st.session_state["active_program_id"] = result
+                    st.session_state["active_program_code"] = code.strip().upper()
+                    set_user_program(user.get("UserID"), result)
+                    st.success(f"Created **{code}** and set as active.")
+                    st.rerun()
+                else:
+                    st.error(f"Could not create program: {result}")
+
+
+
+# Block the page if no program is set
+active_program_id = st.session_state.get("active_program_id")
+if not active_program_id:
+    st.warning("⏳ No active program has been set. Please pick one from the Active Program panel above.")
+    st.stop()
+
+active_code = st.session_state.get("active_program_code", "")
+
+# ---------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------
 active_login_id = st.session_state.get("session_id", None)
@@ -43,7 +113,7 @@ if active_login_id:
 col_title, col_action = st.columns([2.5, 1.5])
 
 with col_title:
-    st.title("Student Roster")
+    st.title(f"Student Roster — {active_code} Program")
 
 with col_action:
     last_sync = get_last_updated_time()
@@ -60,8 +130,8 @@ with col_action:
 st.markdown("---")
 
 # Displays student roster in table format
-try: 
-    df = get_student_roster_data()
+try:
+    df = get_student_roster_data(program_id=active_program_id)
 
     if not df.empty:
         # ----------------- Clean Filter & Search Rhythm -----------------
@@ -75,7 +145,7 @@ try:
             )
 
         with col_cohort:
-            available_cohorts = ["All Cohorts"] + get_available_cohorts()
+            available_cohorts = ["All Cohorts"] + get_available_cohorts(program_id=active_program_id)
             cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
 
         with col_sort:
@@ -108,12 +178,11 @@ try:
         )
 
         # ----------------- Enterprise Roster Grid -----------------
-        # Column widths tuned for 7 columns (was 8 with Risk Status)
         col_widths = [1.2, 2.4, 1.0, 2.0, 1.3, 1.3, 1.3]
 
         header_cols = st.columns(col_widths, vertical_alignment="center")
         header_labels = [
-            "STUDENT ID", "STUDENT", "COHORT", "ADVISOR",
+            "STUDENT ID", "STUDENT", "COHORT", "ADVISER",
             "COURSEWORK", "COMP EXAM", "CAPSTONE"
         ]
         for col, label in zip(header_cols, header_labels):
@@ -127,7 +196,7 @@ try:
                 s_id = str(row.get("StudentNumber", ""))
                 s_name = str(row.get("Student", "Unknown"))
                 cohort = str(row.get("Cohort", "N/A"))
-                advisor = str(row.get("Advisor", "None Assigned"))
+                adviser = str(row.get("Adviser", "None Assigned"))
 
                 cw_status = row.get("CourseworkStatus")
                 ce_status = row.get("CompExamStatus")
@@ -152,7 +221,7 @@ try:
                     unsafe_allow_html=True
                 )
                 r_cols[3].markdown(
-                    f'<span class="roster-cell-text">{advisor}</span>',
+                    f'<span class="roster-cell-text">{adviser}</span>',
                     unsafe_allow_html=True
                 )
                 r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
@@ -162,5 +231,8 @@ try:
                     '<div class="roster-row-divider"></div>',
                     unsafe_allow_html=True
                 )
+    else:
+        st.info(f"No students are currently tagged under the {active_code} program.")
+
 except Exception as e:
     st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. Please check the Admin Configuration page. ({e})")

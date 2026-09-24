@@ -5,5 +5,5 @@
     "Coursework Status": "dbo.Student_Lifecycle.CourseworkStatus",
     "Comprehensive Exam Status": "dbo.Student_Lifecycle.CompExamStatus",
     "Capstone Status": "dbo.Student_Lifecycle.CapstoneStatus",
-    "Assigned Advisor": "dbo.Advisor.AdvisorName"
+    "Assigned Adviser": "dbo.Adviser.AdviserName"
 }
