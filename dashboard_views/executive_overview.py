@@ -25,24 +25,6 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.warning("Please log in to view executive reporting.")
     st.stop()
 
-# ---------------------------------------------------------------
-# Resolve the active program
-# ---------------------------------------------------------------
-user = st.session_state.get("user", {})
-role = user.get("role")
-
-if not st.session_state.get("active_program_id") and role != "IT/Admin":
-    pinned = get_user_program(user.get("UserID"))
-    if pinned:
-        st.session_state["active_program_id"] = pinned["ProgramID"]
-        st.session_state["active_program_code"] = pinned["ProgramCode"]
-
-active_program_id = st.session_state.get("active_program_id")
-active_code = st.session_state.get("active_program_code", "")
-
-if not active_program_id:
-    st.warning("⏳ No active program has been set. Please pick one on the Student Roster page first.")
-    st.stop()
 
 # ---------------------------------------------------------------------------
 # CONSTANTS
