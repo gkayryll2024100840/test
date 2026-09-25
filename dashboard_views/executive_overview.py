@@ -10,12 +10,9 @@ from db_connect import (
     format_mysql_error,
     get_available_cohorts,
     check_column_exists,
-    get_all_programs,
-    get_enrollment_count,
     get_user_program,
 )
 from dashboard_views.components import DARK_MODE_CSS
-import mysql.connector
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -225,11 +222,6 @@ def get_executive_data() -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=300)
-def get_cohort_options():
-    return ["All Cohorts"] + get_available_cohorts()
-
-
 # ---------------------------------------------------------------------------
 # BUSINESS LOGIC
 # ---------------------------------------------------------------------------
@@ -428,7 +420,7 @@ def render_student_table(df: pd.DataFrame):
 # ---------------------------------------------------------------------------
 def render_executive_overview():
     st.markdown(PAGE_CSS, unsafe_allow_html=True)
-    st.title(f"Executive Overview — {active_code} Program")
+    st.title("Executive Overview")
 
     # ---- Data ----
     try:
@@ -440,13 +432,14 @@ def render_executive_overview():
         st.error(f"Failed to fetch executive overview data: {e}")
         return
 
-    # ---- Filters ----
+    # ---- Filters: Enrollment | Cohort | Program ----
     with st.container(key="eo_filters"):
         f1, f2, f3 = st.columns(3, gap="small")
 
         with f1:
             selected_status = st.selectbox("Enrollment Status", ENROLLMENT_OPTIONS)
 
+        # Program is chosen before Cohort in code (it still displays third)
         with f3:
             selected_program = st.selectbox(
                 "Program", get_program_options(), format_func=lambda p: p["ProgramName"]
@@ -460,6 +453,7 @@ def render_executive_overview():
             cohorts = sorted(program_df["Cohort"].dropna().unique(), key=cohort_sort_key, reverse=True)
             selected_cohort = st.selectbox("Cohort", ["All Cohorts"] + list(cohorts))
 
+    # Program + status filters apply everywhere; cohort applies to everything except the trend
     status_df = program_df
     if selected_status != "All":
         status_df = program_df[
@@ -473,8 +467,10 @@ def render_executive_overview():
 
     # ---- KPI row ----
     total_label = "Total Enrolled" if selected_status == "All" else f"Total {selected_status}"
+    program_label = selected_program["ProgramCode"] or "All Programs"
+
     render_kpi_row([
-        kpi_card(total_label, f"{len(df):,}", f"{html.escape(active_code)} · {html.escape(selected_cohort)}"),
+        kpi_card(total_label, f"{len(df):,}", f"{html.escape(program_label)} · {html.escape(selected_cohort)}"),
         kpi_card("On-Time Graduation Rate", f"{on_time_rate(df):.1f}%",
                  delta_html(cohort_delta(hist, "OnTime", selected_cohort))),
         kpi_card("Overall Completion", f"{completion_rate(df):.1f}%",
