@@ -661,3 +661,46 @@ def check_column_exists(full_column_path):
 def find_invalid_mappings(mappings):
     """Returns [(field_label, typed_path), ...] for every mapping that doesn't resolve to a real column."""
     return [(label, path) for label, path in mappings.items() if not check_column_exists(path)]
+
+def get_my_adviser_name(user_id):
+    """Resolves the AdviserName linked to a given UserID, for US-23's
+    auto-scoped "my advisees" roster filter.
+ 
+    Schema assumption: Adviser.UserID (int, NULLABLE, FK to Users.UserID)
+    links an Adviser row to the login that IS that adviser. If this column
+    doesn't exist yet on your live table, add it first:
+        ALTER TABLE Adviser ADD COLUMN UserID INT NULL;
+        ALTER TABLE Adviser ADD FOREIGN KEY (UserID) REFERENCES Users(UserID);
+ 
+    Args:
+        user_id: The UserID of the logged-in user.
+ 
+    Returns:
+        str: the adviser's AdviserName, when this user has a linked Adviser row.
+        None: when user_id is empty, the user has no Adviser row, or on error.
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return None
+ 
+    user_id = str(user_id).strip()
+ 
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT AdviserName FROM Adviser WHERE UserID = %s",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return row["AdviserName"] if row else None
+ 
+    except mysql.connector.Error as e:
+        print(f"Failed to fetch adviser name: {format_mysql_error(e)}")
+        return None
+ 
+    except Exception as e:
+        print(f"Failed to fetch adviser name: {e}")
+        return None
+ 
