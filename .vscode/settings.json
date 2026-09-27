@@ -1,7 +1,7 @@
 //this makes last_sync.txt and local_logs.db hiddem
 {
     "files.exclude": {
-        "**/*.db": false,
+        "**/*.db": true,
         "**/*.txt": false
     },
     "python-envs.defaultEnvManager": "ms-python.python:system"

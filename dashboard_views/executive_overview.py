@@ -16,7 +16,7 @@ from db_connect import (
     check_column_exists,
     get_user_program,
 )
-from dashboard_views.components import DARK_MODE_CSS
+from dashboard_views.components import DARK_MODE_CSS, set_header_context
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -61,11 +61,36 @@ TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
 # ---------------------------------------------------------------------------
 PAGE_CSS = """
 <style>
-.block-container,
-[data-testid="stMainBlockContainer"] {
-    padding-top: 1.5rem !important;
+/* ---- colour tokens: light by default, dark when Streamlit's theme is dark ---- */
+.stApp{
+  --eo-surface:#FFFFFF; --eo-surface-2:#F9FAFB; --eo-border:#E5E7EB; --eo-border-soft:#F1F2F4; --eo-line:#D1D5DB;
+  --eo-text:#0F172A; --eo-text-2:#111827; --eo-body:#374151; --eo-label:#4B5563; --eo-muted:#6B7280; --eo-faint:#9CA3AF;
+  --eo-shadow:0 1px 2px rgba(16,24,40,.05); --eo-tip-shadow:0 8px 24px rgba(16,24,40,.14);
+  --eo-up:#2E9E3E; --eo-down:#C62828; --eo-chart-line:#111827; --eo-chart-text:#4B5563; --eo-chart-grid:#E5E7EB;
+  --pg-bg:#ECFDF3; --pg-fg:#15803D; --pg-bd:#BBF7D0;   --pr-bg:#FEF2F2; --pr-fg:#B91C1C; --pr-bd:#FECACA;
+  --pb-bg:#EFF6FF; --pb-fg:#1D4ED8; --pb-bd:#BFDBFE;   --pa-bg:#FFFBEB; --pa-fg:#B45309; --pa-bd:#FDE68A;
+  --px-bg:#F3F4F6; --px-fg:#4B5563; --px-bd:#E5E7EB;
 }
-header[data-testid="stHeader"] { display: none; }
+html[data-eo-theme="dark"] .stApp{
+  --eo-surface:#161D2B; --eo-surface-2:#1B2333; --eo-border:#263044; --eo-border-soft:#1E293B; --eo-line:#334155;
+  --eo-text:#F1F5F9; --eo-text-2:#E2E8F0; --eo-body:#CBD5E1; --eo-label:#94A3B8; --eo-muted:#94A3B8; --eo-faint:#64748B;
+  --eo-shadow:none; --eo-tip-shadow:0 8px 24px rgba(0,0,0,.55);
+  --eo-up:#34D399; --eo-down:#F87171; --eo-chart-line:#E2E8F0; --eo-chart-text:#CBD5E1; --eo-chart-grid:#263044;
+  --pg-bg:rgba(16,185,129,.15); --pg-fg:#34D399; --pg-bd:rgba(16,185,129,.3);
+  --pr-bg:rgba(239,68,68,.14);  --pr-fg:#FCA5A5; --pr-bd:rgba(239,68,68,.3);
+  --pb-bg:rgba(59,130,246,.15); --pb-fg:#93C5FD; --pb-bd:rgba(59,130,246,.3);
+  --pa-bg:rgba(245,158,11,.14); --pa-fg:#FCD34D; --pa-bd:rgba(245,158,11,.3);
+  --px-bg:rgba(148,163,184,.12);--px-fg:#CBD5E1; --px-bd:rgba(148,163,184,.24);
+}
+/* Plotly draws with inline colours; these rules make chart text/lines/grid follow the theme */
+.stApp .js-plotly-plot .xtick text,
+.stApp .js-plotly-plot .bars .textpoint text{fill:var(--eo-chart-text) !important;}
+.stApp .js-plotly-plot .scatterlayer .textpoint text{fill:var(--eo-chart-line) !important;}
+.stApp .js-plotly-plot .scatterlayer .js-line{stroke:var(--eo-chart-line) !important;}
+.stApp .js-plotly-plot .scatterlayer .point{fill:var(--eo-chart-line) !important;}
+.stApp .js-plotly-plot .gridlayer path{stroke:var(--eo-chart-grid) !important;}
+.stApp .js-plotly-plot .xlines-above{stroke:var(--eo-line) !important;}
+/* page padding + Streamlit header are handled by render_app_shell() in components.py (shared across pages) */
 
 .st-key-eo_filters [data-testid="stColumn"],
 .st-key-eo_filters [data-testid="column"] {
@@ -83,70 +108,70 @@ header[data-testid="stHeader"] { display: none; }
 }
 
 /* page title with the divider line right under it (one element = no extra Streamlit gaps) */
-.eo-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:#0F172A;letter-spacing:-.01em;
-        padding-bottom:6px;border-bottom:1px solid #E5E7EB;margin:0;}
+.eo-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:var(--eo-text);letter-spacing:-.01em;
+        padding-bottom:6px;border-bottom:1px solid var(--eo-border);margin:0;}
 /* SPACE BETWEEN THE TITLE LINE AND THE FILTERS: change padding-top */
 .st-key-eo_filters{padding-top:16px;}
 /* SPACE BETWEEN EACH FILTER LABEL (e.g. "Enrollment Status") AND ITS DROPDOWN: change margin-bottom */
 .st-key-eo_filters [data-testid="stWidgetLabel"]{margin-bottom:4px;min-height:0;}
-.eo-subtitle{color:#4B5563;font-size:14px;margin:-14px 0 14px 0;}
+.eo-subtitle{color:var(--eo-label);font-size:14px;margin:-14px 0 14px 0;}
 .eo-kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:6px 0 18px 0;}
 @media (max-width:1200px){.eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media (max-width:700px){.eo-kpi-row{grid-template-columns:repeat(1,minmax(0,1fr));}}
-.eo-kpi{background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:18px 20px;
-        box-shadow:0 1px 2px rgba(16,24,40,.05);min-height:122px;display:flex;flex-direction:column;}
-.eo-kpi-label{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:#4B5563;}
-.eo-kpi-value{font-size:34px;font-weight:700;color:#0F172A;line-height:1.1;margin:12px 0 8px 0;}
-.eo-kpi-sub{font-size:12px;color:#6B7280;margin-top:auto;}
+.eo-kpi{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;padding:18px 20px;
+        box-shadow:var(--eo-shadow);min-height:122px;display:flex;flex-direction:column;}
+.eo-kpi-label{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-label);}
+.eo-kpi-value{font-size:34px;font-weight:700;color:var(--eo-text);line-height:1.1;margin:12px 0 8px 0;}
+.eo-kpi-sub{font-size:12px;color:var(--eo-muted);margin-top:auto;}
 .eo-kpi{position:relative;}
 .eo-info{position:absolute;top:14px;right:14px;width:20px;height:20px;border-radius:50%;
-        border:1.5px solid #6B7280;color:#6B7280;font-family:inherit;font-size:12px;font-weight:600;
+        border:1.5px solid var(--eo-muted);color:var(--eo-muted);font-family:inherit;font-size:12px;font-weight:600;
         line-height:17px;font-style:normal;text-align:center;cursor:help;outline:none;}
-.eo-info:hover,.eo-info:focus{border-color:#0F172A;color:#0F172A;}
+.eo-info:hover,.eo-info:focus{border-color:var(--eo-text);color:var(--eo-text);}
 .eo-tip{visibility:hidden;opacity:0;transition:opacity .15s;position:absolute;top:28px;right:-8px;z-index:1000;
-        width:390px;max-width:90vw;background:#FFFFFF;border:1px solid #E5E7EB;border-radius:10px;padding:14px 16px;
-        box-shadow:0 8px 24px rgba(16,24,40,.14);font-family:inherit;font-size:13px;line-height:1.6;
-        font-weight:400;letter-spacing:0;text-transform:none;color:#374151;text-align:left;cursor:default;
+        width:390px;max-width:90vw;background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:10px;padding:14px 16px;
+        box-shadow:var(--eo-tip-shadow);font-family:inherit;font-size:13px;line-height:1.6;
+        font-weight:400;letter-spacing:0;text-transform:none;color:var(--eo-body);text-align:left;cursor:default;
         white-space:normal;}
 .eo-info:hover .eo-tip,.eo-info:focus .eo-tip,.eo-info:focus-within .eo-tip{visibility:visible;opacity:1;}
-.eo-tip-formula{font-weight:600;color:#0F172A;margin-bottom:10px;white-space:nowrap;}
+.eo-tip-formula{font-weight:600;color:var(--eo-text);margin-bottom:10px;white-space:nowrap;}
 /* let the tooltip spill outside Streamlit's markdown wrappers instead of being clipped */
 [data-testid="stElementContainer"]:has(.eo-kpi-row),
 [data-testid="element-container"]:has(.eo-kpi-row),
 [data-testid="stMarkdown"]:has(.eo-kpi-row),
 [data-testid="stMarkdownContainer"]:has(.eo-kpi-row){overflow:visible !important;position:relative;z-index:20;}
 .eo-tip-row{display:flex;align-items:baseline;gap:6px;}
-.eo-tip-dots{flex:1;border-bottom:1px solid #D1D5DB;transform:translateY(-4px);}
-.eo-tip-caption{margin-top:8px;padding-top:8px;border-top:1px solid #F1F2F4;font-size:12px;color:#6B7280;}
-.eo-placeholder{color:#9CA3AF;font-style:italic;}
-.eo-flat{color:#6B7280;}
-.eo-up{color:#2E9E3E;} .eo-down{color:#C62828;} .eo-risk{color:#C62828;}
+.eo-tip-dots{flex:1;border-bottom:1px solid var(--eo-line);transform:translateY(-4px);}
+.eo-tip-caption{margin-top:8px;padding-top:8px;border-top:1px solid var(--eo-border-soft);font-size:12px;color:var(--eo-muted);}
+.eo-placeholder{color:var(--eo-faint);font-style:italic;}
+.eo-flat{color:var(--eo-muted);}
+.eo-up{color:var(--eo-up);} .eo-down{color:var(--eo-down);} .eo-risk{color:var(--eo-down);}
 
-div[data-testid="stVerticalBlockBorderWrapper"]{background:#FFFFFF;border:1px solid #E5E7EB !important;
-        border-radius:12px !important;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);border:1px solid var(--eo-border) !important;
+        border-radius:12px !important;box-shadow:var(--eo-shadow);}
 .eo-card-head{display:flex;flex-direction:column;align-items:flex-start;}
-.eo-card-title{display:block;font-size:20px;font-weight:700;color:#0F172A;margin:4px 0 2px 4px;}
-.eo-card-sub{display:block;font-size:12px;color:#6B7280;margin:0 0 4px 4px;}
+.eo-card-title{display:block;font-size:20px;font-weight:700;color:var(--eo-text);margin:4px 0 2px 4px;}
+.eo-card-sub{display:block;font-size:12px;color:var(--eo-muted);margin:0 0 4px 4px;}
 
-.eo-table-wrap{background:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;overflow:auto;
-        max-height:560px;margin-top:18px;box-shadow:0 1px 2px rgba(16,24,40,.05);}
-.eo-table{width:100%;border-collapse:collapse;font-size:14px;color:#111827;margin:0;}
-.eo-table th{position:sticky;top:0;z-index:1;background:#F9FAFB;text-align:left;font-size:12px;
-        font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#6B7280;
-        padding:12px 18px;border:none;border-bottom:1px solid #E5E7EB;}
-.eo-table td{padding:10px 18px;border:none;border-bottom:1px solid #F1F2F4;vertical-align:middle;white-space:nowrap;}
+.eo-table-wrap{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;overflow:auto;
+        max-height:560px;margin-top:18px;box-shadow:var(--eo-shadow);}
+.eo-table{width:100%;border-collapse:collapse;font-size:14px;color:var(--eo-text-2);margin:0;}
+.eo-table th{position:sticky;top:0;z-index:1;background:var(--eo-surface-2);text-align:left;font-size:12px;
+        font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);
+        padding:12px 18px;border:none;border-bottom:1px solid var(--eo-border);}
+.eo-table td{padding:10px 18px;border:none;border-bottom:1px solid var(--eo-border-soft);vertical-align:middle;white-space:nowrap;}
 .eo-table tr:last-child td{border-bottom:none;}
 .eo-student{display:flex;align-items:center;gap:12px;}
 .eo-avatar{width:34px;height:34px;border-radius:50%;background:#475569;color:#FFFFFF;font-size:13px;
         font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.eo-name{font-weight:600;color:#111827;} .eo-id{font-size:12px;color:#6B7280;}
+.eo-name{font-weight:600;color:var(--eo-text-2);} .eo-id{font-size:12px;color:var(--eo-muted);}
 .eo-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
-.pill-green{background:#ECFDF3;color:#15803D;border-color:#BBF7D0;}
-.pill-red{background:#FEF2F2;color:#B91C1C;border-color:#FECACA;}
-.pill-blue{background:#EFF6FF;color:#1D4ED8;border-color:#BFDBFE;}
-.pill-amber{background:#FFFBEB;color:#B45309;border-color:#FDE68A;}
-.pill-gray{background:#F3F4F6;color:#4B5563;border-color:#E5E7EB;}
-.eo-muted{color:#6B7280;}
+.pill-green{background:var(--pg-bg);color:var(--pg-fg);border-color:var(--pg-bd);}
+.pill-red{background:var(--pr-bg);color:var(--pr-fg);border-color:var(--pr-bd);}
+.pill-blue{background:var(--pb-bg);color:var(--pb-fg);border-color:var(--pb-bd);}
+.pill-amber{background:var(--pa-bg);color:var(--pa-fg);border-color:var(--pa-bd);}
+.pill-gray{background:var(--px-bg);color:var(--px-fg);border-color:var(--px-bd);}
+.eo-muted{color:var(--eo-muted);}
 </style>
 """
 
@@ -441,8 +466,8 @@ def card_header(title, subtitle):
 BASE_LAYOUT = dict(
     height=300,
     margin=dict(l=10, r=10, t=30, b=10),
-    plot_bgcolor="white",
-    paper_bgcolor="white",
+    plot_bgcolor="rgba(0,0,0,0)",     # transparent: the card colour shows through (light or dark)
+    paper_bgcolor="rgba(0,0,0,0)",
     showlegend=False,
     font=dict(size=12, color="#6B7280"),
 )
@@ -591,6 +616,13 @@ def compare_text(hist, metric, cohort, kind="pct", higher_is_better=True) -> str
     return f"{'▲' if delta > 0 else '▼'} {amount} vs {prev_c} ({prev_txt}) — {'better' if better else 'worse'}"
 
 
+def _tidy_chart(chart, GraphicalProperties, LineProperties):
+    """Title above the plot (not on top of it) and light grey axis lines."""
+    chart.title.overlay = False
+    for ax in (chart.x_axis, chart.y_axis):
+        ax.spPr = GraphicalProperties(ln=LineProperties(solidFill="D1D5DB"))
+
+
 def _value_labels(DataLabelList):
     """Chart labels that show only the number (not the series/category name)."""
     lbl = DataLabelList()
@@ -605,6 +637,8 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     from openpyxl.chart import BarChart, LineChart, Reference
     from openpyxl.chart.label import DataLabelList
     from openpyxl.chart.series import DataPoint
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
@@ -686,8 +720,8 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
 
     # --- Charts ---
     bar = BarChart()
-    bar.title, bar.style, bar.legend = "Cohort by Lifecycle Stage", 10, None
-    bar.y_axis.title, bar.y_axis.majorGridlines = "Students", None
+    bar.title, bar.legend, bar.varyColors = "Cohort by Lifecycle Stage", None, False
+    bar.y_axis.majorGridlines = None
     bar.add_data(Reference(ov, min_col=2, min_row=17, max_row=21), titles_from_data=True)
     bar.set_categories(Reference(ov, min_col=1, min_row=18, max_row=21))
     series = bar.series[0]
@@ -698,21 +732,26 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         series.dPt.append(pt)
     series.dLbls = _value_labels(DataLabelList)
     bar.x_axis.delete = bar.y_axis.delete = False      # openpyxl 3.1 hides axes otherwise
+    _tidy_chart(bar, GraphicalProperties, LineProperties)
     bar.width, bar.height = 17, 8.5
     ov.add_chart(bar, "E3")
 
     if len(recent) >= 2:
         line = LineChart()
-        line.title, line.style, line.legend = "Overall Completion % — Trend", 12, None
-        line.y_axis.number_format, line.y_axis.title = "0%", "Completion"
+        line.title, line.legend, line.varyColors = "Overall Completion % — Trend", None, False
+        line.y_axis.number_format = "0%"
         line.add_data(Reference(ov, min_col=2, min_row=26, max_row=26 + len(recent)), titles_from_data=True)
         line.set_categories(Reference(ov, min_col=1, min_row=27, max_row=26 + len(recent)))
         s0 = line.series[0]
         s0.graphicalProperties.line.solidFill, s0.graphicalProperties.line.width = "111827", 19050
         s0.marker.symbol, s0.marker.size = "circle", 6
+        s0.marker.graphicalProperties = GraphicalProperties(solidFill="111827")   # same colour every point
+        s0.marker.graphicalProperties.line.solidFill = "111827"
         s0.smooth = False
         s0.dLbls = _value_labels(DataLabelList); s0.dLbls.position = "t"
         line.x_axis.delete = line.y_axis.delete = False
+        line.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="E5E7EB"))
+        _tidy_chart(line, GraphicalProperties, LineProperties)
         line.width, line.height = 17, 8.5
         ov.add_chart(line, "E21")
 
@@ -842,6 +881,9 @@ def render_executive_overview():
         with f2:
             cohorts = sorted(program_df["Cohort"].dropna().unique(), key=cohort_sort_key, reverse=True)
             selected_cohort = st.selectbox("Cohort", ["All Cohorts"] + list(cohorts))
+
+    # yellow header bar follows these filters
+    set_header_context(program=selected_program["ProgramID"], cohort=selected_cohort)
 
     # Program + status filters apply everywhere; cohort applies to everything except the trend
     status_df = program_df

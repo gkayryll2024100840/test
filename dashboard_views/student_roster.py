@@ -20,6 +20,7 @@ from db_connect import (
 from dashboard_views.components import (
     DARK_MODE_CSS,
     render_status_pill,
+    set_header_context,
 )
  
 st.set_page_config(page_title="Student Roster", layout="wide")
@@ -143,6 +144,8 @@ is_advisor_view = (role == "FacultyAdvisor")
 if is_advisor_view:
     my_adviser_name = get_my_adviser_name(user.get("UserID"))
  
+cohort_choice = "All Cohorts"   # reported to the yellow header bar at the end of the page
+
 # Displays student roster in table format
 try:
     df = get_student_roster_data(program_id=active_program_id)
@@ -281,4 +284,7 @@ try:
  
 except Exception as e:
     st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. Please check the Admin Configuration page. ({e})")
- 
+
+# Yellow header bar: show this page's program + selected cohort
+# (kept outside the try/except above so it can't be swallowed by it)
+set_header_context(program=active_program_id, cohort=cohort_choice)

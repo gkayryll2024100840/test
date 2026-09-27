@@ -7,7 +7,9 @@ import pandas as pd
 from dotenv import load_dotenv
 from db_connect import get_db_connection, format_mysql_error
 from system_log import log_sync_attempt_local
-from permissions import render_sidebar_permission_badge
+# render_sidebar_permission_badge (permissions.py) drew the old "Access Mode ● Edit" block.
+# The new sidebar card shows the same value via get_user_permission(), so it is no longer called.
+from dashboard_views.components import render_app_shell
 
 load_dotenv()
 
@@ -133,91 +135,13 @@ if not st.session_state.get('user'):
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
 
-    st.markdown(f"""
-<style>
-    /* Restyle Streamlit's header — it already respects the sidebar */
-    [data-testid="stHeader"] {{
-        background-color: #b91b21 !important;
-        height: 72px !important;
-        padding: 0 28px !important;
-        display: flex !important;
-        align-items: center !important;
-        z-index: 999990 !important;
-    }}
 
-    /* Give the header its own content via a pseudo-element */
-    [data-testid="stHeader"]::before {{
-        content: "MAPÚA UNIVERSITY · ASU PATHWAYS\\A ETYSB Dashboard";
-        white-space: pre;
-        color: #ffffff !important;
-        font-family: "Source Sans Pro", sans-serif;
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 1.5;
-        letter-spacing: 0.3px;
-        text-transform: none;
-        position: absolute;
-        left: 28px;
-        top: 50%;
-        transform: translateY(-50%);
-        pointer-events: none;
-    }}
-
-    /* Program label on the right */
-    [data-testid="stHeader"]::after {{
-        position: absolute;
-        right: 120px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #f5d5d7 !important;
-        font-family: "Source Sans Pro", sans-serif;
-        font-size: 13px;
-        font-weight: 600;
-        pointer-events: none;
-    }}
-
-    /* Push page content below the header */
-    .block-container {{
-        padding-top: 90px !important;
-    }}
-</style>
-""", unsafe_allow_html=True)
-
-    # ----- Sidebar position (updated per request) -----
-    st.markdown("""
-<style>
-[data-testid="stSidebarCollapseButton"] {
-    position: fixed;
-    top: 50%;
-    left: 20px; /* Adjust left offset if needed (e.g., left: 20px;) */
-    transform: translateY(-50%);
-    z-index: 999; /* Keeps it on top of other content */
-}
-
-[data-testid="stExpandSidebarButton"] {
-    position: fixed;
-    top: 50%;
-    left: 20px; /* Adjust left offset if needed (e.g., left: 20px;) */
-    transform: translateY(-50%);
-    z-index: 999; /* Keeps it on top of other content */
-}
-
-
-</style>
-
-
-""", unsafe_allow_html=True)
 
     user = st.session_state.user
     # FIX: Keys are now lowercase because verify_login() normalizes them.
     # This works whether you use 'role' or 'Role' — but we read 'role' here.
     role = user.get('role')
 
-    if st.sidebar.button("Log Out"):
-        st.session_state.clear()
-        st.rerun()
-
-    render_sidebar_permission_badge()
     has_student_target = bool(
         st.query_params.get("student_id")
         or st.session_state.get("selected_student_override")
@@ -250,4 +174,5 @@ else:
         st.stop()
 
     pg = st.navigation(allowed, position="sidebar")
+    render_app_shell(user, page_key=pg.title)   # red/yellow header + sidebar card on every page
     pg.run()
