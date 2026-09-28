@@ -124,11 +124,18 @@ def get_student_roster_data(program_id=None):
                 a.AdviserName AS Adviser,
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
-                sl.CapstoneStatus
+                sl.CapstoneStatus,
+                sl.LastUpdate
             FROM Students s
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
-            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
+            LEFT JOIN (
+                -- students with 2 advisers -> one row, e.g. "Dr. A, Dr. B"
+                SELECT sa.StudentNumber,
+                       GROUP_CONCAT(a.AdviserName ORDER BY a.AdviserName SEPARATOR ', ') AS AdviserName
+                FROM Student_Adviser sa
+                JOIN Adviser a ON sa.AdviserID = a.AdviserID
+                GROUP BY sa.StudentNumber
+            ) a ON a.StudentNumber = s.StudentNumber
             WHERE s.ProgramID = %s
         """
         df = pd.read_sql(query, conn, params=(program_id,))
@@ -703,4 +710,323 @@ def get_my_adviser_name(user_id):
     except Exception as e:
         print(f"Failed to fetch adviser name: {e}")
         return None
- 
+
+
+# ===========================================================================
+# LIFECYCLE STATUS EDITING (Student Profile)
+#
+# Saving a status:
+#   1. INSERT a row into that pillar's history table (StudentNumber, Status, UpdatedAt = NOW())
+#   2. Read the student's latest history row for that pillar
+#   3. UPDATE Student_Lifecycle: the pillar's status + its "...UpdatedAt" = that row's time
+#   4. UPDATE Student_Lifecycle.LastUpdate = the most recent of the three "...UpdatedAt" columns
+# All of it runs in ONE transaction, so the history and the lifecycle can't get out of sync.
+# Column names are read from the database (information_schema), so small naming
+# differences like CourseworkUpdateAt vs CourseworkUpdatedAt don't break it.
+# ===========================================================================
+LIFECYCLE_PILLARS = {
+    "coursework": {"history": "Student_Course_Status_History", "status_col": "CourseworkStatus", "prefix": "coursework"},
+    "compexam":   {"history": "CompExam_Status_History",       "status_col": "CompExamStatus",   "prefix": "compexam"},
+    "capstone":   {"history": "Capstone_Status_History",       "status_col": "CapstoneStatus",   "prefix": "capstone"},
+}
+_LIFECYCLE_TABLE = "Student_Lifecycle"
+# Time written to the history tables / Student_Lifecycle. Philippines = UTC+8 (no daylight saving).
+from datetime import timezone as _tz, timedelta as _td
+_APP_TZ = _tz(_td(hours=8))
+
+
+def _now_local():
+    return datetime.now(_APP_TZ).replace(tzinfo=None, microsecond=0)
+_lifecycle_schema_cache = {"schema": None, "loaded_at": 0.0}
+_LIFECYCLE_SCHEMA_TTL = 600  # seconds
+
+
+def _enum_values(column_type):
+    """"enum('A','B')" -> ['A', 'B']; anything else -> None."""
+    ct = str(column_type or "")
+    if not ct.lower().startswith("enum("):
+        return None
+    inner = ct[ct.index("(") + 1: ct.rindex(")")]
+    return [v.strip().strip("'").replace("''", "'") for v in inner.split("','")] if inner else []
+
+
+def _match_enum(value, allowed):
+    """Case/spacing-insensitive match of a status to the values a column allows."""
+    if allowed is None:
+        return value
+    norm = lambda v: str(v).strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    for a in allowed:
+        if norm(a) == norm(value):
+            return a
+    raise ValueError(f"'{value}' is not an allowed value ({', '.join(allowed)})")
+
+
+def _get_lifecycle_schema(force=False):
+    cache = _lifecycle_schema_cache
+    if not force and cache["schema"] and (time.monotonic() - cache["loaded_at"]) < _LIFECYCLE_SCHEMA_TTL:
+        return cache["schema"]
+
+    tables = [_LIFECYCLE_TABLE] + [p["history"] for p in LIFECYCLE_PILLARS.values()]
+    conn = mysql.connector.connect(**db_config)
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA "
+            "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            f"AND LOWER(TABLE_NAME) IN ({', '.join(['%s'] * len(tables))})",
+            [t.lower() for t in tables],
+        )
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
+
+    dec = lambda v: v.decode() if isinstance(v, (bytes, bytearray)) else v
+    for r in rows:
+        for k in ("TABLE_NAME", "COLUMN_NAME", "COLUMN_TYPE", "COLUMN_KEY", "EXTRA"):
+            r[k] = dec(r[k])
+    cols, real_name = {}, {}
+    for r in rows:
+        cols.setdefault(r["TABLE_NAME"].lower(), []).append(r)
+        real_name[r["TABLE_NAME"].lower()] = r["TABLE_NAME"]
+
+    def col_name(r):
+        return r["COLUMN_NAME"]
+
+    life_cols = cols.get(_LIFECYCLE_TABLE.lower(), [])
+    if not life_cols:
+        raise RuntimeError(f"Table {_LIFECYCLE_TABLE} was not found in this database.")
+    schema = {"lifecycle_table": real_name[_LIFECYCLE_TABLE.lower()], "pillars": {}, "last_col": None,
+              "term_col": next((col_name(r) for r in life_cols if col_name(r).lower() == "termid"), None)}
+
+    for r in life_cols:
+        if col_name(r).lower().replace("_", "") in ("lastupdate", "lastupdated", "lastupdatedat", "lastupdateat"):
+            schema["last_col"] = col_name(r)
+
+    for key, p in LIFECYCLE_PILLARS.items():
+        status_row = next((r for r in life_cols if col_name(r).lower() == p["status_col"].lower()), None)
+        updated_row = next((r for r in life_cols
+                            if col_name(r).lower().replace("_", "").startswith(p["prefix"])
+                            and "update" in col_name(r).lower()), None)
+        hist_cols = cols.get(p["history"].lower(), [])
+        h = {col_name(r).lower(): r for r in hist_cols}
+        pk = next((r for r in hist_cols if r["COLUMN_KEY"] == "PRI"), None)
+        h_status = h.get("status")
+        h_updated = next((r for n, r in h.items() if "update" in n), None)
+        schema["pillars"][key] = {
+            "status_col": col_name(status_row) if status_row else p["status_col"],
+            "status_enum": _enum_values(status_row["COLUMN_TYPE"]) if status_row else None,
+            "updated_col": col_name(updated_row) if updated_row else None,
+            "history_table": real_name.get(p["history"].lower(), p["history"]) if hist_cols else None,
+            "history_id": col_name(pk) if pk else None,
+            "history_id_auto": bool(pk and "auto_increment" in str(pk["EXTRA"]).lower()),
+            "history_student": col_name(h["studentnumber"]) if "studentnumber" in h else None,
+            "history_status": col_name(h_status) if h_status else None,
+            "history_status_enum": _enum_values(h_status["COLUMN_TYPE"]) if h_status else None,
+            "history_updated": col_name(h_updated) if h_updated else None,
+            "history_term": col_name(h["termid"]) if "termid" in h else None,
+            "history_updated_type": str(h_updated["COLUMN_TYPE"]).lower() if h_updated else "",
+        }
+
+    cache["schema"], cache["loaded_at"] = schema, time.monotonic()
+    return schema
+
+
+def get_lifecycle_status_options(pillar, preferred):
+    """The dropdown options for a pillar, spelled exactly the way the database stores them."""
+    try:
+        allowed = _get_lifecycle_schema()["pillars"][pillar]["status_enum"]
+    except Exception:
+        return list(preferred)
+    out = []
+    for v in preferred:
+        try:
+            out.append(_match_enum(v, allowed))
+        except ValueError:
+            continue
+    return out or list(preferred)
+
+
+def get_student_lifecycle_detail(student_number):
+    """Current status + last-updated time of each pillar, plus LastUpdate, for one student."""
+    try:
+        schema = _get_lifecycle_schema()
+        pillars = schema["pillars"]
+        select = []
+        for key, p in pillars.items():
+            select.append(f"`{p['status_col']}` AS `{key}_status`")
+            select.append(f"`{p['updated_col']}` AS `{key}_updated`" if p["updated_col"] else f"NULL AS `{key}_updated`")
+        select.append(f"`{schema['last_col']}` AS `last_update`" if schema["last_col"] else "NULL AS `last_update`")
+        conn = mysql.connector.connect(**db_config)
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            f"SELECT {', '.join(select)} FROM `{schema['lifecycle_table']}` WHERE StudentNumber = %s",
+            (str(student_number),),
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row
+    except Exception as e:
+        print(f"Failed to fetch lifecycle detail: {e}")
+        return None
+
+
+def update_lifecycle_statuses(student_number, changes):
+    """Save one or more pillar changes for a student.
+
+    changes: {"coursework": "Pending", "compexam": "Passed", ...}
+    Returns (True, message) or (False, error message). Nothing is saved if any step fails.
+    """
+    if not changes:
+        return False, "Nothing to save."
+    try:
+        schema = _get_lifecycle_schema(force=True)
+    except Exception as e:
+        return False, f"Could not read the lifecycle tables: {e}"
+
+    life = schema["lifecycle_table"]
+    sn = str(student_number)
+    conn = mysql.connector.connect(**db_config)
+    try:
+        if conn.in_transaction:
+            conn.rollback()
+        conn.start_transaction()
+        cur = conn.cursor()
+        for pillar, new_status in changes.items():
+            p = schema["pillars"][pillar]
+            missing = [k for k in ("history_table", "history_id", "history_student", "history_status", "history_updated")
+                       if not p[k]]
+            if missing:
+                raise RuntimeError(f"{LIFECYCLE_PILLARS[pillar]['history']} is missing columns: {', '.join(missing)}")
+            status_life = _match_enum(new_status, p["status_enum"])
+            status_hist = _match_enum(new_status, p["history_status_enum"])
+            ht, hid = p["history_table"], p["history_id"]
+
+            # 1. log the change in the history table (TermID copied from Student_Lifecycle when both have it)
+            now = _now_local()
+            cols_ = [p["history_student"], p["history_status"], p["history_updated"]]
+            vals_ = [sn, status_hist, now]
+            if not p["history_id_auto"]:
+                cur.execute(f"SELECT COALESCE(MAX(`{hid}`), 0) + 1 FROM `{ht}` FOR UPDATE")
+                cols_.insert(0, hid)
+                vals_.insert(0, cur.fetchone()[0])
+            if p["history_term"] and schema["term_col"]:
+                cur.execute(f"SELECT `{schema['term_col']}` FROM `{life}` WHERE StudentNumber = %s", (sn,))
+                term_row = cur.fetchone()
+                cols_.append(p["history_term"])
+                vals_.append(term_row[0] if term_row else None)
+            cur.execute(
+                f"INSERT INTO `{ht}` ({', '.join(f'`{c}`' for c in cols_)}) "
+                f"VALUES ({', '.join(['%s'] * len(vals_))})",
+                vals_,
+            )
+
+            # 2. latest history row for this student
+            cur.execute(
+                f"SELECT `{p['history_updated']}` FROM `{ht}` WHERE `{p['history_student']}` = %s "
+                f"ORDER BY `{hid}` DESC LIMIT 1",
+                (sn,),
+            )
+            latest_time = cur.fetchone()[0]
+            if p["history_updated_type"] == "date":   # history column only stores the day -> keep the real time here
+                latest_time = now
+
+            # 3. copy status + time into Student_Lifecycle
+            sets, params = [f"`{p['status_col']}` = %s"], [status_life]
+            if p["updated_col"]:
+                sets.append(f"`{p['updated_col']}` = %s")
+                params.append(latest_time)
+            cur.execute(f"UPDATE `{life}` SET {', '.join(sets)} WHERE StudentNumber = %s", params + [sn])
+            if cur.rowcount == 0:
+                cur.execute(f"SELECT COUNT(*) FROM `{life}` WHERE StudentNumber = %s", (sn,))
+                if cur.fetchone()[0] == 0:
+                    raise RuntimeError(f"Student {sn} has no row in {life}.")
+
+        # 4. LastUpdate = most recent of the three pillar times
+        if schema["last_col"]:
+            parts = [f"COALESCE(`{p['updated_col']}`, '1000-01-01')"
+                     for p in schema["pillars"].values() if p["updated_col"]]
+            if parts:
+                cur.execute(
+                    f"UPDATE `{life}` SET `{schema['last_col']}` = "
+                    f"NULLIF(GREATEST({', '.join(parts)}), '1000-01-01') WHERE StudentNumber = %s",
+                    (sn,),
+                )
+        conn.commit()
+        cur.close()
+        return True, f"Saved {len(changes)} change(s)."
+    except Exception as e:
+        conn.rollback()
+        msg = format_mysql_error(e) if isinstance(e, mysql.connector.Error) else str(e)
+        return False, f"Nothing was saved: {msg}"
+    finally:
+        conn.close()
+
+
+# ===========================================================================
+# ENROLLMENT STATUS EDITING (Student Profile)
+#   1. INSERT into Enrollment_Status_History (StudentNumber, Status, UpdatedAt)
+#   2. Read the student's latest history row
+#   3. UPDATE Students: EnrollmentStatus + LastUpdate = that row's time
+# One transaction, like the lifecycle statuses. Tables come from create_enrollment_history.sql.
+# ===========================================================================
+ENROLLMENT_HISTORY_TABLE = "Enrollment_Status_History"
+
+
+def update_enrollment_status(student_number, new_status):
+    """Returns (True, message) or (False, error message). Nothing is saved if any step fails."""
+    sn = str(student_number)
+    conn = mysql.connector.connect(**db_config)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) IN ('students', %s)",
+            (ENROLLMENT_HISTORY_TABLE.lower(),),
+        )
+        dec = lambda v: v.decode() if isinstance(v, (bytes, bytearray)) else v
+        info = {}
+        for t, c, ty in cur.fetchall():
+            info.setdefault(dec(t).lower(), {})[dec(c).lower()] = (dec(c), dec(ty))
+        hist = info.get(ENROLLMENT_HISTORY_TABLE.lower())
+        students = info.get("students", {})
+        if not hist:
+            return False, (f"Nothing was saved: table {ENROLLMENT_HISTORY_TABLE} doesn't exist yet. "
+                           "Run create_enrollment_history.sql first.")
+        status_students = _match_enum(new_status, _enum_values(students.get("enrollmentstatus", ("", ""))[1]))
+        status_hist = _match_enum(new_status, _enum_values(hist.get("status", ("", ""))[1]))
+        now = _now_local()
+
+        # the column lookup above already opened a (read-only) transaction; close it first,
+        # otherwise start_transaction() fails with "Transaction already in progress"
+        if conn.in_transaction:
+            conn.rollback()
+        conn.start_transaction()
+        cur.execute(
+            f"INSERT INTO `{ENROLLMENT_HISTORY_TABLE}` (StudentNumber, Status, UpdatedAt) VALUES (%s, %s, %s)",
+            (sn, status_hist, now),
+        )
+        cur.execute(
+            f"SELECT UpdatedAt FROM `{ENROLLMENT_HISTORY_TABLE}` WHERE StudentNumber = %s "
+            "ORDER BY HistoryID DESC LIMIT 1",
+            (sn,),
+        )
+        latest_time = cur.fetchone()[0]
+        sets, params = ["EnrollmentStatus = %s"], [status_students]
+        if "lastupdate" in students:
+            sets.append(f"`{students['lastupdate'][0]}` = %s")
+            params.append(latest_time)
+        cur.execute(f"UPDATE Students SET {', '.join(sets)} WHERE StudentNumber = %s", params + [sn])
+        conn.commit()
+        cur.close()
+        return True, "Enrollment status saved."
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        msg = format_mysql_error(e) if isinstance(e, mysql.connector.Error) else str(e)
+        return False, f"Enrollment status not saved: {msg}"
+    finally:
+        conn.close()

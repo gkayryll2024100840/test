@@ -1,6 +1,7 @@
 import streamlit as st
 from permissions import require_edit
 import re
+import pandas as pd
  
 from db_connect import (
     get_student_roster_data,
@@ -159,7 +160,7 @@ try:
             )
             df = df.iloc[0:0]
         else:
-            df = df[df["Adviser"] == my_adviser_name]
+            df = df[df["Adviser"].fillna("").str.split(", ").apply(lambda names: my_adviser_name in names)]
  
     if not df.empty:
         # ----------------- Clean Filter & Search Rhythm -----------------
@@ -183,7 +184,8 @@ try:
         if not is_advisor_view:
             with col_adviser:
                 # US-23 AC1 (for non-advisor roles browsing by adviser) + AC3 (combinable with cohort)
-                available_advisers = ["All Advisers"] + sorted(df["Adviser"].dropna().unique().tolist())
+                adviser_names = {n for v in df["Adviser"].dropna() for n in str(v).split(", ") if n}
+                available_advisers = ["All Advisers"] + sorted(adviser_names)
                 adviser_choice = st.selectbox("FILTER BY ADVISER:", available_advisers)
  
         with col_sort:
@@ -191,6 +193,7 @@ try:
                 "Student Name": "Student",
                 "Student ID": "StudentNumber",
                 "Cohort": "Cohort",
+                "Last Update (newest)": "LastUpdate",
             }
             sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
  
@@ -208,9 +211,14 @@ try:
             df_filtered = df_filtered[df_filtered["Cohort"] == cohort_choice]
  
         if not is_advisor_view and adviser_choice and adviser_choice != "All Advisers":
-            df_filtered = df_filtered[df_filtered["Adviser"] == adviser_choice]
+            df_filtered = df_filtered[
+                df_filtered["Adviser"].fillna("").str.split(", ").apply(lambda names: adviser_choice in names)
+            ]
  
-        df_filtered = df_filtered.sort_values(by=sort_map[sort_choice])
+        sort_col = sort_map[sort_choice]
+        df_filtered = df_filtered.sort_values(
+            by=sort_col, ascending=(sort_col != "LastUpdate"), na_position="last"
+        )
  
         # Total Count Bar
         st.caption(
@@ -219,12 +227,12 @@ try:
         )
  
         # ----------------- Enterprise Roster Grid -----------------
-        col_widths = [1.2, 2.4, 1.0, 2.0, 1.3, 1.3, 1.3]
+        col_widths = [1.2, 2.2, 0.9, 1.9, 1.2, 1.2, 1.6, 1.2]
  
         header_cols = st.columns(col_widths, vertical_alignment="center")
         header_labels = [
             "STUDENT ID", "STUDENT", "COHORT", "ADVISER",
-            "COURSEWORK", "COMP EXAM", "CAPSTONE"
+            "COURSEWORK", "COMP EXAM", "CAPSTONE", "LAST UPDATE"
         ]
         for col, label in zip(header_cols, header_labels):
             col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
@@ -268,6 +276,12 @@ try:
                 r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
                 r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
                 r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
+                last_upd = row.get("LastUpdate")
+                last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
+                r_cols[7].markdown(
+                    f'<span class="roster-cell-text">{last_txt}</span>',
+                    unsafe_allow_html=True
+                )
                 st.markdown(
                     '<div class="roster-row-divider"></div>',
                     unsafe_allow_html=True
