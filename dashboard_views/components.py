@@ -1089,7 +1089,10 @@ html[data-eo-theme="dark"] .stApp{
 .ps-rail .ps-avatar::after{content:"";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;
     background:#10B981;border:2px solid var(--ps-side-bg);}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .ps-rail{display:flex;}
-.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMain"]{margin-left:58px;}
+/* make room for the rail by shrinking the page area (a plain margin pushed the right side off-screen) */
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMain"]{
+    margin-left:58px !important;width:calc(100% - 58px) !important;max-width:calc(100% - 58px) !important;
+    flex:1 1 auto;min-width:0;}
 [data-testid="stExpandSidebarButton"]{position:fixed !important;top:14px !important;left:13px !important;z-index:999991 !important;
     background:var(--ps-card) !important;border:1px solid var(--ps-btn-border) !important;border-radius:8px !important;
     width:32px;height:32px;color:var(--ps-nav) !important;}

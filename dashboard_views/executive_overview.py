@@ -1,3 +1,4 @@
+# EXEC OVERVIEW 9-28-26
 import html
 import io
 import json
@@ -33,10 +34,10 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed"]
 
 STAGE_COLORS = {
-    "Coursework": "#C0392B",
-    "Comprehensive Exam": "#B8860B",
-    "Capstone": "#1F3864",
-    "Completed": "#2E7D32",
+    "Coursework": "#B91B21",
+    "Comprehensive Exam": "#FFCA06",
+    "Capstone": "#55AB22",
+    "Completed": "#4A7CF2",
 }
 
 COURSEWORK_DONE = "Completed"
@@ -107,9 +108,11 @@ html[data-eo-theme="dark"] .stApp{
     margin-left: auto !important;
 }
 
-/* page title with the divider line right under it (one element = no extra Streamlit gaps) */
-.eo-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:var(--eo-text);letter-spacing:-.01em;
-        padding-bottom:6px;border-bottom:1px solid var(--eo-border);margin:0;}
+/* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
+.eo-header{padding-bottom:10px;border-bottom:1px solid var(--eo-border);margin:0;}
+.eo-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:var(--eo-text);letter-spacing:-.01em;margin:0;}
+/* caption under the title: change margin-top to move it closer to / further from the title */
+.eo-caption{color:var(--eo-label);font-size:14px;line-height:1.5;margin:4px 0 0 0;}
 /* SPACE BETWEEN THE TITLE LINE AND THE FILTERS: change padding-top */
 .st-key-eo_filters{padding-top:16px;}
 /* SPACE BETWEEN EACH FILTER LABEL (e.g. "Enrollment Status") AND ITS DROPDOWN: change margin-bottom */
@@ -172,6 +175,23 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .pill-amber{background:var(--pa-bg);color:var(--pa-fg);border-color:var(--pa-bd);}
 .pill-gray{background:var(--px-bg);color:var(--px-fg);border-color:var(--px-bd);}
 .eo-muted{color:var(--eo-muted);}
+
+/* ---- student table (built from Streamlit rows so the names can open Student Profile) ---- */
+.st-key-eo_table{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;
+        box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow:hidden;}
+.st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;}
+.eo-th{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);}
+.st-key-eo_table_rows{gap:0 !important;}
+.st-key-eo_table_rows [data-testid="stHorizontalBlock"]{padding:10px 18px;border-bottom:1px solid var(--eo-border-soft);
+        align-items:center;}
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stVerticalBlock"]{gap:2px !important;}
+.st-key-eo_table [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
+.eo-cell{font-size:14px;color:var(--eo-text-2);}
+/* student name = clickable link-style button that opens their Student Profile */
+.st-key-eo_table_rows button[kind="tertiary"]{padding:0 !important;min-height:0 !important;height:auto !important;
+        justify-content:flex-start;}
+.st-key-eo_table_rows button[kind="tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);}
+.st-key-eo_table_rows button[kind="tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
 </style>
 """
 
@@ -525,6 +545,40 @@ def status_pill(value):
     return f'<span class="eo-pill {cls}">{html.escape(value)}</span>'
 
 
+STUDENT_PROFILE_PAGE = "dashboard_views/student_profile.py"   # same page the Student Roster links to
+EO_ROWS_VISIBLE = 10    # students shown before the table scrolls
+EO_ROW_HEIGHT_PX = 64   # height of one row in px (nudge if 10 rows show a bit more / less)
+EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
+EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
+
+
+def time_in_stage(row):
+    """Days the student has been in their current stage. Not built yet -> None (shows "—").
+
+    Plan (from the ER diagram): days since the date they entered ActiveStage, i.e. the previous
+    stage's *UpdateAt in Student_Lifecycle (CourseworkUpdateAt / CompExamUpdateAt / CapstoneUpdateAt).
+    """
+    return None
+
+
+def risk_flag(row, days):
+    """True when the student is past the stage's expected duration. Not built yet -> None (shows "—").
+
+    Plan: compare `days` with Program_Stage.ExpectedDays for this student's ProgramID + stage.
+    """
+    return None
+
+
+def open_student_profile(student_id, program_id, program_code):
+    """Go to Student Profile for this student (also sets the program Student Profile needs)."""
+    st.session_state["roster_program_id"] = program_id
+    st.session_state["roster_program_code"] = program_code or ""
+    st.session_state["active_program_id"] = program_id
+    st.session_state["active_program_code"] = program_code or ""
+    st.session_state["selected_student_override"] = str(student_id)
+    st.switch_page(STUDENT_PROFILE_PAGE)
+
+
 def render_student_table(df: pd.DataFrame):
     if df.empty:
         st.info("No students match these filters.")
@@ -532,39 +586,43 @@ def render_student_table(df: pd.DataFrame):
 
     df = df.sort_values(["LastUpdated", "LastName"], ascending=[False, True], na_position="last")
 
-    rows = []
-    for r in df.to_dict("records"):
-        first = str(r["FirstName"] or "").strip()
-        last = str(r["LastName"] or "").strip()
-        name = f"{first} {last}".strip() or "Unnamed student"
-        initials = ((first[:1] + last[:1]) or name[:1]).upper()
-        adviser = r["Adviser"] if pd.notna(r["Adviser"]) else "—"
-        cohort = r["Cohort"] if pd.notna(r["Cohort"]) else "—"
-        updated = r["LastUpdated"].strftime("%b %d, %Y") if pd.notna(r["LastUpdated"]) else "—"
+    with st.container(key="eo_table"):
+        # header row (stays put while the rows scroll)
+        with st.container(key="eo_table_head"):
+            for col, label in zip(st.columns(EO_COL_WIDTHS, vertical_alignment="center"), EO_COL_LABELS):
+                col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
 
-        rows.append(
-            "<tr>"
-            f'<td><div class="eo-student"><div class="eo-avatar">{html.escape(initials)}</div>'
-            f'<div><div class="eo-name">{html.escape(name)}</div>'
-            f'<div class="eo-id">{html.escape(str(r["StudentNumber"]))}</div></div></div></td>'
-            f"<td>{html.escape(str(cohort))}</td>"
-            f"<td>{html.escape(str(adviser))}</td>"
-            f"<td>{status_pill(r['CourseworkStatus'])}</td>"
-            f"<td>{status_pill(r['CompExamStatus'])}</td>"
-            f"<td>{updated}</td>"
-            "</tr>"
-        )
+        height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
+        with st.container(height=height, border=False, key="eo_table_rows"):
+            for r in df.to_dict("records"):
+                sid = str(r["StudentNumber"])
+                first = str(r["FirstName"] or "").strip()
+                last = str(r["LastName"] or "").strip()
+                name = f"{first} {last}".strip() or "Unnamed student"
+                cohort = r["Cohort"] if pd.notna(r["Cohort"]) else "—"
+                days = time_in_stage(r)
+                flag = risk_flag(r, days)
 
-    header = (
-        "<tr><th>Student Name &amp; ID</th><th>Current Cohort</th><th>Assigned Adviser</th>"
-        "<th>Coursework Status</th><th>Comp. Exam Status</th><th>Last Updated</th></tr>"
-    )
-
-    st.markdown(
-        f'<div class="eo-table-wrap"><table class="eo-table"><thead>{header}</thead>'
-        f'<tbody>{"".join(rows)}</tbody></table></div>',
-        unsafe_allow_html=True,
-    )
+                c = st.columns(EO_COL_WIDTHS, vertical_alignment="center")
+                with c[0]:
+                    if st.button(name, key=f"eo_open_{sid}", type="tertiary",
+                                 help="Open this student's profile"):
+                        open_student_profile(sid, r["ProgramID"], r.get("ProgramCode"))
+                    st.markdown(f'<div class="eo-id">{html.escape(sid)}</div>', unsafe_allow_html=True)
+                c[1].markdown(f'<div class="eo-cell">{html.escape(str(cohort))}</div>', unsafe_allow_html=True)
+                c[2].markdown(status_pill(r["CourseworkStatus"]), unsafe_allow_html=True)
+                c[3].markdown(status_pill(r["CompExamStatus"]), unsafe_allow_html=True)
+                c[4].markdown(status_pill(r["CapstoneStatus"]), unsafe_allow_html=True)
+                c[5].markdown(
+                    f'<div class="eo-cell">{days:,} days</div>' if days is not None
+                    else '<span class="eo-muted">—</span>',
+                    unsafe_allow_html=True,
+                )
+                c[6].markdown(
+                    '<span class="eo-pill pill-red">AT RISK</span>' if flag
+                    else '<span class="eo-muted">—</span>',
+                    unsafe_allow_html=True,
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -846,7 +904,14 @@ def log_export(filters: dict, row_count: int, file_name: str):
 def render_executive_overview():
     st.markdown(PAGE_CSS, unsafe_allow_html=True)
     # plain div instead of st.title: no hover link icon, and the line sits right under the text
-    st.markdown('<div class="eo-title">Executive Overview</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="eo-header">'
+        '<div class="eo-title">Executive Overview</div>'
+        '<div class="eo-caption">High-level summary of active cohort health, completion metrics, '
+        'and at-risk student statuses.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # ---- Data ----
     try:
