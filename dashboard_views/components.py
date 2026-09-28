@@ -3,8 +3,23 @@ Unified reusable UI components and styles for Student Roster and Student Profile
 Responsive dual-theme (Light & Dark mode) enterprise styling with accessible contrast steps
 and no AI/SaaS anti-patterns.
 """
+import base64
+import html
+import os
+import re
+from datetime import datetime
+
 import pandas as pd
 import streamlit as st
+
+from db_connect import (
+    get_all_programs,
+    get_available_cohorts,
+    get_db_connection,
+    get_last_updated_time,
+    get_user_permission,
+    get_user_program,
+)
 
 
 def get_current_theme() -> str:
@@ -21,7 +36,9 @@ def get_current_theme() -> str:
 
 def get_theme_css() -> str:
     """Generates dynamic, responsive CSS supporting both Light Mode and Dark Mode."""
-    current_theme = get_current_theme()
+    # The theme is detected IN THE BROWSER (see THEME_DETECTOR_JS). Reading it here with
+    # st.context.theme only updated on the next page load, which caused the stale-colour bug.
+    current_theme = None
 
     explicit_override = ""
     if current_theme == "dark":
@@ -260,96 +277,100 @@ def get_theme_css() -> str:
     --lifecycle-pill-neutral-text: #475569;
 }}
 
-/* System / Browser Dark Mode */
-@media (prefers-color-scheme: dark) {{
-    :root, .stApp {{
-        --app-bg: #0B0F17;
-        --app-text: #F1F5F9;
-        --card-bg: #161D2B;
-        --card-border: #263044;
-        --card-shadow: none;
-        
-        --text-primary: #F1F5F9;
-        --text-secondary: #94A3B8;
-        --text-body: #CBD5E1;
-        --text-muted: #64748B;
-        
-        --id-badge-bg: #0F172A;
-        --id-badge-border: #263044;
-        --id-badge-text: #94A3B8;
-        
-        --metric-val-color: #F1F5F9;
-        --metric-lbl-color: #94A3B8;
-        
-        --input-bg: #0F172A;
-        --input-border: #263044;
-        --input-text: #F1F5F9;
-        --input-focus-border: #3B82F6;
-        
-        --btn-bg: #161D2B;
-        --btn-border: #263044;
-        --btn-text: #F1F5F9;
-        --btn-hover-bg: #1E293B;
-        --btn-hover-border: #3B82F6;
-        --btn-hover-text: #FFFFFF;
-        
-        --roster-th-color: #94A3B8;
-        --roster-th-border: #263044;
-        --roster-row-border: #1E293B;
-        --roster-cell-id: #94A3B8;
-        --roster-cell-text: #CBD5E1;
-        --roster-link-color: #60A5FA;
-        --roster-link-hover: #93C5FD;
-        
-        /* Dark Mode Status Pills */
-        --pill-success-bg: rgba(16, 185, 129, 0.15);
-        --pill-success-border: rgba(16, 185, 129, 0.3);
-        --pill-success-text: #34D399;
-        
-        --pill-danger-bg: rgba(239, 68, 68, 0.14);
-        --pill-danger-border: rgba(239, 68, 68, 0.3);
-        --pill-danger-text: #FCA5A5;
-        
-        --pill-active-bg: rgba(245, 158, 11, 0.14);
-        --pill-active-border: rgba(245, 158, 11, 0.3);
-        --pill-active-text: #FCD34D;
-        
-        --pill-warning-bg: rgba(245, 158, 11, 0.14);
-        --pill-warning-border: rgba(245, 158, 11, 0.3);
-        --pill-warning-text: #FCD34D;
-        
-        --pill-neutral-bg: rgba(148, 163, 184, 0.12);
-        --pill-neutral-border: rgba(148, 163, 184, 0.24);
-        --pill-neutral-text: #CBD5E1;
-        
-        /* Lifecycle Status Cards (Matched to Profile Card) */
-        --lifecycle-card-bg: #161D2B;
-        --lifecycle-card-border: #263044;
-        --lifecycle-card-title: #F1F5F9;
-        --lifecycle-pill-success-bg: #16433C;
-        --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35);
-        --lifecycle-pill-success-text: #34D399;
-        --lifecycle-pill-danger-bg: #451D24;
-        --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35);
-        --lifecycle-pill-danger-text: #FCA5A5;
-        --lifecycle-pill-active-bg: #422E15;
-        --lifecycle-pill-active-border: rgba(251, 191, 36, 0.35);
-        --lifecycle-pill-active-text: #FCD34D;
-        --lifecycle-pill-warning-bg: #422E15;
-        --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35);
-        --lifecycle-pill-warning-text: #FCD34D;
-        --lifecycle-pill-neutral-bg: #1E293B;
-        --lifecycle-pill-neutral-border: rgba(148, 163, 184, 0.3);
-        --lifecycle-pill-neutral-text: #CBD5E1;
-    }}
+/* Dark mode: set by the theme detector when Streamlit's theme is dark */
+html[data-eo-theme="dark"],
+html[data-eo-theme="dark"] .stApp {{
+    --app-bg: #0B0F17;
+    --app-text: #F1F5F9;
+    --card-bg: #161D2B;
+    --card-border: #263044;
+    --card-shadow: none;
+    
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-body: #CBD5E1;
+    --text-muted: #64748B;
+    
+    --id-badge-bg: #0F172A;
+    --id-badge-border: #263044;
+    --id-badge-text: #94A3B8;
+    
+    --metric-val-color: #F1F5F9;
+    --metric-lbl-color: #94A3B8;
+    
+    --input-bg: #0F172A;
+    --input-border: #263044;
+    --input-text: #F1F5F9;
+    --input-focus-border: #3B82F6;
+    
+    --btn-bg: #161D2B;
+    --btn-border: #263044;
+    --btn-text: #F1F5F9;
+    --btn-hover-bg: #1E293B;
+    --btn-hover-border: #3B82F6;
+    --btn-hover-text: #FFFFFF;
+    
+    --roster-th-color: #94A3B8;
+    --roster-th-border: #263044;
+    --roster-row-border: #1E293B;
+    --roster-cell-id: #94A3B8;
+    --roster-cell-text: #CBD5E1;
+    --roster-link-color: #60A5FA;
+    --roster-link-hover: #93C5FD;
+    
+    /* Dark Mode Status Pills */
+    --pill-success-bg: rgba(16, 185, 129, 0.15);
+    --pill-success-border: rgba(16, 185, 129, 0.3);
+    --pill-success-text: #34D399;
+    
+    --pill-danger-bg: rgba(239, 68, 68, 0.14);
+    --pill-danger-border: rgba(239, 68, 68, 0.3);
+    --pill-danger-text: #FCA5A5;
+    
+    --pill-active-bg: rgba(245, 158, 11, 0.14);
+    --pill-active-border: rgba(245, 158, 11, 0.3);
+    --pill-active-text: #FCD34D;
+    
+    --pill-warning-bg: rgba(245, 158, 11, 0.14);
+    --pill-warning-border: rgba(245, 158, 11, 0.3);
+    --pill-warning-text: #FCD34D;
+    
+    --pill-neutral-bg: rgba(148, 163, 184, 0.12);
+    --pill-neutral-border: rgba(148, 163, 184, 0.24);
+    --pill-neutral-text: #CBD5E1;
+    
+    /* Lifecycle Status Cards (Matched to Profile Card) */
+    --lifecycle-card-bg: #161D2B;
+    --lifecycle-card-border: #263044;
+    --lifecycle-card-title: #F1F5F9;
+    --lifecycle-pill-success-bg: #16433C;
+    --lifecycle-pill-success-border: rgba(52, 211, 153, 0.35);
+    --lifecycle-pill-success-text: #34D399;
+    --lifecycle-pill-danger-bg: #451D24;
+    --lifecycle-pill-danger-border: rgba(248, 113, 113, 0.35);
+    --lifecycle-pill-danger-text: #FCA5A5;
+    --lifecycle-pill-active-bg: #422E15;
+    --lifecycle-pill-active-border: rgba(251, 191, 36, 0.35);
+    --lifecycle-pill-active-text: #FCD34D;
+    --lifecycle-pill-warning-bg: #422E15;
+    --lifecycle-pill-warning-border: rgba(251, 191, 36, 0.35);
+    --lifecycle-pill-warning-text: #FCD34D;
+    --lifecycle-pill-neutral-bg: #1E293B;
+    --lifecycle-pill-neutral-border: rgba(148, 163, 184, 0.3);
+    --lifecycle-pill-neutral-text: #CBD5E1;
 }}
 
 {explicit_override}
 
 /* Surface base and text contrast */
 .stApp {{
-    background-color: var(--app-bg);
     color: var(--app-text);
+}}
+
+/* the invisible theme-detector iframe shouldn't take up space */
+[data-testid="stElementContainer"]:has(iframe[height="0"]),
+.element-container:has(iframe[height="0"]) {{
+    display: none !important;
 }}
 
 /* Base typography for content elements without overriding icon fonts */
@@ -744,11 +765,60 @@ div[data-testid="stMarkdownContainer"] h3.section-title {{
 </style>"""
 
 
+THEME_DETECTOR_JS = """
+<script>
+(function () {
+  var d = window.parent.document;
+  if (d.getElementById("eo-theme-detector")) return;          // already running in this tab
+  var s = d.createElement("script");
+  s.id = "eo-theme-detector";
+  s.textContent = "(" + function () {
+    function rgb(c) {
+      var m = (c || "").match(/[\\d.]+/g);
+      if (!m || m.length < 3) return null;
+      if (m.length > 3 && parseFloat(m[3]) === 0) return null; // transparent
+      return [+m[0], +m[1], +m[2]];
+    }
+    function detect() {
+      var els = [document.querySelector('[data-testid="stApp"]'), document.querySelector(".stApp"),
+                 document.querySelector('[data-testid="stAppViewContainer"]'), document.body];
+      for (var i = 0; i < els.length; i++) {
+        if (!els[i]) continue;
+        var c = rgb(getComputedStyle(els[i]).backgroundColor);
+        if (c) return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255 < 0.5 ? "dark" : "light";
+      }
+      return "light";
+    }
+    function apply() {
+      var t = detect(), h = document.documentElement;
+      if (h.getAttribute("data-eo-theme") !== t) h.setAttribute("data-eo-theme", t);
+    }
+    apply();
+    setInterval(apply, 250);                                   // follows theme switches instantly
+  } + ")();";
+  d.head.appendChild(s);
+})();
+</script>
+"""
+
+
+def inject_theme_detector():
+    """Adds the (invisible) script that tags <html data-eo-theme="light|dark"> from Streamlit's theme."""
+    try:
+        import streamlit.components.v1 as components
+        components.html(THEME_DETECTOR_JS, height=0)
+    except Exception:
+        pass
+
+
 class DynamicThemeCSS:
     """Dynamic theme string that evaluates to the appropriate CSS on demand,
     supporting both Light and Dark mode seamlessly."""
 
     def __str__(self) -> str:
+        # st.markdown(DARK_MODE_CSS) calls this, so every page that loads the shared
+        # styling also gets the theme detector, without editing each page.
+        inject_theme_detector()
         return get_theme_css()
 
     def __repr__(self) -> str:
@@ -817,3 +887,314 @@ def calculate_risk_status(coursework, comp_exam, capstone) -> str:
         return "On Track"
 
     return "In-Progress"
+
+
+# ===========================================================================
+# APP HEADER + SIDEBAR (shown on every page; called from login.py before pg.run())
+# ===========================================================================
+SCHOOL_NAME = "E.T. Yuchengco School of Business"
+UNIVERSITY_LINE = "Mapúa University · ASU Pathways"
+APP_TITLE = "ETYSB Dashboard"
+LOGO_FILES = ["assets/etysb_logo.png", "assets/etysb_logo.jpg", "assets/etysb_logo.jpeg",
+              "assets/etysb_logo.webp", "assets/etysb_logo.svg"]   # put your logo in assets/ with one of these names
+CURRENT_TERM_OVERRIDE = None          # e.g. "1Q2425" to pin the TERM shown in the yellow bar
+
+ROLE_LABELS = {
+    "Dean": "Dean",
+    "IT/Admin": "IT/Admin",
+    "Program_Chair": "Program Chair",
+    "Faculty_Advisor": "Faculty Advisor",
+    "Success_Advisor": "Success Advisor",
+}
+
+
+# ---------------------------------------------------------------------------
+# DATA FOR THE HEADER / USER CARD (cached so page switches stay fast)
+# ---------------------------------------------------------------------------
+def _cohort_key(c):
+    m = re.fullmatch(r"(\d)Q(\d{2})(\d{2})", str(c).strip().upper())
+    return (2000 + int(m.group(2)), int(m.group(1))) if m else (0, 0)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _program_for_user(user_id):
+    return get_user_program(user_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _current_term(program_id):
+    if CURRENT_TERM_OVERRIDE:
+        return CURRENT_TERM_OVERRIDE
+    if program_id is not None:
+        cohorts = get_available_cohorts(program_id)
+    else:
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT Cohort FROM Students WHERE Cohort IS NOT NULL")
+            cohorts = [r[0] for r in cur.fetchall()]
+            cur.close()
+            conn.close()
+        except Exception:
+            cohorts = []
+    return max(cohorts, key=_cohort_key) if cohorts else "—"
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _all_programs():
+    return get_all_programs(active_only=False)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _permission_for_user(user_id):
+    return get_user_permission(user_id)
+
+
+def _sync_label():
+    raw = get_last_updated_time()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return f"{dt:%b %d, %Y} · {dt.hour % 12 or 12}:{dt:%M %p}"
+        except (TypeError, ValueError):
+            continue
+    return raw or "—"
+
+
+@st.cache_data(show_spinner=False)
+def _logo_data_uri(path, mtime):
+    ext = os.path.splitext(path)[1].lstrip(".").lower()
+    mime = {"jpg": "jpeg", "svg": "svg+xml"}.get(ext, ext)
+    with open(path, "rb") as f:
+        return f"data:image/{mime};base64,{base64.b64encode(f.read()).decode()}"
+
+
+def _logo_html():
+    for path in LOGO_FILES:
+        if os.path.exists(path):
+            return f'<img src="{_logo_data_uri(path, os.path.getmtime(path))}" alt="ETYSB logo">'
+    return '<span class="ps-logo-text">ETYSB<br>logo</span>'
+
+
+def _initials(user, role_label):
+    first = str(user.get("firstname") or "").strip()
+    last = str(user.get("lastname") or "").strip()
+    if first or last:
+        return ((first[:1] + last[:1]) or first[:2]).upper()
+    words = [w for w in re.split(r"[\s_/]+", role_label) if w]
+    return "".join(w[0] for w in words[:2]).upper() or "U"
+
+
+# ---------------------------------------------------------------------------
+# STYLES
+# ---------------------------------------------------------------------------
+SHELL_CSS = """
+<style>
+/* ---- colours (light, and dark when the theme detector marks the page dark) ---- */
+.stApp{
+  --ps-red:#B31B21; --ps-yellow:#F2E230; --ps-yellow-text:#1F2937;
+  --ps-side-bg:#F3F4F6; --ps-side-border:#E5E7EB; --ps-card:#FFFFFF; --ps-card-border:#E5E7EB;
+  --ps-text:#111827; --ps-muted:#6B7280; --ps-nav:#374151; --ps-btn-border:#D1D5DB;
+  --ps-shadow:0 1px 2px rgba(16,24,40,.06);
+}
+html[data-eo-theme="dark"] .stApp{
+  --ps-side-bg:#111827; --ps-side-border:#1F2937; --ps-card:#161D2B; --ps-card-border:#263044;
+  --ps-text:#F1F5F9; --ps-muted:#94A3B8; --ps-nav:#CBD5E1; --ps-btn-border:#334155; --ps-shadow:none;
+}
+
+/* ---- Streamlit's own top bar: invisible, but keep the ⋮ menu and the sidebar-open button ---- */
+[data-testid="stHeader"]{background:transparent !important;height:90px !important;
+    display:block !important;z-index:999990 !important;pointer-events:none;}
+[data-testid="stHeader"] button, [data-testid="stHeader"] a{pointer-events:auto;}
+[data-testid="stToolbar"]{position:fixed !important;top:25px !important;right:22px !important;
+    height:32px !important;display:flex !important;align-items:center !important;}
+[data-testid="stToolbar"] button, [data-testid="stToolbar"] a, [data-testid="stToolbar"] span,
+[data-testid="stToolbar"] p, [data-testid="stToolbar"] svg{color:#FFFFFF !important;fill:#FFFFFF;}
+[data-testid="stDecoration"]{display:none !important;}
+
+/* blocks that only hold <style> tags still take up space (the gaps above/below the header) */
+[data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child),
+.element-container:has([data-testid="stMarkdownContainer"] > style:only-child){display:none !important;}
+
+/* ---- page area: header runs edge to edge ---- */
+[data-testid="stMainBlockContainer"], .block-container{
+    padding-top:0 !important;padding-left:2.25rem !important;padding-right:2.25rem !important;max-width:100% !important;}
+.ps-header{margin:0 -2.25rem 26px -2.25rem;}
+/* keep the red + yellow bars pinned at the top while scrolling, so Deploy / ⋮ always sit on the red bar */
+[data-testid="stElementContainer"]:has(.ps-header),
+.element-container:has(.ps-header){position:sticky;top:0;z-index:999980;}
+.ps-red{background:var(--ps-red);display:flex;align-items:center;gap:14px;padding:16px 28px;}
+.ps-logo{width:46px;height:46px;border-radius:8px;flex-shrink:0;overflow:hidden;
+    border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;
+    background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 6px,rgba(255,255,255,.06) 6px 12px);}
+.ps-logo img{width:100%;height:100%;object-fit:contain;}
+.ps-logo:has(img){background:#FFFFFF;padding:4px;}
+.ps-logo-text{color:#FFFFFF;font-size:9px;font-weight:700;line-height:1.1;text-align:center;}
+.ps-kicker{color:#FFFFFF;font-size:12px;font-weight:600;opacity:.95;}
+.ps-title{color:#FFFFFF;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15;}
+.ps-yellow{background:var(--ps-yellow);display:flex;justify-content:space-between;align-items:center;
+    padding:8px 28px;font-size:12px;color:var(--ps-yellow-text);}
+.ps-meta{display:flex;align-items:center;gap:10px;}
+.ps-meta-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.8;}
+.ps-meta-sep{width:1px;height:16px;background:rgba(31,41,55,.35);}
+.ps-meta-value{font-weight:700;}
+
+/* ---- sidebar ---- */
+[data-testid="stSidebar"]{background:var(--ps-side-bg) !important;border-right:1px solid var(--ps-side-border);}
+[data-testid="stSidebarContent"]{display:flex !important;flex-direction:column;background:transparent !important;}
+[data-testid="stSidebarHeader"]{position:relative;min-height:64px;padding:18px 14px 10px 20px !important;
+    border-bottom:1px solid var(--ps-side-border);margin:0 0 10px 0;}
+[data-testid="stSidebarHeader"]::before{content:"DASHBOARD";position:absolute;left:20px;top:16px;
+    font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--ps-muted);}
+[data-testid="stSidebarHeader"]::after{content:"Navigation";position:absolute;left:20px;top:31px;
+    font-size:16px;font-weight:700;color:var(--ps-text);}
+[data-testid="stSidebarCollapseButton"]{display:flex !important;visibility:visible !important;opacity:1 !important;
+    position:static !important;transform:none !important;margin-left:auto;}
+[data-testid="stSidebarCollapseButton"] button{background:var(--ps-card) !important;border:1px solid var(--ps-btn-border) !important;
+    border-radius:8px !important;width:32px;height:32px;display:flex !important;align-items:center;justify-content:center;}
+[data-testid="stSidebarCollapseButton"] *{visibility:visible !important;opacity:1 !important;color:var(--ps-nav) !important;}
+[data-testid="stSidebarNavSeparator"]{display:none;}
+[data-testid="stSidebarNav"]{padding:0 10px;}
+[data-testid="stSidebarNavLink"]{border-radius:8px;padding:9px 14px !important;margin:2px 0;border-left:3px solid transparent;}
+[data-testid="stSidebarNavLink"] span{color:var(--ps-nav) !important;font-size:14px;}
+[data-testid="stSidebarNavLink"]:hover{background:rgba(148,163,184,.12) !important;}
+[data-testid="stSidebarNavLink"][aria-current="page"]{background:var(--ps-card) !important;border-left-color:var(--ps-red);
+    box-shadow:var(--ps-shadow);}
+[data-testid="stSidebarNavLink"][aria-current="page"] span{color:var(--ps-red) !important;font-weight:600;}
+
+/* user card pinned to the bottom of the sidebar */
+[data-testid="stSidebarUserContent"]{margin-top:auto;padding:0 12px 14px 12px !important;}
+.st-key-ps_user_card{background:var(--ps-card);border:1px solid var(--ps-card-border);border-radius:12px;
+    padding:14px 14px 12px 14px;box-shadow:var(--ps-shadow);gap:10px;}
+.ps-user{display:flex;align-items:center;gap:10px;}
+.ps-avatar{width:34px;height:34px;border-radius:50%;background:#1F2937;color:#FFFFFF;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;}
+.ps-user-name{font-size:14px;font-weight:700;color:var(--ps-text);line-height:1.2;}
+.ps-user-mode{font-size:12px;color:var(--ps-muted);}
+.ps-user-mode b{color:var(--ps-text);}
+.ps-sync{display:flex;align-items:flex-start;gap:8px;margin:12px 0 4px 0;font-size:12px;
+    color:var(--ps-muted);line-height:1.45;}
+.ps-dot{width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0;margin-top:5px;}
+/* Streamlit pulls the element after a markdown block up by 1rem; undo that inside the card
+   so the sync text never sits on top of the Log Out button */
+.st-key-ps_user_card [data-testid="stMarkdown"],
+.st-key-ps_user_card [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
+.st-key-ps_user_card button{border-radius:8px !important;}
+.st-key-ps_legacy_badge{display:none !important;}
+
+/* ---- collapsed sidebar: slim rail with the open button (top) and avatar (bottom) ---- */
+.ps-rail{display:none;position:fixed;left:0;top:0;bottom:0;width:58px;z-index:100;
+    background:var(--ps-side-bg);border-right:1px solid var(--ps-side-border);
+    flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:16px;}
+.ps-rail .ps-avatar::after{content:"";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;
+    background:#10B981;border:2px solid var(--ps-side-bg);}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) .ps-rail{display:flex;}
+.stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMain"]{margin-left:58px;}
+[data-testid="stExpandSidebarButton"]{position:fixed !important;top:14px !important;left:13px !important;z-index:999991 !important;
+    background:var(--ps-card) !important;border:1px solid var(--ps-btn-border) !important;border-radius:8px !important;
+    width:32px;height:32px;color:var(--ps-nav) !important;}
+[data-testid="stExpandSidebarButton"] *{color:var(--ps-nav) !important;}
+</style>
+"""
+
+
+# ---------------------------------------------------------------------------
+# RENDER (header + sidebar)
+# ---------------------------------------------------------------------------
+_UNSET = "__not_set__"
+
+
+def set_header_context(program=_UNSET, cohort=_UNSET):
+    """Call from ANY page, after its filters, to make the yellow bar match what's selected.
+
+        program: ProgramID (int), ProgramCode ("BIA"), or None for "All Programs"
+        cohort:  "1Q2425", or "All Cohorts" / None
+
+    The header is drawn before the page runs, so when the selection changes this
+    reruns once to redraw it (quick, the page data is cached).
+    """
+    ctx = {"page": st.session_state.get("_hdr_page"), "program": program, "cohort": cohort}
+    st.session_state["_hdr_ctx"] = ctx
+    if st.session_state.get("_hdr_drawn") != ctx:
+        st.rerun()
+
+
+def _resolve_program(value, user_id):
+    if value == _UNSET:            # page hasn't picked anything -> "All Programs"
+        return None
+    if value is None or str(value).strip().lower() in ("", "all", "all programs"):
+        return None
+    for p in _all_programs():
+        if p["ProgramID"] == value or str(p["ProgramCode"]).strip().upper() == str(value).strip().upper():
+            return p
+    return None
+
+
+def render_app_shell(user: dict, on_logout=None, page_key=None):
+    """Header (red + yellow bars), styled sidebar nav, user card and collapsed rail.
+
+    page_key: which page is open (login.py passes pg.title), so a page's filter
+    selection only shows in the header while that page is open.
+    """
+    user = user or {}
+    user_id = user.get("userid")
+    role_label = ROLE_LABELS.get(user.get("role"), str(user.get("role") or "User").replace("_", " "))
+    initials = html.escape(_initials(user, role_label))
+
+    # What the open page last reported through set_header_context(). Opening another page
+    # resets the bar to "All Programs" / "All Cohorts" until that page reports a selection.
+    st.session_state["_hdr_page"] = page_key
+    ctx = st.session_state.get("_hdr_ctx")
+    if not ctx or ctx.get("page") != page_key:
+        ctx = None
+    st.session_state["_hdr_drawn"] = ctx
+
+    program = _resolve_program(ctx["program"] if ctx else _UNSET, user_id)
+    if program:
+        program_text = f'{program["ProgramCode"]} ({SCHOOL_NAME})'
+    else:
+        program_text = f"All Programs ({SCHOOL_NAME})"
+
+    cohort = ctx["cohort"] if ctx else _UNSET
+    # page hasn't picked a cohort -> "All Cohorts"
+    term = "All Cohorts" if cohort in (_UNSET, None, "", "All Cohorts") else cohort
+    access = _permission_for_user(user_id) if user_id is not None else "View Only"
+
+    st.markdown(SHELL_CSS, unsafe_allow_html=True)
+
+    # header + rail in ONE markdown element (no extra gaps)
+    st.markdown(
+        f"""
+<div class="ps-header">
+  <div class="ps-red">
+    <div class="ps-logo">{_logo_html()}</div>
+    <div><div class="ps-kicker">{html.escape(UNIVERSITY_LINE)}</div><div class="ps-title">{html.escape(APP_TITLE)}</div></div>
+  </div>
+  <div class="ps-yellow">
+    <div class="ps-meta"><span class="ps-meta-label">Program Instance</span><span class="ps-meta-sep"></span>
+      <span class="ps-meta-value">{html.escape(program_text)}</span></div>
+    <div class="ps-meta"><span class="ps-meta-label">Cohort</span><span class="ps-meta-sep"></span>
+      <span class="ps-meta-value">{html.escape(str(term))}</span></div>
+  </div>
+</div>
+<div class="ps-rail"><div class="ps-avatar">{initials}</div></div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    # sidebar user card (sits under the page links, pushed to the bottom by CSS)
+    with st.sidebar.container(key="ps_user_card"):
+        st.markdown(
+            f"""
+<div class="ps-user"><div class="ps-avatar">{initials}</div>
+  <div><div class="ps-user-name">{html.escape(role_label)} View</div>
+  <div class="ps-user-mode">Access mode · <b>{html.escape(str(access))}</b></div></div></div>
+<div class="ps-sync"><span class="ps-dot"></span><span>Live Sync Status: {html.escape(_sync_label())}</span></div>
+""",
+            unsafe_allow_html=True,
+        )
+        if st.button("Log Out", key="ps_logout", width="stretch"):
+            if on_logout:
+                on_logout()
+            st.session_state.clear()
+            st.rerun()
