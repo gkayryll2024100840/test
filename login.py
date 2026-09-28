@@ -7,20 +7,16 @@ import pandas as pd
 from dotenv import load_dotenv
 from db_connect import get_db_connection, format_mysql_error
 from system_log import log_sync_attempt_local
-# render_sidebar_permission_badge (permissions.py) drew the old "Access Mode ● Edit" block.
-# The new sidebar card shows the same value via get_user_permission(), so it is no longer called.
 from dashboard_views.components import render_app_shell
 
 load_dotenv()
 
 # Creates session ID
-# For US-16. Used to track sync attempts and log errors in local_logs.db
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
 
 MAX_FAILED_ATTEMPTS = 3
 
-# Logs unauthorized access attempts
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
@@ -46,14 +42,8 @@ def log_failed_attempt(user_id, ip_address=None):
         connection.close()
 
 
-# login verify
 def verify_login(user_id, password):
-    """Verify user credentials against the database.
-
-    Returns a tuple: (success: bool, result: dict or str)
-    - On success: (True, user_dict) with lowercase keys
-    - On failure: (False, error_message)
-    """
+    """Verify user credentials against the database."""
     try:
         connection = get_db_connection()
     except mysql.connector.Error as e:
@@ -61,7 +51,6 @@ def verify_login(user_id, password):
 
     try:
         with connection.cursor(dictionary=True) as cursor:
-            # FIX: Pull all needed columns from the updated Users schema
             sql = """
                 SELECT UserID, FirstName, LastName, PasswordHash, Salt, Role, Email,
                        isActive, RolePermission, CurrentProgramID
@@ -71,25 +60,18 @@ def verify_login(user_id, password):
             cursor.execute(sql, (user_id,))
             user = cursor.fetchone()
 
-            # User not found
             if not user:
                 return False, "Invalid User ID or password."
 
-            # Recompute the hash using the stored salt
             stored_salt = user['Salt']
             combined = password + stored_salt
             computed_hash = hashlib.sha256(combined.encode()).hexdigest()
 
-            # Compare hashes
             if computed_hash == user['PasswordHash']:
-                # FIX: Block deactivated accounts (isActive == 0 / False)
                 if not user.get('isActive', 1):
                     return False, "This account has been deactivated. Contact IT/Admin."
 
                 st.session_state.failed_attempts = 0
-
-                # FIX: Normalize all keys to lowercase so downstream code
-                # (e.g. user.get('role')) works regardless of SQL column casing.
                 user = {k.lower(): v for k, v in user.items()}
                 return True, user
             else:
@@ -100,7 +82,6 @@ def verify_login(user_id, password):
                     return False, "Invalid User ID or password. Unauthorized attempts have been logged."
                 else:
                     return False, "Invalid User ID or password. Verify using email."
-                
 
     except mysql.connector.Error as er:
         return False, f"Database error: {er}"
@@ -108,9 +89,29 @@ def verify_login(user_id, password):
         connection.close()
 
 
-# -------------------------------------Streamlit Ui-----------------------------------------------------
-# --- If NOT logged in: show the login form ---
+# -------------------------------------Streamlit UI-----------------------------------------------------
+
 if not st.session_state.get('user'):
+    # ----- Hide sidebar + its toggle buttons while on the login screen -----
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stExpandSidebarButton"] {
+            display: none !important;
+        }
+        /* Give the login content a bit more breathing room without the sidebar */
+        section.main > div.block-container {
+            padding-top: 3rem !important;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("Project PULSE Login Page")
     input_id = st.text_input("User ID")
     input_pass = st.text_input("Password", type="password")
@@ -134,12 +135,7 @@ if not st.session_state.get('user'):
 
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
-
-
-
     user = st.session_state.user
-    # FIX: Keys are now lowercase because verify_login() normalizes them.
-    # This works whether you use 'role' or 'Role' — but we read 'role' here.
     role = user.get('role')
 
     has_student_target = bool(
@@ -166,7 +162,6 @@ else:
         allowed = []
 
     if not allowed:
-        # FIX: Show the actual returned role value so you can debug mismatches.
         st.error(
             f"No pages assigned to your role. Contact IT/Admin. "
             f"(Detected role: {role!r})"
@@ -174,5 +169,5 @@ else:
         st.stop()
 
     pg = st.navigation(allowed, position="sidebar")
-    render_app_shell(user, page_key=pg.title)   # red/yellow header + sidebar card on every page
+    render_app_shell(user, page_key=pg.title)
     pg.run()
