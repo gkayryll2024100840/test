@@ -784,4 +784,4 @@ THEME_DETECTOR_JS = """
                  document.querySelector('[data-testid="stAppViewContainer"]'), document.body];
       for (var i = 0; i < els.length; i++) {
         if (!els[i]) continue;
-        var c = rgb(getComputedStyle
+        var c = rgb(getComputedStyle """
