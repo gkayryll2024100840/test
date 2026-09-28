@@ -1,3 +1,4 @@
+import html
 import streamlit as st
 from permissions import require_edit
 import re
@@ -25,6 +26,31 @@ from dashboard_views.components import (
 )
  
 st.set_page_config(page_title="Student Roster", layout="wide")
+
+# Roster list size: how many students show before you have to scroll,
+# and the height of one row in px (raise/lower it if 10 rows show a bit more or less than 10).
+ROWS_VISIBLE = 10
+ROW_HEIGHT_PX = 58
+
+HEADER_CSS = """<style>
+/* ---- page header: copied from the Executive Overview header ---- */
+.stApp{--sr-h-text:#0F172A; --sr-h-label:#4B5563; --sr-h-border:#E5E7EB;}
+html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --sr-h-border:#263044;}
+.sr-title{font-size:2.75rem !important;font-weight:700 !important;line-height:1.15 !important;color:var(--sr-h-text) !important;
+        letter-spacing:-.01em;margin:0 !important;padding:0 !important;opacity:1 !important;}
+/* title + caption stack on top of each other (something on the page lays markdown out side by side) */
+.sr-head{display:block !important;width:100%;}
+.sr-head .sr-title,.sr-head .sr-caption{display:block !important;width:100%;}
+/* caption under the title: change margin-top to move it closer to / further from the title */
+.sr-caption{font-size:14px !important;line-height:1.5 !important;color:var(--sr-h-label) !important;
+        margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
+/* line under the whole header row (title + controls on the right); padding-bottom = space above the line */
+.st-key-sr_top{border-bottom:1px solid var(--sr-h-border);padding-bottom:10px;}
+/* Streamlit gives markdown a negative bottom margin that would pull the caption onto the line */
+.st-key-sr_top [data-testid="stElementContainer"]:has(.sr-title),
+.st-key-sr_top [data-testid="stMarkdown"]:has(.sr-title),
+.st-key-sr_top [data-testid="stMarkdownContainer"]:has(.sr-title){margin:0 !important;padding:0 !important;}
+</style>"""
  
 # Inject unified dark mode styling
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -97,6 +123,11 @@ if not active_program_id:
     st.warning("⏳ No active program has been set. Please pick one from the Active Program panel above.")
     st.stop()
  
+# Student Profile only opens after a program has been picked here on the Student Roster.
+# This is the "unlock" it checks for (it holds the program chosen on this page).
+st.session_state["roster_program_id"] = active_program_id
+st.session_state["roster_program_code"] = st.session_state.get("active_program_code", "")
+ 
 active_code = st.session_state.get("active_program_code", "")
  
 # ---------------------------------------------------------------
@@ -112,25 +143,30 @@ if active_login_id:
             f"({retry_count} attempts). Check Admin logs."
         )
  
-# Header & Sync Controls
-col_title, col_action = st.columns([2.5, 1.5])
- 
-with col_title:
-    st.title(f"Student Roster — {active_code} Program")
- 
-with col_action:
-    last_sync = get_last_updated_time()
-    st.caption(f"Last Refreshed: {last_sync}")
-    if st.button("Refresh Now", use_container_width=False):
-        success = trigger_data_sync(login_id=active_login_id)
-        if success:
-            st.success("Synced successfully.")
-            st.rerun()
-        else:
-            st.error("Sync failed. Check admin logs.")
-            st.rerun()
- 
-st.markdown("---")
+# Header & Sync Controls (title + caption styled like the Executive Overview header)
+st.markdown(HEADER_CSS, unsafe_allow_html=True)
+with st.container(key="sr_top"):
+    col_title, col_action = st.columns([2.5, 1.5], vertical_alignment="top")
+
+    with col_title:
+        st.markdown(
+            f'<div class="sr-head"><div class="sr-title">Student Roster — {html.escape(str(active_code))} Program</div>'
+            '<div class="sr-caption">Search, filter, and sort students in this program, '
+            'and open any student\'s profile.</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    with col_action:
+        last_sync = get_last_updated_time()
+        st.caption(f"Last Refreshed: {last_sync}")
+        if st.button("Refresh Now", use_container_width=False):
+            success = trigger_data_sync(login_id=active_login_id)
+            if success:
+                st.success("Synced successfully.")
+                st.rerun()
+            else:
+                st.error("Sync failed. Check admin logs.")
+                st.rerun()
  
 # ---------------------------------------------------------------
 # US-23: Faculty/Program Advisor sees ONLY their own advisees.
@@ -241,51 +277,55 @@ try:
         if df_filtered.empty:
             st.info("No students match the current filters.")
         else:
-            for _, row in df_filtered.iterrows():
-                s_id = str(row.get("StudentNumber", ""))
-                s_name = str(row.get("Student", "Unknown"))
-                cohort = str(row.get("Cohort", "N/A"))
-                adviser = str(row.get("Adviser", "None Assigned"))
+            # Scrollable list: shows about ROWS_VISIBLE students, scroll for the rest.
+            # The column headers above stay put while the rows scroll.
+            scroll_height = ROW_HEIGHT_PX * ROWS_VISIBLE if len(df_filtered) > ROWS_VISIBLE else None
+            with st.container(height=scroll_height, border=False, key="roster_scroll"):
+                for _, row in df_filtered.iterrows():
+                    s_id = str(row.get("StudentNumber", ""))
+                    s_name = str(row.get("Student", "Unknown"))
+                    cohort = str(row.get("Cohort", "N/A"))
+                    adviser = str(row.get("Adviser", "None Assigned"))
  
-                cw_status = row.get("CourseworkStatus")
-                ce_status = row.get("CompExamStatus")
-                cp_status = row.get("CapstoneStatus")
+                    cw_status = row.get("CourseworkStatus")
+                    ce_status = row.get("CompExamStatus")
+                    cp_status = row.get("CapstoneStatus")
  
-                cw_pill = render_status_pill(cw_status)
-                ce_pill = render_status_pill(ce_status)
-                cp_pill = render_status_pill(cp_status)
+                    cw_pill = render_status_pill(cw_status)
+                    ce_pill = render_status_pill(ce_status)
+                    cp_pill = render_status_pill(cp_status)
  
-                r_cols = st.columns(col_widths)
-                r_cols[0].markdown(
-                    f'<span class="roster-cell-id">{s_id}</span>',
-                    unsafe_allow_html=True
-                )
-                r_cols[1].page_link(
-                    "dashboard_views/student_profile.py",
-                    label=s_name,
-                    query_params={"student_id": s_id}
-                )
-                r_cols[2].markdown(
-                    f'<span class="roster-cell-text">{cohort}</span>',
-                    unsafe_allow_html=True
-                )
-                r_cols[3].markdown(
-                    f'<span class="roster-cell-text">{adviser}</span>',
-                    unsafe_allow_html=True
-                )
-                r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
-                r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
-                r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
-                last_upd = row.get("LastUpdate")
-                last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
-                r_cols[7].markdown(
-                    f'<span class="roster-cell-text">{last_txt}</span>',
-                    unsafe_allow_html=True
-                )
-                st.markdown(
-                    '<div class="roster-row-divider"></div>',
-                    unsafe_allow_html=True
-                )
+                    r_cols = st.columns(col_widths)
+                    r_cols[0].markdown(
+                        f'<span class="roster-cell-id">{s_id}</span>',
+                        unsafe_allow_html=True
+                    )
+                    r_cols[1].page_link(
+                        "dashboard_views/student_profile.py",
+                        label=s_name,
+                        query_params={"student_id": s_id}
+                    )
+                    r_cols[2].markdown(
+                        f'<span class="roster-cell-text">{cohort}</span>',
+                        unsafe_allow_html=True
+                    )
+                    r_cols[3].markdown(
+                        f'<span class="roster-cell-text">{adviser}</span>',
+                        unsafe_allow_html=True
+                    )
+                    r_cols[4].markdown(cw_pill, unsafe_allow_html=True)
+                    r_cols[5].markdown(ce_pill, unsafe_allow_html=True)
+                    r_cols[6].markdown(cp_pill, unsafe_allow_html=True)
+                    last_upd = row.get("LastUpdate")
+                    last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
+                    r_cols[7].markdown(
+                        f'<span class="roster-cell-text">{last_txt}</span>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        '<div class="roster-row-divider"></div>',
+                        unsafe_allow_html=True
+                    )
     else:
         # US-23 AC2: advisor exists but has zero assigned students right now
         if is_advisor_view and my_adviser_name is not None:

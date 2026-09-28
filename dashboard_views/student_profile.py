@@ -1,5 +1,6 @@
-import html
+# STUDENT PROFILE.PY 9-28-26
 
+import html
 import pandas as pd
 import streamlit as st
 
@@ -61,7 +62,7 @@ PAGE_CSS = """
   --sp-card-pad: 20px;          /* inside padding of every card (student card, status cards, save bar) */
   --sp-card-radius: 14px;       /* corner roundness of the cards */
   --sp-subtitle-gap: 4px;       /* space between "Student Profile" and "Review and update a student's..." */
-  --sp-title-gap: 14px;         /* space between "Review and update..." and the line underneath */
+  --sp-title-gap: 10px;         /* space between "Review and update..." and the line underneath (matches Executive Overview) */
   --sp-block-gap: 18px;         /* space between the big blocks (student card, notice, section, save bar) */
   --sp-section-gap: 12px;       /* space between "Program Lifecycle Status" text and the status cards */
   --sp-pill-title-gap: 16px;    /* space between the CW tag row and the card title */
@@ -69,13 +70,13 @@ PAGE_CSS = """
   --sp-cards-gap: 16px;         /* space between the three status cards (CW / CE / CP) */
 }
 .stApp{
-  --sp-surface:#FFFFFF; --sp-soft:#F9FAFB; --sp-border:#E5E7EB; --sp-text:#0F172A; --sp-muted:#6B7280; --sp-faint:#9CA3AF;
+  --sp-surface:#FFFFFF; --sp-soft:#F9FAFB; --sp-border:#E5E7EB; --sp-text:#0F172A; --sp-label:#4B5563; --sp-muted:#6B7280; --sp-faint:#9CA3AF;
   --sp-shadow:0 1px 2px rgba(16,24,40,.05);
   --g-bg:#ECFDF3; --g-fg:#15803D; --g-bd:#BBF7D0;  --y-bg:#FEF9C3; --y-fg:#854D0E; --y-bd:#FDE047;
   --r-bg:#FEF2F2; --r-fg:#B91C1C; --r-bd:#FECACA;
 }
 html[data-eo-theme="dark"] .stApp{
-  --sp-surface:#161D2B; --sp-soft:#111827; --sp-border:#263044; --sp-text:#F1F5F9; --sp-muted:#94A3B8; --sp-faint:#64748B;
+  --sp-surface:#161D2B; --sp-soft:#111827; --sp-border:#263044; --sp-text:#F1F5F9; --sp-label:#94A3B8; --sp-muted:#94A3B8; --sp-faint:#64748B;
   --sp-shadow:none;
   --g-bg:rgba(16,185,129,.15); --g-fg:#34D399; --g-bd:rgba(16,185,129,.35);
   --y-bg:rgba(234,179,8,.15);  --y-fg:#FDE047; --y-bd:rgba(234,179,8,.35);
@@ -85,6 +86,11 @@ html[data-eo-theme="dark"] .stApp{
 /* ---- title row: title + subtitle on the left, student picker on the right, line underneath ---- */
 .st-key-sp_top{border-bottom:1px solid var(--sp-border);padding-bottom:var(--sp-title-gap);margin-bottom:6px;}
 .st-key-sp_top [data-testid="stHorizontalBlock"]{gap:0 !important;}
+/* Streamlit gives markdown blocks a negative bottom margin, which pulled the caption down onto the line.
+   Zeroing it makes the gap under the caption exactly --sp-title-gap, like the Executive Overview header. */
+.st-key-sp_top [data-testid="stElementContainer"]:has(.sp-page-title),
+.st-key-sp_top [data-testid="stMarkdown"]:has(.sp-page-title),
+.st-key-sp_top [data-testid="stMarkdownContainer"]:has(.sp-page-title){margin:0 !important;padding:0 !important;}
 /* student picker: fills the right-hand column so its right edge lines up with the cards' right edge */
 .st-key-sp_top [data-testid="stColumn"]:last-child{padding:0 !important;}
 .st-key-sp_picker, .st-key-sp_picker [data-testid="stVerticalBlock"],
@@ -94,8 +100,11 @@ html[data-eo-theme="dark"] .stApp{
 /* markdown blocks fill their box (Streamlit shrinks them otherwise, which broke the right-alignment) */
 [class*="st-key-sp_"] [data-testid="stMarkdownContainer"] > div,
 .sp-block{width:100%;flex:1 1 auto;}
-.sp-page-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:var(--sp-text);letter-spacing:-.01em;}
-.sp-page-sub{font-size:14px;color:var(--sp-muted);margin-top:var(--sp-subtitle-gap);}
+/* title + caption: same look as the Executive Overview header */
+.sp-page-title{font-size:2.75rem !important;font-weight:700 !important;line-height:1.15 !important;color:var(--sp-text) !important;
+        letter-spacing:-.01em;margin:0 !important;padding:0 !important;opacity:1 !important;}
+.sp-page-sub{font-size:14px !important;line-height:1.5 !important;color:var(--sp-label) !important;
+        margin:var(--sp-subtitle-gap) 0 0 0 !important;padding:0 !important;opacity:1 !important;}
 .st-key-sp_picker [data-testid="stWidgetLabel"]{margin-bottom:4px;min-height:0;}
 .st-key-sp_picker [data-testid="stWidgetLabel"] p{font-size:13px;font-weight:600;color:var(--sp-text);text-transform:none;}
 
@@ -115,12 +124,15 @@ html[data-eo-theme="dark"] .stApp{
 
 /* ---- notice ---- */
 .sp-note{display:flex;gap:12px;align-items:flex-start;border-radius:12px;padding:12px 16px;font-size:13px;line-height:1.55;
-    margin:var(--sp-block-gap) 0 var(--sp-block-gap) 0;background:#FEF9C3;border:1px solid #FDE68A;color:#3F3F46;}
-.sp-note b{color:#1F2937;}
+    margin:var(--sp-block-gap) 0 var(--sp-block-gap) 0;background:#FFFBEB;border:1px solid #FFCA06;color:#DFB000;}
+/* notice box, exact Figma colors: fill #FFFBEB / outline #FFCA06 / text #DFB000 / icon #FFCA06 */
+.sp-note b{color:#DFB000;}
 html[data-eo-theme="dark"] .sp-note{background:rgba(234,179,8,.10);border-color:rgba(234,179,8,.3);color:#E5E7EB;}
 html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
 .sp-note-view{background:var(--sp-soft);border-color:var(--sp-border);color:var(--sp-muted);}
-.sp-note-icon{border:1.5px solid #A16207;color:#A16207;border-radius:50%;width:20px;height:20px;flex-shrink:0;
+.sp-note-view b{color:var(--sp-text);}   /* view-only notice keeps its grey look */
+.sp-note-view .sp-note-icon{border-color:var(--sp-muted);color:var(--sp-muted);}
+.sp-note-icon{border:1.5px solid #FFCA06;color:#FFCA06;border-radius:50%;width:20px;height:20px;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px;}
 
 /* ---- section header + legend ---- */
@@ -213,17 +225,13 @@ user = st.session_state.get("user", {})
 role = user.get("role")
 user_id = user.get("userid") or user.get("UserID")   # login.py stores keys in lowercase
 
-if not st.session_state.get("active_program_id") and role != "IT/Admin":
-    pinned = get_user_program(user_id)
-    if pinned:
-        st.session_state["active_program_id"] = pinned["ProgramID"]
-        st.session_state["active_program_code"] = pinned["ProgramCode"]
-
-active_program_id = st.session_state.get("active_program_id")
-active_code = st.session_state.get("active_program_code", "")
+# The program must be picked on the Student Roster first. No pinned / default program is loaded here,
+# so opening Student Profile straight from the sidebar shows nothing until that's done.
+active_program_id = st.session_state.get("roster_program_id")
+active_code = st.session_state.get("roster_program_code", "")
 
 if not active_program_id:
-    st.warning("⏳ No active program has been set. Please pick one on the Student Roster page first.")
+    st.warning("⏳ No program selected yet. Go to the Student Roster page and pick a program first.")
     st.stop()
 
 df = get_student_roster_data(program_id=active_program_id)
@@ -235,7 +243,7 @@ header_cohort = "All Cohorts"
 selected_label = None
 student_options = {}
 with st.container(key="sp_top"):
-    c_title, c_pick = st.columns([4.8, 1.2], vertical_alignment="bottom")   # same split as the student card
+    c_title, c_pick = st.columns([4.8, 1.2], vertical_alignment="top")   # same split as the student card; top = title starts at the top like Executive Overview
     with c_title:
         st.markdown(
             '<div><div class="sp-page-title">Student Profile</div>'
@@ -248,20 +256,28 @@ with st.container(key="sp_top"):
             for _, row in df.iterrows()
         }
         student_ids = list(student_options.values())
-        default_index = 0
-        # Navigation from Student Roster (student_profile?student_id=...)
-        target_student_id = st.query_params.get("student_id") or st.session_state.get("selected_student_override")
+        labels = list(student_options.keys())
+        # A student clicked on the Student Roster (?student_id=...) or on the Executive Overview table
+        # (selected_student_override). Applied once, so picking another student in the list still works.
+        clicked_id = st.session_state.pop("selected_student_override", None)   # a fresh click: always applied
+        target_student_id = clicked_id or st.query_params.get("student_id")
         if target_student_id:
             target_str = str(target_student_id).strip()
-            if target_str in student_ids:
-                default_index = student_ids.index(target_str)
-            st.session_state.pop("selected_student_override", None)
+            if target_str in student_ids and (clicked_id or st.session_state.get("sp_applied_target") != target_str):
+                st.session_state["sp_student"] = labels[student_ids.index(target_str)]
+                st.session_state["sp_applied_target"] = target_str
+        if st.session_state.get("sp_student") not in labels:
+            st.session_state.pop("sp_student", None)   # no student is opened by default
         with c_pick:
             with st.container(key="sp_picker"):
-                selected_label = st.selectbox("Select student", list(student_options.keys()), index=default_index)
+                selected_label = st.selectbox("Select student", labels, index=None, key="sp_student",
+                                              placeholder="Choose a student")
 
 if df.empty:
     st.info(f"No student records available for the {active_code} program.")
+
+elif not selected_label:
+    st.info("Select a student from the list above, or click a student's name on the Student Roster.")
 
 elif selected_label:
     selected_id = student_options[selected_label]

@@ -1,3 +1,5 @@
+# ADMIN_CONFIG 9-28-26
+
 import json
 import os
 import streamlit as st
@@ -15,8 +17,28 @@ from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
 from permissions import require_edit
 
-st.title("Admin Configuration")
-st.markdown("---")
+HEADER_CSS = """<style>
+/* ---- page header: copied from the Executive Overview header ---- */
+.stApp{--ac-h-text:#0F172A; --ac-h-label:#4B5563; --ac-h-border:#E5E7EB;}
+html[data-eo-theme="dark"] .stApp{--ac-h-text:#F1F5F9; --ac-h-label:#94A3B8; --ac-h-border:#263044;}
+.ac-title{font-size:2.75rem !important;font-weight:700 !important;line-height:1.15 !important;color:var(--ac-h-text) !important;
+        letter-spacing:-.01em;margin:0 !important;padding:0 !important;opacity:1 !important;}
+/* caption under the title: change margin-top to move it closer to / further from the title */
+.ac-caption{font-size:14px !important;line-height:1.5 !important;color:var(--ac-h-label) !important;
+        margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
+/* title + caption with the line under both (one element = no extra Streamlit gaps) */
+.ac-header{padding-bottom:10px;border-bottom:1px solid var(--ac-h-border);margin:0;}
+</style>"""
+
+# Title + caption styled like the Executive Overview header (line under both)
+st.markdown(HEADER_CSS, unsafe_allow_html=True)
+st.markdown(
+    '<div class="ac-header">'
+    '<div class="ac-title">Admin Configuration</div>'
+    '<div class="ac-caption">Manage field mappings, user permissions, and system sync logs.</div>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 
 # ============================================================
 # FIELD MAPPING CONFIGURATION SECTION
