@@ -1,21 +1,30 @@
-# ADMIN_CONFIG 9-28-26
+# ADMIN CONFIG.PY 9-29-26
+#
+# SPEED NOTES
+#  - Each section is an @st.fragment: clicking/typing in one section only re-runs THAT section,
+#    not the whole page (before, every click re-ran every section + every database query).
+#  - Database reads are cached for a short time and the cache is cleared right after a save,
+#    so what you see is always up to date after a change.
+#  - The user list shows USERS_PER_PAGE users at a time instead of building up to 200 rows of widgets.
 
-import json
-import os
 import streamlit as st
+from datetime import datetime, time as dtime
 from db_connect import (
-    get_system_logs,
     trigger_data_sync,
     check_column_exists,
     refresh_schema_cache,
     get_schema_load_error,
     search_users,
-    get_user_permission,
     set_user_permission,
+    get_db_connection,
+    get_all_programs, get_program_threshold, set_program_threshold,
+    get_refresh_schedule, set_refresh_time,
 )
 from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
 from permissions import require_edit
+
+USERS_PER_PAGE = 20
 
 HEADER_CSS = """<style>
 /* ---- page header: copied from the Executive Overview header ---- */
@@ -28,115 +37,350 @@ html[data-eo-theme="dark"] .stApp{--ac-h-text:#F1F5F9; --ac-h-label:#94A3B8; --a
         margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
 /* title + caption with the line under both (one element = no extra Streamlit gaps) */
 .ac-header{padding-bottom:10px;border-bottom:1px solid var(--ac-h-border);margin:0;}
+
+/* ---- section heading + description (e.g. "Field Mapping (US-10)") ----
+   padding-top = space between the page's line and the section title (same as Executive Overview's line -> filters)
+   description sits 4px under the title, same size/colour as the page caption */
+.ac-section{padding-top:32px;padding-bottom:32px;margin:0;}
+/* line between sections: same thin line as the page header's, no extra Streamlit hr margins,
+   so every section sits the same distance below its line as Field Mapping does */
+.ac-divider{border-top:1px solid var(--ac-h-border);margin:0;height:0;}
+/* table column headers (User Permissions) */
+.ac-th{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#6B7280;}
+html[data-eo-theme="dark"] .ac-th{color:#94A3B8;}
+.ac-th-line{border-top:1px solid var(--ac-h-border);margin:-8px 0 0 0;height:0;}
+
+/* Re-check schema + Save Mappings in one row, left-aligned */
+.st-key-ac_actions{display:flex !important;flex-direction:row !important;flex-wrap:wrap;align-items:center !important;
+        justify-content:flex-start !important;gap:12px !important;}
+.st-key-ac_actions [data-testid="stElementContainer"]{width:auto !important;flex:0 0 auto !important;}
+.ac-section-title{font-size:1.75rem !important;font-weight:600 !important;line-height:1.2 !important;
+        color:var(--ac-h-text) !important;margin:0 !important;padding:0 !important;}
+.ac-sub{font-size:16px;font-weight:600;color:var(--ac-h-text);margin:0;}
+.ac-sub-gap{height:20px;}
+.ac-section-caption{font-size:14px !important;line-height:1.5 !important;color:var(--ac-h-label) !important;
+        margin:4px 0 0 0 !important;padding:0 !important;}
 </style>"""
+
+
+
+def section_divider():
+    st.markdown('<div class="ac-divider"></div>', unsafe_allow_html=True)
+
+
+def section_header(title, description):
+    """Section title with its description right under it (one element, so no extra Streamlit gaps)."""
+    st.markdown(
+        f'<div class="ac-section"><div class="ac-section-title">{title}</div>'
+        f'<div class="ac-section-caption">{description}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def current_user_id():
+    user = st.session_state.get("user", {}) or {}
+    return user.get("userid") or user.get("UserID")
+
+
+# ---------------------------------------------------------------------------
+# Cached reads (short TTL; cleared right after the matching save)
+# ---------------------------------------------------------------------------
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_programs():
+    return get_all_programs() or []
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_threshold(program_id):
+    return get_program_threshold(program_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_schedule():
+    return get_refresh_schedule()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_users(query):
+    return search_users(query)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_audit_rows():
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT pal.LogID, pal.UserID,
+                      CONCAT(u.FirstName, ' ', u.LastName) AS Name,
+                      u.Role AS Role,
+                      pal.LoggedAt
+               FROM Permission_Audit_Log pal
+               LEFT JOIN Users u ON u.UserID = pal.UserID
+               ORDER BY pal.LoggedAt DESC
+               LIMIT 100"""
+        )
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        conn.close()
+    return rows
+
 
 # Title + caption styled like the Executive Overview header (line under both)
 st.markdown(HEADER_CSS, unsafe_allow_html=True)
 st.markdown(
     '<div class="ac-header">'
     '<div class="ac-title">Admin Configuration</div>'
-    '<div class="ac-caption">Manage field mappings, user permissions, and system sync logs.</div>'
+    '<div class="ac-caption">Manage field mappings, program thresholds, refresh schedule, user permissions, '
+    'and system sync logs.</div>'
     '</div>',
     unsafe_allow_html=True,
 )
+
 
 # ============================================================
 # FIELD MAPPING CONFIGURATION SECTION
 # ============================================================
 CONFIG_FILE = "field_mappings.json"
 
-st.subheader("Field Mapping (US-10)")
-st.markdown("Maps dashboard fields to IFT200's normalized schema — no code changes required to repoint for a new program.")
+section_header(
+    "Field Mapping",
+    "Tells the dashboard which database column holds each piece of student data. "
+    "A field shows <b>Mapped</b> when its column is found in the database, so you can confirm "
+    "everything is connected correctly before saving.",
+)
 
-if st.button("Re-check schema"):
-    require_edit()
-    refresh_schema_cache()
 
-schema_error = get_schema_load_error()
-if schema_error:
-    st.error(f"Could not read the database schema, so no mapping can be verified: {schema_error}")
+@st.fragment
+def field_mapping_section():
+    schema_error = get_schema_load_error()
+    if schema_error:
+        st.error(f"Could not read the database schema, so no mapping can be verified: {schema_error}")
 
-if "current_mappings" not in st.session_state:
-    st.session_state["current_mappings"] = load_mappings()
+    if "current_mappings" not in st.session_state:
+        st.session_state["current_mappings"] = load_mappings()
 
-updated_mappings = {}
-validation_errors = []
+    updated_mappings = {}
+    validation_errors = []
 
-for field_label, db_column in st.session_state["current_mappings"].items():
-    col1, col2, col3 = st.columns([3, 5, 2])
+    for field_label, db_column in st.session_state["current_mappings"].items():
+        col1, col2, col3 = st.columns([3, 5, 2])
 
-    with col1:
-        st.write(f"**{field_label}**")
+        with col1:
+            st.write(f"**{field_label}**")
 
-    with col2:
-        new_column = st.text_input(
-            f"Column for {field_label}",
-            value=db_column,
-            label_visibility="collapsed",
-            key=f"input_{field_label}",
+        with col2:
+            new_column = st.text_input(
+                f"Column for {field_label}",
+                value=db_column,
+                label_visibility="collapsed",
+                key=f"input_{field_label}",
+            )
+            updated_mappings[field_label] = new_column.strip()
+
+        with col3:
+            typed_path = new_column.strip()
+            column_exists = check_column_exists(typed_path)   # in-memory lookup (schema snapshot)
+            toggle_key = f"toggle_{field_label}"
+            st.session_state[toggle_key] = column_exists
+            st.toggle("Mapped", key=toggle_key, disabled=True)
+
+            if not column_exists:
+                validation_errors.append(field_label)
+
+    st.markdown("---")
+
+    col_save, col_status = st.columns([1.3, 3])
+
+    with col_save:
+        # Re-check schema + Save Mappings side by side, starting at the page's left margin
+        with st.container(key="ac_actions"):
+            recheck_clicked = st.button("Re-check schema", key="ac_recheck")
+            save_clicked = st.button("Save Mappings", type="primary", key="ac_save")
+
+    if recheck_clicked:
+        require_edit()
+        refresh_schema_cache()
+        st.rerun(scope="fragment")   # redraw this section so the Mapped switches use the fresh schema
+
+    if save_clicked:
+        require_edit()                # US-13 gate
+        save_mappings(updated_mappings)
+        st.session_state["current_mappings"] = updated_mappings
+
+    with col_status:
+        if save_clicked and validation_errors:
+            st.warning(
+                "Saved with errors! Note: Roster view will be disabled until resolved. "
+                f"Fix: {', '.join(validation_errors)}"
+            )
+        elif save_clicked:
+            st.success("Configurations successfully saved!")
+        elif validation_errors:
+            st.warning(
+                "Configuration has errors and cannot go live until resolved: "
+                f"{', '.join(validation_errors)}"
+            )
+        else:
+            st.success("All mappings valid and ready for production deployment.")
+
+
+field_mapping_section()
+
+
+# ============================================================
+# PROGRAM-SPECIFIC THRESHOLDS AND TERMINOLOGIES
+#   1) At-Risk Threshold (US-27): one number per program, used for every stage
+#   2) Data Refresh Schedule: nightly automatic refresh (dashboard-wide)
+# ============================================================
+section_divider()
+section_header(
+    "Program-Specific Thresholds and Terminologies",
+    "Set each program's At-Risk threshold and when the dashboard's data refreshes automatically. "
+    "Changes apply right away.",
+)
+
+
+@st.fragment
+def threshold_section():
+    st.markdown('<div class="ac-sub">At-Risk Threshold</div>', unsafe_allow_html=True)
+    programs = cached_programs()
+    if not programs:
+        st.info("No programs found.")
+        return
+
+    prog_by_label = {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in programs}
+    th_col_prog, th_col_days, th_col_btn = st.columns([2.2, 1.4, 1], vertical_alignment="bottom")
+
+    with th_col_prog:
+        th_label = st.selectbox("Program", list(prog_by_label), key="th_program")
+    th_program_id = prog_by_label[th_label]
+    th_current = cached_threshold(th_program_id)
+
+    with th_col_days:
+        th_days = st.number_input(
+            "Days in a single stage",
+            min_value=1, step=1,
+            value=int(th_current) if th_current else 180,
+            key=f"th_days_{th_program_id}",
         )
-        updated_mappings[field_label] = new_column.strip()
+    with th_col_btn:
+        th_save = st.button("Save Threshold", type="primary", key="th_save", use_container_width=True)
 
-    with col3:
-        typed_path = new_column.strip()
-        column_exists = check_column_exists(typed_path)
-        toggle_key = f"toggle_{field_label}"
-        st.session_state[toggle_key] = column_exists
-        st.toggle("Mapped", key=toggle_key, disabled=True)
+    st.caption(
+        f"Current threshold for this program: {th_current} days in a single stage."
+        if th_current else "No threshold set for this program yet (nobody is flagged until one is saved)."
+    )
 
-        if not column_exists:
-            validation_errors.append(field_label)
+    if th_save:
+        require_edit()   # US-13 gate: View Only users are stopped and the attempt is logged
+        ok, msg = set_program_threshold(current_user_id(), th_program_id, int(th_days))
+        if ok:
+            st.cache_data.clear()   # dashboards (roster / overview) pick up the new flags right away
+            st.session_state["th_flash"] = msg
+            st.rerun(scope="fragment")   # redraw so "Current threshold" shows the new number
+        else:
+            st.error(msg)
 
-st.markdown("---")
+    th_flash = st.session_state.pop("th_flash", None)
+    if th_flash:
+        st.success(th_flash)
 
-col_save, col_status = st.columns([1, 3])
 
-with col_save:
-    save_clicked = st.button("Save Mappings", type="primary")
+@st.fragment
+def refresh_schedule_section():
+    st.markdown('<div class="ac-sub-gap"></div><div class="ac-sub">Data Refresh Schedule</div>',
+                unsafe_allow_html=True)
+    schedule = cached_schedule()
+    cur_h, cur_m = (int(x) for x in schedule["time"].split(":"))
+    rf_col_freq, rf_col_time, rf_col_btn = st.columns([2.2, 1.4, 1], vertical_alignment="bottom")
+    with rf_col_freq:
+        st.selectbox("Frequency", ["Nightly (every day)"], disabled=True, key="rf_freq",
+                     help="The refresh runs once every night at the time on the right.")
+    with rf_col_time:
+        rf_time = st.time_input(f"Refresh time ({schedule['timezone']})", value=dtime(cur_h, cur_m),
+                                step=900, key="rf_time")
+    with rf_col_btn:
+        rf_save = st.button("Save Schedule", type="primary", key="rf_save", use_container_width=True)
 
-if save_clicked:
-    require_edit()                # US-13 gate
-    save_mappings(updated_mappings)
-    st.session_state["current_mappings"] = updated_mappings
+    last_run_txt = "not run yet"
+    if schedule["last_run"]:
+        try:
+            last_run_txt = datetime.strptime(schedule["last_run"], "%Y-%m-%d %H:%M:%S").strftime("%b %d, %Y · %I:%M %p")
+        except ValueError:
+            last_run_txt = schedule["last_run"]
+        if schedule["last_status"]:
+            last_run_txt += f" ({schedule['last_status']})"
+    st.caption(
+        f"Current schedule: nightly at {schedule['time']} ({schedule['timezone']}). "
+        f"Last scheduled refresh: {last_run_txt}. Failed refreshes are recorded in System Sync Logs below. "
+        "For urgent updates, use Refresh Now in the sidebar or Run Sync Attempt below."
+    )
 
-with col_status:
-    if save_clicked and validation_errors:
-        st.warning(
-            "Saved with errors! Note: Roster view will be disabled until resolved. "
-            f"Fix: {', '.join(validation_errors)}"
-        )
-    elif save_clicked:
-        st.success("Configurations successfully saved!")
-    elif validation_errors:
-        st.warning(
-            "Configuration has errors and cannot go live until resolved: "
-            f"{', '.join(validation_errors)}"
-        )
-    else:
-        st.success("All mappings valid and ready for production deployment.")
+    if rf_save:
+        require_edit()   # US-13 gate
+        ok, msg = set_refresh_time(current_user_id(), rf_time.strftime("%H:%M"))
+        if ok:
+            cached_schedule.clear()
+            st.session_state["rf_flash"] = msg
+            st.rerun(scope="fragment")
+        else:
+            st.error(msg)
+
+    rf_flash = st.session_state.pop("rf_flash", None)
+    if rf_flash:
+        st.success(rf_flash)
+
+
+threshold_section()
+refresh_schedule_section()
 
 
 # ============================================================
 # USER PERMISSIONS SECTION (US-13)
 # ============================================================
-st.markdown("---")
-st.subheader("User Permissions")
-st.markdown("Set a user's permission level to **Edit** (can make changes) or **View Only** (read-only; write attempts are blocked and logged).")
-
-search_query = st.text_input(
-    "Search user by name or ID",
-    placeholder="e.g. Juan, dela Cruz, or 2024-10012",
-    key="perm_search",
+section_divider()
+section_header(
+    "User Permissions",
+    "Set a user's permission level to <b>Edit</b> (can make changes) or <b>View Only</b> "
+    "(read-only; write attempts are blocked and logged).",
 )
 
-users = search_users(search_query)
 
-if not users:
-    st.info("No users match this search.")
-else:
-    st.caption(f"Showing {len(users)} user(s).")
-    for u in users:
-        cols = st.columns([2, 2, 1.4, 1.6])
+@st.fragment
+def user_permissions_section():
+    search_query = st.text_input(
+        "Search User by Name or UserID",
+        placeholder="e.g. Juan, dela Cruz, or 2024-10012",
+        key="perm_search",
+    )
+
+    users = cached_users(search_query.strip())
+
+    if not users:
+        st.info("No users match this search.")
+        return
+
+    # show USERS_PER_PAGE at a time (building 200 rows of widgets on every click was the slowest part)
+    n_pages = max(1, -(-len(users) // USERS_PER_PAGE))
+    page = 1
+    if n_pages > 1:
+        pg_col, _ = st.columns([1, 5])
+        with pg_col:
+            page = st.number_input(f"Page (of {n_pages})", min_value=1, max_value=n_pages, value=1,
+                                   step=1, key=f"perm_page_{search_query}")
+    page_users = users[(page - 1) * USERS_PER_PAGE: page * USERS_PER_PAGE]
+
+    # column headers (same look as the Student Roster / Executive Overview table headers)
+    perm_widths = [2, 2, 1.4, 1.6]
+    for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
+                          ["UserID", "Name", "Role", "Permission"]):
+        col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+
+    for u in page_users:
+        cols = st.columns(perm_widths)
 
         with cols[0]:
             st.write(f"**{u['UserID']}**")
@@ -161,36 +405,29 @@ else:
                     ok, err = set_user_permission(u["UserID"], new_perm)
                     if ok:
                         st.success(f"{u['UserID']} → {new_perm}")
-                        st.rerun()
+                        cached_users.clear()
+                        st.rerun(scope="fragment")
                     else:
                         st.error(f"Failed: {err}")
+
+    if n_pages > 1:
+        st.caption(f"Showing {len(page_users)} of {len(users)} users.")
+
+
+user_permissions_section()
 
 
 # ============================================================
 # PERMISSION AUDIT LOG SECTION (US-13)
 # ============================================================
-st.markdown("---")
-st.subheader("Permission Audit Log")
-st.markdown("Every blocked write attempt by a **View Only** user is recorded here.")
+section_divider()
+section_header(
+    "Permission Audit Log",
+    "Every blocked write attempt by a <b>View Only</b> user is recorded here.",
+)
 
 try:
-    from db_connect import get_db_connection
-    _conn = get_db_connection()
-    _cur = _conn.cursor(dictionary=True)
-    _cur.execute(
-        """SELECT pal.LogID, pal.UserID,
-                  CONCAT(u.FirstName, ' ', u.LastName) AS Name,
-                  u.Role AS Role,
-                  pal.LoggedAt
-           FROM Permission_Audit_Log pal
-           LEFT JOIN Users u ON u.UserID = pal.UserID
-           ORDER BY pal.LoggedAt DESC
-           LIMIT 100"""
-    )
-    audit_rows = _cur.fetchall()
-    _cur.close()
-    _conn.close()
-
+    audit_rows = cached_audit_rows()
     if audit_rows:
         st.dataframe(audit_rows, use_container_width=True)
     else:
@@ -202,25 +439,34 @@ except Exception as e:
 # ============================================================
 # SYSTEM SYNC LOGS SECTION
 # ============================================================
-st.markdown("---")
-st.subheader("System Sync Logs")
+section_divider()
+section_header(
+    "System Sync Logs",
+    "Run a test sync and review past sync attempts, including any errors, for troubleshooting.",
+)
 
-active_login_id = st.session_state.get("session_id", "default_admin")
-st.info(f"Active Session ID for this browser: **{active_login_id}**")
 
-if st.button("Run Sync Attempt"):
-    # Sync is a read-only operation — no permission gate needed
-    success = trigger_data_sync(login_id=active_login_id)
-    if success:
-        st.success("Sync executed successfully!")
-        st.rerun()
+@st.fragment
+def sync_logs_section():
+    active_login_id = st.session_state.get("session_id", "default_admin")
+    st.info(f"Active Session ID for this browser: **{active_login_id}**")
+
+    if st.button("Run Sync Attempt"):
+        # Sync is a read-only operation — no permission gate needed
+        success = trigger_data_sync(login_id=active_login_id)
+        if success:
+            st.success("Sync executed successfully!")
+            st.rerun()   # full page rerun so the sidebar's Live Sync Status updates too
+        else:
+            st.error("Sync failed! Error logged to SQL Local_Logs table.")
+            st.rerun()
+
+    logs = get_system_logs_local()
+
+    if logs:
+        st.dataframe(logs, use_container_width=True)
     else:
-        st.error("Sync failed! Error logged to SQL Local_Logs table.")
-        st.rerun()
+        st.info("No system logs found in the local_logs.db")
 
-logs = get_system_logs_local()
 
-if logs:
-    st.dataframe(logs, use_container_width=True)
-else:
-    st.info("No system logs found in the local_logs.db")
+sync_logs_section()
