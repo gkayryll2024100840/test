@@ -15,10 +15,13 @@ from db_connect import (
     format_mysql_error,
     get_available_cohorts,
     check_column_exists,
+    find_invalid_mappings,
+    get_schema_load_error,
     get_user_program,
     get_flagged_students,
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
+from field_mapping import load_mappings
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -32,7 +35,7 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
-INACTIVE_STAGE = "Inactive"   # students with any stage marked Inactive 
+INACTIVE_STAGE = "Inactive"   # students with any stage marked Cancelled (dropped out)
 
 STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed", INACTIVE_STAGE]
 
@@ -403,6 +406,29 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# FIELD MAPPING CHECK (US-10)
+#   Same rule as the Student Roster: if any saved mapping in Admin Configuration
+#   points to a column that doesn't exist, the page shows an error instead of data.
+#   Uses the schema snapshot in db_connect, so this costs no extra database queries
+#   on most reruns (the snapshot refreshes every 60 s, or via "Re-check schema").
+# ---------------------------------------------------------------------------
+def check_field_mappings():
+    """Returns an error message if the saved field mappings are invalid, else None."""
+    try:
+        mappings = load_mappings()
+    except Exception as e:
+        return f"Could not load field mappings: {e}"
+    invalid = find_invalid_mappings(mappings)
+    if not invalid:
+        return None
+    schema_error = get_schema_load_error()
+    if schema_error:
+        return f"Could not verify field mappings: {schema_error}"
+    details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
+    return f"Invalid or unverified mapping(s) - {details}"
+
+
+# ---------------------------------------------------------------------------
 # BUSINESS LOGIC
 # ---------------------------------------------------------------------------
 def determine_active_stage(row) -> str:
@@ -540,7 +566,7 @@ def remaining_info_html(df: pd.DataFrame) -> str:
         f'<div class="eo-tip-formula">Total Enrolled ({total:,}) &minus; Completed ({completed:,}) '
         f'&minus; Inactive ({inactive:,}) = Total ({total - completed - inactive:,})</div>{rows}'
         '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed '
-        'and Inactive, then split by the lifecycle stage each student is currently in.</div>'
+        'and Inactive (dropped out), then split by the lifecycle stage each student is currently in.</div>'
     )
 
 
@@ -1103,6 +1129,16 @@ def render_executive_overview():
         unsafe_allow_html=True,
     )
 
+    # ---- Field mapping gate: no data is shown while a mapping is broken ----
+    mapping_error = check_field_mappings()
+    if mapping_error:
+        st.error(
+            "Executive Overview is unavailable because a field mapping is invalid. "
+            "Ask an admin to fix it in Admin Configuration → Field Mapping."
+        )
+        st.caption(mapping_error)
+        return
+
     # ---- Data ----
     try:
         all_df = get_executive_data()
@@ -1255,7 +1291,6 @@ def render_executive_overview():
 
     # ---- Student table ----
     render_student_table(df)
-
 
 if __name__ == "__main__":
     render_executive_overview()
