@@ -179,9 +179,8 @@ if not st.session_state.get('user'):
         .st-key-login_card {{
             background: rgba(255, 255, 255, 0.16);
             border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 24px 22px 20px 22px;
-            backdrop-filter: blur(8px);
             text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }}
