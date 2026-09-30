@@ -161,16 +161,16 @@ if not st.session_state.get('user'):
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
             padding-top: 3rem !important;
-            max-width: 400px !important;
+            max-width: 500px !important;
             margin-left: auto !important;
             margin-right: auto !important;
         }}
 
-        /* The card itself: never wider than 400px, always centered */
+        /* The card itself: never wider than 500px, always centered */
         .st-key-login_card,
         .st-key-login_card > div,
         .st-key-login_card [data-testid="stVerticalBlock"] {{
-            max-width: 400px !important;
+            max-width: 500px !important;
             width: 100% !important;
             margin-left: auto !important;
             margin-right: auto !important;
