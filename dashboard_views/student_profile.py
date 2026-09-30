@@ -1,4 +1,4 @@
-# STUDENT PROFILE.PY 9-28-26
+# STUDENT PROFILE.PY 9-28-26 (speed-optimized)
 
 import html
 import pandas as pd
@@ -47,6 +47,28 @@ STATUS_TONE = {
     "in-progress": "yellow", "pending": "yellow", "conditionally enrolled": "yellow",
     "incomplete": "red", "cancelled": "red",
 }
+
+
+# SPEED: cached wrappers so reruns (opening the dropdown pills, etc.) don't re-query the database.
+# The Save button already calls st.cache_data.clear(), so saved changes show up right away.
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_roster(program_id):
+    return get_student_roster_data(program_id=program_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_can_edit(user_id):
+    return can_edit(user_id)   # Save still calls require_edit(), which is the real permission gate
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_lifecycle_detail(student_id):
+    return get_student_lifecycle_detail(student_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_status_options(key, preferred):
+    return get_lifecycle_status_options(key, list(preferred))
 
 
 def tone_of(status):
@@ -234,7 +256,7 @@ if not active_program_id:
     st.warning("⏳ No program selected yet. Go to the Student Roster page and pick a program first.")
     st.stop()
 
-df = get_student_roster_data(program_id=active_program_id)
+df = cached_roster(active_program_id)
 header_cohort = "All Cohorts"
 
 # ---------------------------------------------------------------
@@ -252,8 +274,8 @@ with st.container(key="sp_top"):
         )
     if not df.empty:
         student_options = {
-            f"{row['StudentNumber']} — {row['Student']}": str(row["StudentNumber"])
-            for _, row in df.iterrows()
+            f"{num} — {name}": str(num)
+            for num, name in zip(df["StudentNumber"], df["Student"])
         }
         student_ids = list(student_options.values())
         labels = list(student_options.keys())
@@ -292,11 +314,11 @@ elif selected_label:
     advisers = [a for a in rows.get(adviser_col, pd.Series(dtype=object)).dropna().unique().tolist() if str(a).strip()]
     adviser_text = ", ".join(map(str, advisers)) or "None Assigned"
 
-    detail = get_student_lifecycle_detail(selected_id) or {}
+    detail = cached_lifecycle_detail(selected_id) or {}
     current = {k: (detail.get(f"{k}_status") or student.get(STATUS_FIELD[k]) or "") for k, *_ in PILLARS}
     updated = {k: detail.get(f"{k}_updated") for k, *_ in PILLARS}
 
-    editable = bool(user_id) and can_edit(user_id)
+    editable = bool(user_id) and cached_can_edit(user_id)
     pick_keys = [f"sp_pick_{k}_{selected_id}" for k, *_ in PILLARS] + [f"sp_pick_enroll_{selected_id}"]
 
     # ----------------- Student card -----------------
@@ -355,7 +377,7 @@ elif selected_label:
     with st.container(key="sp_pillars"):
         cols = st.columns(3)
         for col, (key, tag, title, preferred) in zip(cols, PILLARS):
-            options = get_lifecycle_status_options(key, preferred)
+            options = cached_status_options(key, tuple(preferred))
             if current[key] and current[key] not in options:
                 options = [current[key]] + options          # keep an unexpected DB value visible
             with col:

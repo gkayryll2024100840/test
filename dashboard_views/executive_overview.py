@@ -1,4 +1,5 @@
-# EXEC OVERVIEW 9-30-26
+# EXEC OVERVIEW MERGE
+# EXEC OVERVIEW 9-30-26 (speed-optimized)
 import html
 import io
 import json
@@ -20,6 +21,7 @@ from db_connect import (
     get_user_program,
     get_flagged_students,
     get_kpi_tiles,
+    get_stage_labels,   # US-30
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
 from field_mapping import load_mappings
@@ -63,8 +65,37 @@ ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
 LAST_UPDATED_CANDIDATES = ["LastUpdated", "UpdatedAt", "DateUpdated", "LastModified", "ModifiedAt"]
 ENROLLMENT_OPTIONS = ["All", "Enrolled", "Conditionally Enrolled"]
 TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
+# US-30: stage names come from Admin Config (Program_Stage.StageLabel), per program.
+# Inside this file stages keep their fixed keys ("Coursework", "Comprehensive Exam", "Capstone");
+# stage_name() turns a key into the label the user should see.
+STAGE_PILLAR = {"Coursework": "Coursework", "Comprehensive Exam": "CompExam", "Capstone": "Capstone"}
+_stage_labels = {}   # filled at the top of render_executive_overview() for the selected program
+
+
+def stage_name(stage):
+    """Display name for a stage key (program-specific label, US-30)."""
+    pillar = STAGE_PILLAR.get(stage)
+    return _stage_labels.get(pillar, stage) if pillar else stage
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_stage_labels(program_id):
+    return get_stage_labels(program_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_kpi_tiles(program_id):
+    return get_kpi_tiles(program_id=program_id, visible_only=True)
+
+
+def eo_col_labels():
+    return ["Student", "Cohort", stage_name("Coursework"), stage_name("Comprehensive Exam"),
+            stage_name("Capstone"), "Time in Stage", "Flag"]
+
+
 DRILL_STAGE_KEY = "eo_drill_stage"        # session_state key: the stage currently drilled into
 DRILL_CLEAR_LABEL = "← Back to all stages"
+DRILL_CHART_VERSION_KEY = "eo_drill_chart_v"   # bumped by "Back" to clear the chart's bar selection
 
 # ---------------------------------------------------------------------------
 # STYLES
@@ -520,7 +551,7 @@ def render_drill_breadcrumb(stage, count):
     chip = (f'<span style="display:inline-flex;align-items:center;gap:8px;'
             f'padding:4px 12px;border-radius:999px;background:rgba(185,27,33,.08);'
             f'border:1px solid rgba(185,27,33,.25);color:#B91B21;font-size:13px;font-weight:600;">'
-            f'Stage · {html.escape(stage)} · {count} student{"s" if count != 1 else ""}</span>')
+            f'Stage · {html.escape(stage_name(stage))} · {count} student{"s" if count != 1 else ""}</span>')
 
     c_left, c_right = st.columns([3, 1], vertical_alignment="center")
     with c_left:
@@ -533,6 +564,8 @@ def render_drill_breadcrumb(stage, count):
     with c_right:
         if st.button(DRILL_CLEAR_LABEL, key="eo_drill_back", use_container_width=True):
             st.session_state.pop(DRILL_STAGE_KEY, None)
+            # new chart key = the chart forgets the clicked bar (otherwise it re-opens the drill-down)
+            st.session_state[DRILL_CHART_VERSION_KEY] = st.session_state.get(DRILL_CHART_VERSION_KEY, 0) + 1
             st.rerun()
 
 def delta_html(hist, metric, cohort, kind="pct", higher_is_better=True):
@@ -580,7 +613,7 @@ def remaining_info_html(df: pd.DataFrame) -> str:
         .reindex(["Coursework", "Comprehensive Exam", "Capstone"], fill_value=0)
     )
     rows = "".join(
-        f'<div class="eo-tip-row"><span style="color:{STAGE_COLORS[stage]};font-weight:600;">{stage}</span>'
+        f'<div class="eo-tip-row"><span style="color:{STAGE_COLORS[stage]};font-weight:600;">{html.escape(stage_name(stage))}</span>'
         f'<span class="eo-tip-dots"></span><span>{n:,}</span></div>'
         for stage, n in breakdown.items()
     )
@@ -615,7 +648,7 @@ BASE_LAYOUT = dict(
 def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
     fig = go.Figure(
         go.Bar(
-            x=counts["Stage"],
+            x=[stage_name(s) for s in counts["Stage"]],   # US-30 labels (customdata keeps the stage key)
             y=counts["Count"],
             marker_color=[STAGE_COLORS[s] for s in counts["Stage"]],
             text=counts["Count"],
@@ -698,6 +731,7 @@ STUDENT_PROFILE_PAGE = "dashboard_views/student_profile.py"   # same page the St
 EO_ROWS_VISIBLE = 10    # students shown before the table scrolls
 EO_ROW_HEIGHT_PX = 64   # height of one row in px (nudge if 10 rows show a bit more / less)
 EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
+EO_PAGE_SIZES = [25, 50, 100]   # rows drawn per page (first = default)
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
 
 
@@ -753,34 +787,66 @@ def open_student_profile(student_id, program_id, program_code):
     st.switch_page(STUDENT_PROFILE_PAGE)
 
 
-def render_student_table(df: pd.DataFrame):
-    """Students At Risk table: only students past their program's At-Risk threshold
-    (and not finished with every stage), longest time in stage first."""
+def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
+    """Student table.
+
+    Default: "Students At Risk" = only students past their program's At-Risk threshold,
+    longest time in stage first.
+    drill_stage (US-21): ALL students in that lifecycle stage (at-risk ones first).
+    """
+    if drill_stage:
+        title = f"Students in {html.escape(stage_name(drill_stage))}"
+        subtitle = "Every student currently in this stage. At-risk students are listed first."
+    else:
+        title = "Students At Risk — Requires Follow-Up"
+        subtitle = ("Auto-flagged when a student stays in a stage longer than the "
+                    "program's At-Risk threshold (US-26 / US-27)")
     st.markdown(
         '<div class="eo-card-head" style="margin-top:18px;">'
-        '<div class="eo-card-title">Students At Risk — Requires Follow-Up</div>'
-        '<div class="eo-card-sub">Auto-flagged when a student stays in a stage longer than the '
-        "program's At-Risk threshold (US-26 / US-27)</div></div>",
+        f'<div class="eo-card-title">{title}</div>'
+        f'<div class="eo-card-sub">{subtitle}</div></div>',
         unsafe_allow_html=True,
     )
 
-    df = df[df["IsFlagged"]] if "IsFlagged" in df.columns else df.iloc[0:0]
-    if df.empty:
-        st.success("No students are at risk for these filters.")
+    if not drill_stage:
+        df = df[df["IsFlagged"]] if "IsFlagged" in df.columns else df.iloc[0:0]
+        if df.empty:
+            st.success("No students are at risk for these filters.")
+            return
+    elif df.empty:
+        st.info(f"No students are currently in the '{stage_name(drill_stage)}' stage with these filters.")
         return
 
-    df = df.sort_values(["DaysInStage", "LastName"], ascending=[False, True], na_position="last")
+    sort_cols, ascending = ["DaysInStage", "LastName"], [False, True]
+    if drill_stage and "IsFlagged" in df.columns:
+        sort_cols, ascending = ["IsFlagged"] + sort_cols, [False] + ascending
+    df = df.sort_values(sort_cols, ascending=ascending, na_position="last")
+
+    # ---- paging: only the current page of rows is drawn ----
+    total_rows = len(df)
+    page_size = st.session_state.get("eo_page_size", EO_PAGE_SIZES[0])
+    if page_size not in EO_PAGE_SIZES:
+        page_size = EO_PAGE_SIZES[0]
+    total_pages = max(1, -(-total_rows // page_size))
+    sig = (page_sig, drill_stage, page_size)
+    if st.session_state.get("eo_page_sig") != sig:       # filters / drilled stage changed -> back to page 1
+        st.session_state["eo_page_sig"] = sig
+        st.session_state["eo_page"] = 1
+    page_no = min(max(int(st.session_state.get("eo_page", 1)), 1), total_pages)
+    st.session_state["eo_page"] = page_no
+    page_start = (page_no - 1) * page_size
+    page_df = df.iloc[page_start:page_start + page_size]
 
     with st.container(key="eo_table"):
         # header row (stays put while the rows scroll)
         with st.container(key="eo_table_head"):
-            for col, label in zip(st.columns(EO_COL_WIDTHS, vertical_alignment="center"), EO_COL_LABELS):
+            for col, label in zip(st.columns(EO_COL_WIDTHS, vertical_alignment="center"), eo_col_labels()):
                 col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
 
-        height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
+        height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(page_df) > EO_ROWS_VISIBLE else None
         scroll_kwargs = {"height": height} if height else {}   # never pass height=None (older Streamlit rejects it)
         with st.container(border=False, key="eo_table_rows", **scroll_kwargs):
-            for r in df.to_dict("records"):
+            for r in page_df.to_dict("records"):
                 sid = str(r["StudentNumber"])
                 first = str(r["FirstName"] or "").strip()
                 last = str(r["LastName"] or "").strip()
@@ -810,6 +876,12 @@ def render_student_table(df: pd.DataFrame):
                     else '<span class="eo-muted">—</span>',
                     unsafe_allow_html=True,
                 )
+
+    if total_rows > EO_PAGE_SIZES[0]:
+        c_ps, c_pg, c_cap = st.columns([1, 1, 4], vertical_alignment="center")
+        c_ps.selectbox("Rows per page", EO_PAGE_SIZES, key="eo_page_size")
+        c_pg.number_input(f"Page (of {total_pages})", min_value=1, max_value=total_pages, step=1, key="eo_page")
+        c_cap.caption(f"Showing {page_start + 1}-{min(page_start + page_size, total_rows)} of {total_rows} students.")
 
 
 # ---------------------------------------------------------------------------
@@ -846,6 +918,8 @@ def export_table(df: pd.DataFrame) -> pd.DataFrame:
     """The at-risk table as it goes into the export: readable headers, longest time in stage first,
     dates as text."""
     out = df[[c for c in EXPORT_COLUMNS if c in df.columns]].copy()
+    if "ActiveStage" in out:
+        out["ActiveStage"] = out["ActiveStage"].map(stage_name)   # US-30 labels
     if "LastUpdated" in out:
         out["LastUpdated"] = out["LastUpdated"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
     for c in ("DaysInStage", "ExpectedDays"):
@@ -854,7 +928,11 @@ def export_table(df: pd.DataFrame) -> pd.DataFrame:
     sort_cols = [c for c in ("DaysInStage", "LastName", "FirstName") if c in out]
     out = out.sort_values(sort_cols, ascending=[c != "DaysInStage" for c in sort_cols], na_position="last")
     out = out.astype(object).where(out.notna(), "")
-    return out.rename(columns=EXPORT_COLUMNS)
+    headers = dict(EXPORT_COLUMNS)   # US-30: status columns use the program's stage labels
+    headers["CourseworkStatus"] = f"{stage_name('Coursework')} Status"
+    headers["CompExamStatus"] = f"{stage_name('Comprehensive Exam')} Status"
+    headers["CapstoneStatus"] = f"{stage_name('Capstone')} Status"
+    return out.rename(columns=headers)
 
 
 def compare_text(hist, metric, cohort, kind="pct", higher_is_better=True) -> str:
@@ -932,7 +1010,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     for c in ("A17", "B17"):
         ov[c].font = Font(bold=True, color="FFFFFF"); ov[c].fill = head_fill
     for i, (stage, n) in enumerate(zip(counts["Stage"], counts["Count"]), start=18):
-        ov.cell(i, 1, stage); ov.cell(i, 2, int(n))
+        ov.cell(i, 1, stage_name(stage)); ov.cell(i, 2, int(n))
         for c in (1, 2):
             ov.cell(i, c).border = thin
     # rows 18-22 = Coursework, Comprehensive Exam, Capstone, Completed, Inactive
@@ -1077,6 +1155,14 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     return buf.getvalue()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_export_xlsx(df, hist, filters, exported_by, labels):
+    """SPEED: building the workbook (tables + 3 charts) used to run on every rerun, even when you only
+    clicked a chart bar. Now it's built once per set of filters. `labels` (the program's stage names)
+    is only here so a renamed stage produces a fresh file."""
+    return build_export_xlsx(df, hist, filters, exported_by)
+
+
 def export_file_name(program_label, cohort, status) -> str:
     parts = ["at_risk_students", program_label, cohort, status, datetime.now().strftime("%Y-%m-%d")]
     return "_".join(re.sub(r"[^A-Za-z0-9]+", "-", str(p)).strip("-") for p in parts) + ".xlsx"
@@ -1146,9 +1232,9 @@ def resolve_kpi_value(source, df, program_label, selected_cohort, hist):
     if src == "total_enrolled":
         return f"{len(df):,}", None
     if src == "remaining":
-        return f"{int((~df['IsComplete']).sum()):,}", remaining_info_html(df)
+        return f"{int((~df['IsComplete'] & ~df['IsInactive']).sum()):,}", remaining_info_html(df)
     if src == "at_risk":
-        return f"{int(df['IsAtRisk'].sum()):,}", None
+        return f"{int(df['IsFlagged'].sum()):,}", None
     if src == "on_time_rate":
         return f"{on_time_rate(df):.1f}%", None
     if src == "overall_completion":
@@ -1181,7 +1267,8 @@ def resolve_kpi_subtext(source, df, program_label, selected_cohort, hist):
     if src == "remaining":
         return delta_html(hist, "Remaining", selected_cohort, kind="count", higher_is_better=False)
     if src == "at_risk":
-        return "Incomplete or Cancelled at current stage"
+        return ('<span class="eo-risk">Past the at-risk threshold</span>' if df["IsFlagged"].any()
+                else "Past the at-risk threshold")
     if src == "cohort_count":
         return "distinct cohorts in view"
     return "&nbsp;"
@@ -1235,6 +1322,9 @@ def render_executive_overview():
                 format_func=lambda pid: programs_by_id[pid]["ProgramName"],
             )
             selected_program = programs_by_id[selected_program_id]
+            # US-30: this program's stage names ("All Programs" -> the default names)
+            _stage_labels.clear()
+            _stage_labels.update(cached_stage_labels(selected_program["ProgramID"]))
 
         program_df = all_df
         if selected_program["ProgramID"] is not None:
@@ -1279,7 +1369,8 @@ def render_executive_overview():
     with f4:
         st.download_button(
             "⬇ Export Excel",
-            data=build_export_xlsx(df, hist, export_filters, _current_user_label()) if not df.empty else b"",
+            data=(cached_export_xlsx(df, hist, export_filters, _current_user_label(),
+                                     tuple(sorted(_stage_labels.items()))) if not df.empty else b""),
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
@@ -1295,7 +1386,7 @@ def render_executive_overview():
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
 
-    tiles = get_kpi_tiles(program_id=selected_program["ProgramID"], visible_only=True)
+    tiles = cached_kpi_tiles(selected_program["ProgramID"])
 
     if not tiles:
         st.info("No KPI tiles are configured for this program. Add them in Admin Config.")
@@ -1331,7 +1422,7 @@ def render_executive_overview():
                 lifecycle_bar(stage_counts),
                 use_container_width=True,
                 config=chart_config,
-                key="eo_lifecycle_chart",
+                key=f"eo_lifecycle_chart_{st.session_state.get(DRILL_CHART_VERSION_KEY, 0)}",
                 on_select="rerun",
                 selection_mode="points",
             )
@@ -1343,8 +1434,8 @@ def render_executive_overview():
             if pts:
                 clicked_stage = pts[0].get("customdata")
                 if clicked_stage and st.session_state.get(DRILL_STAGE_KEY) != clicked_stage:
+                    # no st.rerun() needed: the student table further down reads this value in the same run
                     st.session_state[DRILL_STAGE_KEY] = clicked_stage
-                    st.rerun()
 
     with c2:
         with st.container(border=True):
@@ -1385,17 +1476,15 @@ def render_executive_overview():
                 else:
                     st.info("At least two cohorts are needed to show a trend.")
 
-        # ---- Student table (US-21: optionally filtered to the drilled-in stage) ----
+    # ---- Student table (US-21: a clicked bar shows every student in that stage) ----
     drill_stage = st.session_state.get(DRILL_STAGE_KEY)
+    table_sig = (selected_program["ProgramID"], selected_status, selected_cohort)
     if drill_stage:
         drilled_df = df[df["ActiveStage"] == drill_stage]
         render_drill_breadcrumb(drill_stage, len(drilled_df))
-        if drilled_df.empty:
-            st.info(f"No students are currently in the '{drill_stage}' stage with these filters.")
-        else:
-            render_student_table(drilled_df)
+        render_student_table(drilled_df, drill_stage=drill_stage, page_sig=table_sig)
     else:
-        render_student_table(df)
+        render_student_table(df, page_sig=table_sig)
 
 if __name__ == "__main__":
     render_executive_overview()
