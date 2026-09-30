@@ -1,7 +1,4 @@
 # DB_CONNECT.PY (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
-print("DB_HOST =", repr(os.getenv("DB_HOST")))
-print("DB_USER =", repr(os.getenv("DB_USER")))
-
 import os
 import time
 import threading
@@ -24,7 +21,8 @@ db_config = {
     "database": os.getenv("DB_NAME"),
     "port": int(os.getenv("DB_PORT", 3306))
 }
-
+print("DB_HOST =", repr(os.getenv("DB_HOST")))
+print("DB_USER =", repr(os.getenv("DB_USER")))
 # Standardized status mapping for US-07, US-08, and US-09
 LIFECYCLE_STATUS_MAP = {
     # US-07: Pending, Cancelled, Completed
