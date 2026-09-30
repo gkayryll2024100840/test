@@ -340,24 +340,28 @@ refresh_schedule_section()
 # KPI TILES (US-29) — stored as JSON on Program.KpiTiles
 # ============================================================
 from db_connect import (
-    get_all_programs,
     get_all_kpi_tiles,
     save_kpi_tiles,
     reset_kpi_tiles,
 )
 
-st.markdown("---")
-st.subheader("KPI Tiles")
-st.markdown(
-    "Configure the tiles shown on the Executive Overview. "
-    "Tiles are stored per program. Programs with no custom set — including any program "
-    "created later from the Student Roster — fall back to the built-in defaults."
+
+section_divider()
+section_header(
+    "KPI Tiles",
+    "Configure the tiles shown on the Executive Overview. Tiles are stored per program. "
+    "Programs with no custom set — including any program created later from the Student Roster — "
+    "fall back to the built-in defaults.",
 )
 
-programs = get_all_programs(active_only=False)
-if not programs:
-    st.info("No programs available yet.")
-else:
+
+@st.fragment
+def kpi_tiles_section():
+    programs = cached_programs()   # already defined above; short TTL, shared with other sections
+    if not programs:
+        st.info("No programs available yet.")
+        return
+
     prog_choice = st.selectbox(
         "Program",
         programs,
@@ -397,7 +401,7 @@ else:
                     ok, err = save_kpi_tiles(pid, tiles)
                     if ok:
                         st.success("Removed.")
-                        st.rerun()
+                        st.rerun(scope="fragment")
                     else:
                         st.error(err)
 
@@ -408,19 +412,25 @@ else:
             require_edit()
             ok, err = save_kpi_tiles(pid, tiles)
             if ok:
-                st.success("Saved.")
-                st.rerun()
+                st.session_state["kpi_flash"] = (True, "KPI tiles saved.")
+                st.rerun(scope="fragment")
             else:
-                st.error(err)
+                st.session_state["kpi_flash"] = (False, err)
+                st.rerun(scope="fragment")
     with col_b:
         if st.button("Reset to Defaults", key="kpi_reset"):
             require_edit()
             ok, err = reset_kpi_tiles(pid)
             if ok:
-                st.success("Reset.")
-                st.rerun()
+                st.session_state["kpi_flash"] = (True, "Reset to built-in defaults.")
+                st.rerun(scope="fragment")
             else:
-                st.error(err)
+                st.session_state["kpi_flash"] = (False, err)
+                st.rerun(scope="fragment")
+
+    flash = st.session_state.pop("kpi_flash", None)
+    if flash:
+        (st.success if flash[0] else st.error)(flash[1])
 
     # ----- Add a new tile -----
     st.markdown("#### Add a Tile")
@@ -456,10 +466,14 @@ else:
                 })
                 ok, err = save_kpi_tiles(pid, tiles)
                 if ok:
-                    st.success(f"Added **{new_label}**.")
-                    st.rerun()
+                    st.session_state["kpi_flash"] = (True, f"Added '{new_label}'.")
+                    st.rerun(scope="fragment")
                 else:
-                    st.error(err)
+                    st.session_state["kpi_flash"] = (False, err)
+                    st.rerun(scope="fragment")
+
+
+kpi_tiles_section()
 # ============================================================
 # USER PERMISSIONS SECTION (US-13)
 # ============================================================

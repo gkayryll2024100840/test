@@ -1267,26 +1267,32 @@ def render_executive_overview():
             args=(export_filters, int(at_risk_students(df).shape[0]), file_name),
         )
 
-    # ---- KPI row ----
-    total_label = "Total Enrolled" if selected_status == "All" else f"Total {selected_status}"
+    # ---- KPI row (US-29: driven by Program.KpiTiles config) ----
     program_label = (
         "All Programs" if selected_program["ProgramID"] is None
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
 
-    render_kpi_row([
-        kpi_card(total_label, f"{len(df):,}", f"{html.escape(program_label)} · {html.escape(selected_cohort)}"),
-        kpi_card("On-Time Graduation Rate", f"{on_time_rate(df):.1f}%",
-                 delta_html(hist, "OnTime", selected_cohort)),
-        kpi_card("Overall Completion", f"{completion_rate(df):.1f}%",
-                 delta_html(hist, "Completion", selected_cohort)),
-        kpi_card("Remaining Students", f"{int((~df['IsComplete'] & ~df['IsInactive']).sum()):,}",
-                 delta_html(hist, "Remaining", selected_cohort, kind="count", higher_is_better=False),
-                 info_html=remaining_info_html(df)),
-        kpi_card("Students at Risk", f"{int(df['IsFlagged'].sum()):,}",
-                 '<span class="eo-risk">Past the at-risk threshold</span>' if df["IsFlagged"].any()
-                 else "Past the at-risk threshold"),
-    ])
+    tiles = get_kpi_tiles(program_id=selected_program["ProgramID"], visible_only=True)
+
+    if not tiles:
+        st.info("No KPI tiles are configured for this program. Add them in Admin Config.")
+    else:
+        cards = []
+        for t in tiles:
+            src = (t.get("source") or "").strip().lower()
+            label = html.escape(str(t.get("label", "")))
+
+            # Preserve the enrollment-filter wording on the Total tile
+            if src == "total_enrolled" and selected_status != "All":
+                label = f"Total {html.escape(selected_status)}"
+
+            value, info = resolve_kpi_value(src, df, program_label, selected_cohort, hist)
+            sub = resolve_kpi_subtext(src, df, program_label, selected_cohort, hist)
+
+            cards.append(kpi_card(label, value, sub, info_html=info))
+
+        render_kpi_row(cards)
 
     # ---- Charts ----
     charts_row = st.container(key="eo_charts")
