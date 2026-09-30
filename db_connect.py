@@ -1,7 +1,9 @@
+# DB_CONNECT.PY (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
 import os
 import time
 import threading
-import mysql.connector 
+import mysql.connector
+from mysql.connector import pooling
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv 
@@ -35,11 +37,45 @@ LIFECYCLE_STATUS_MAP = {
     "defended": "Defended for Completion"
 }
 
+# SPEED: opening a brand-new MySQL connection (TCP + login, sometimes TLS) costs far more than the
+# queries themselves, and every function used to open its own. This pool keeps a few connections open
+# and hands them out again. conn.close() still works exactly as before: for a pooled connection it just
+# returns it to the pool (and resets the session), so no caller has to change.
+_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 8))
+_pool = None
+_pool_failed_at = 0.0
+_pool_lock = threading.Lock()
+
+
+def _get_pool():
+    global _pool, _pool_failed_at
+    if _pool is not None:
+        return _pool
+    with _pool_lock:
+        if _pool is None:
+            if time.monotonic() - _pool_failed_at < 30:      # DB was unreachable a moment ago: don't hammer it
+                raise pooling.PoolError("connection pool unavailable")
+            try:
+                _pool = pooling.MySQLConnectionPool(
+                    pool_name="etysb_pool", pool_size=_POOL_SIZE, pool_reset_session=True,
+                    connection_timeout=10, **db_config,
+                )
+            except Exception:
+                _pool_failed_at = time.monotonic()
+                raise
+    return _pool
+
+
 def get_db_connection():
-    """Return a live MySQL connection using the shared db_config.
-    Callers are responsible for closing the connection.
-    """
-    return mysql.connector.connect(**db_config)
+    """Return a live MySQL connection (from the pool). Callers must call .close() when done -
+    that hands it back to the pool. Falls back to a plain connection if the pool is full/unavailable."""
+    try:
+        conn = _get_pool().get_connection()
+        if not conn.is_connected():            # idle connection dropped by the server -> reconnect it
+            conn.reconnect(attempts=2, delay=0)
+        return conn
+    except (pooling.PoolError, mysql.connector.Error):
+        return mysql.connector.connect(**db_config)
 
 def format_mysql_error(err):
     """Translates MySQL error codes into clean error messages."""
@@ -114,9 +150,10 @@ def get_student_roster_data(program_id=None):
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
         # 3. Run the program-scoped query
-        conn = mysql.connector.connect(**db_config)
+        # SPEED: the adviser sub-query is limited to THIS program's students (it used to group the
+        # adviser table for every program in the school before joining).
         query = """
-            SELECT 
+            SELECT
                 s.StudentNumber,
                 CONCAT(s.FirstName, ' ', s.LastName) AS Student,
                 s.Cohort,
@@ -131,15 +168,19 @@ def get_student_roster_data(program_id=None):
             LEFT JOIN (
                 -- students with 2 advisers -> one row, e.g. "Dr. A, Dr. B"
                 SELECT sa.StudentNumber,
-                       GROUP_CONCAT(a.AdviserName ORDER BY a.AdviserName SEPARATOR ', ') AS AdviserName
+                       GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
                 FROM Student_Adviser sa
-                JOIN Adviser a ON sa.AdviserID = a.AdviserID
+                JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
+                JOIN Students sp ON sp.StudentNumber = sa.StudentNumber AND sp.ProgramID = %s
                 GROUP BY sa.StudentNumber
             ) a ON a.StudentNumber = s.StudentNumber
             WHERE s.ProgramID = %s
         """
-        df = pd.read_sql(query, conn, params=(program_id,))
-        conn.close()
+        conn = get_db_connection()
+        try:
+            df = pd.read_sql(query, conn, params=(program_id, program_id))
+        finally:
+            conn.close()
         return df
 
     except Exception as e:
@@ -159,32 +200,33 @@ def get_last_updated_time():
 def get_student_profile_data(student_number):
     """Fetches full student details for a specific student number."""
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        # Adviser link lives on the Student_Adviser junction table.
-        query = """
-            SELECT 
-                s.StudentNumber,
-                CONCAT(s.LastName, ', ', s.FirstName) AS Student,
-                s.Cohort,
-                s.EnrollmentStatus,
-                a.AdviserName,
-                sl.CourseworkStatus,
-                sl.CompExamStatus,
-                sl.CapstoneStatus
-            FROM Students s
-            LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
-            LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
-            WHERE s.StudentNumber = %s
-        """
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(query, (str(student_number),))
-        student_data = cursor.fetchone()
-        
-        cursor.close()
-        conn.close()
+            # Adviser link lives on the Student_Adviser junction table.
+            query = """
+                SELECT
+                    s.StudentNumber,
+                    CONCAT(s.LastName, ', ', s.FirstName) AS Student,
+                    s.Cohort,
+                    s.EnrollmentStatus,
+                    a.AdviserName,
+                    sl.CourseworkStatus,
+                    sl.CompExamStatus,
+                    sl.CapstoneStatus
+                FROM Students s
+                LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
+                LEFT JOIN Student_Adviser sa ON s.StudentNumber = sa.StudentNumber
+                LEFT JOIN Adviser a ON sa.AdviserID = a.AdviserID
+                WHERE s.StudentNumber = %s
+            """
+
+            cursor.execute(query, (str(student_number),))
+            student_data = cursor.fetchone()
+            cursor.close()
+        finally:
+            conn.close()
 
         # Normalize single record values if present
         if student_data:
@@ -192,7 +234,7 @@ def get_student_profile_data(student_number):
                 val = str(student_data.get(col, "")).strip().lower()
                 if val in LIFECYCLE_STATUS_MAP:
                     student_data[col] = LIFECYCLE_STATUS_MAP[val]
-        
+
         return student_data
 
     except Exception as e:
@@ -208,9 +250,6 @@ def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
         return 0
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         conditions = ["ProgramID = %s"]
         params = [program_id]
 
@@ -224,10 +263,14 @@ def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
 
         query = "SELECT COUNT(*) FROM Students WHERE " + " AND ".join(conditions)
 
-        cursor.execute(query, tuple(params))
-        count = cursor.fetchone()[0]
-        cursor.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            count = cursor.fetchone()[0]
+            cursor.close()
+        finally:
+            conn.close()
         return count
 
     except Exception as e:
@@ -239,17 +282,19 @@ def get_available_cohorts(program_id=None):
         return []
 
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        query = (
-            "SELECT DISTINCT Cohort FROM Students "
-            "WHERE Cohort IS NOT NULL AND ProgramID = %s "
-            "ORDER BY Cohort DESC"
-        )
-        cursor.execute(query, (program_id,))
-        cohorts = [row[0] for row in cursor.fetchall()]
-        cursor.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor()
+            query = (
+                "SELECT DISTINCT Cohort FROM Students "
+                "WHERE Cohort IS NOT NULL AND ProgramID = %s "
+                "ORDER BY Cohort DESC"
+            )
+            cursor.execute(query, (program_id,))
+            cohorts = [row[0] for row in cursor.fetchall()]
+            cursor.close()
+        finally:
+            conn.close()
         return cohorts
     except Exception as e:
         print(f"Failed to fetch cohorts: {e}")
@@ -275,9 +320,6 @@ def get_all_programs(active_only=True):
               "IsActive": int, "CreatedAt": datetime}, ...]
     """
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
         query = """
             SELECT ProgramID, ProgramCode, ProgramName, IsActive, CreatedAt
             FROM Program
@@ -286,10 +328,14 @@ def get_all_programs(active_only=True):
             query += " WHERE IsActive = 1"
         query += " ORDER BY ProgramName ASC"
 
-        cursor.execute(query)
-        programs = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query)
+            programs = cursor.fetchall()
+            cursor.close()
+        finally:
+            conn.close()
         return programs
 
     except Exception as e:
@@ -315,20 +361,20 @@ def get_user_program(user_id):
     user_id = str(user_id).strip()
 
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-
         query = """
             SELECT p.ProgramID, p.ProgramCode, p.ProgramName, p.IsActive
             FROM Users u
             JOIN Program p ON u.CurrentProgramID = p.ProgramID
             WHERE u.UserID = %s
         """
-        cursor.execute(query, (user_id,))
-        row = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query, (user_id,))
+            row = cursor.fetchone()
+            cursor.close()
+        finally:
+            conn.close()
         return row  # None if no match
 
     except mysql.connector.Error as e:
@@ -361,7 +407,7 @@ def create_program(program_code, program_name, is_active=1):
     is_active = 1 if is_active else 0
 
     try:
-        conn = mysql.connector.connect(**db_config)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # ProgramID auto-increments; CreatedAt uses table default CURRENT_TIMESTAMP.
@@ -421,7 +467,7 @@ def set_user_program(user_id, program_id):
             return False, f"Invalid program ID: {program_id!r}"
 
     try:
-        conn = mysql.connector.connect(**db_config)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         query = "UPDATE Users SET CurrentProgramID = %s WHERE UserID = %s"
@@ -460,7 +506,7 @@ def set_user_program(user_id, program_id):
 # ONE query against INFORMATION_SCHEMA loads every (table, column) pair of the
 # current database. Validating a mapping is then an in-memory lookup, instead of
 # a new connection + query per column on every Streamlit rerun.
-_SCHEMA_TTL_SECONDS = 60        # how long a successful snapshot is trusted
+_SCHEMA_TTL_SECONDS = 300       # how long a successful snapshot is trusted (refresh_schema_cache() forces a reload)
 _SCHEMA_RETRY_SECONDS = 10      # wait before retrying after a failed load
 _SCHEMA_CONNECT_TIMEOUT = 5     # fail fast if the DB host is unreachable
 
@@ -480,14 +526,16 @@ def get_user_permission(user_id):
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT RolePermission FROM Users WHERE UserID = %s",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT RolePermission FROM Users WHERE UserID = %s",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+        finally:
+            conn.close()
 
         if not row or not row.get("RolePermission"):
             return "View Only"
@@ -672,41 +720,43 @@ def find_invalid_mappings(mappings):
 def get_my_adviser_name(user_id):
     """Resolves the AdviserName linked to a given UserID, for US-23's
     auto-scoped "my advisees" roster filter.
- 
+
     Schema assumption: Adviser.UserID (int, NULLABLE, FK to Users.UserID)
     links an Adviser row to the login that IS that adviser. If this column
     doesn't exist yet on your live table, add it first:
         ALTER TABLE Adviser ADD COLUMN UserID INT NULL;
         ALTER TABLE Adviser ADD FOREIGN KEY (UserID) REFERENCES Users(UserID);
- 
+
     Args:
         user_id: The UserID of the logged-in user.
- 
+
     Returns:
         str: the adviser's AdviserName, when this user has a linked Adviser row.
         None: when user_id is empty, the user has no Adviser row, or on error.
     """
     if user_id is None or str(user_id).strip() == "":
         return None
- 
+
     user_id = str(user_id).strip()
- 
+
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT AdviserName FROM Adviser WHERE UserID = %s",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT AdviserName FROM Adviser WHERE UserID = %s",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+        finally:
+            conn.close()
         return row["AdviserName"] if row else None
- 
+
     except mysql.connector.Error as e:
         print(f"Failed to fetch adviser name: {format_mysql_error(e)}")
         return None
- 
+
     except Exception as e:
         print(f"Failed to fetch adviser name: {e}")
         return None
@@ -767,7 +817,7 @@ def _get_lifecycle_schema(force=False):
         return cache["schema"]
 
     tables = [_LIFECYCLE_TABLE] + [p["history"] for p in LIFECYCLE_PILLARS.values()]
-    conn = mysql.connector.connect(**db_config)
+    conn = get_db_connection()
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
@@ -857,15 +907,17 @@ def get_student_lifecycle_detail(student_number):
             select.append(f"`{p['status_col']}` AS `{key}_status`")
             select.append(f"`{p['updated_col']}` AS `{key}_updated`" if p["updated_col"] else f"NULL AS `{key}_updated`")
         select.append(f"`{schema['last_col']}` AS `last_update`" if schema["last_col"] else "NULL AS `last_update`")
-        conn = mysql.connector.connect(**db_config)
-        cur = conn.cursor(dictionary=True)
-        cur.execute(
-            f"SELECT {', '.join(select)} FROM `{schema['lifecycle_table']}` WHERE StudentNumber = %s",
-            (str(student_number),),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
+                f"SELECT {', '.join(select)} FROM `{schema['lifecycle_table']}` WHERE StudentNumber = %s",
+                (str(student_number),),
+            )
+            row = cur.fetchone()
+            cur.close()
+        finally:
+            conn.close()
         return row
     except Exception as e:
         print(f"Failed to fetch lifecycle detail: {e}")
@@ -887,7 +939,7 @@ def update_lifecycle_statuses(student_number, changes):
 
     life = schema["lifecycle_table"]
     sn = str(student_number)
-    conn = mysql.connector.connect(**db_config)
+    conn = get_db_connection()
     try:
         if conn.in_transaction:
             conn.rollback()
@@ -977,7 +1029,7 @@ ENROLLMENT_HISTORY_TABLE = "Enrollment_Status_History"
 def update_enrollment_status(student_number, new_status):
     """Returns (True, message) or (False, error message). Nothing is saved if any step fails."""
     sn = str(student_number)
-    conn = mysql.connector.connect(**db_config)
+    conn = get_db_connection()
     try:
         cur = conn.cursor()
         cur.execute(
@@ -1042,7 +1094,7 @@ def update_enrollment_status(student_number, new_status):
 # ===========================================================================
 PROGRAM_STAGES = [
     # Pillar,       StageLabel,           StageOrder
-    ("Coursework", "Coursework",         1),
+    ("Coursework", "Coursework Completion", 1),   # US-30: ETYSB tracker names
     ("CompExam",   "Comprehensive Exam", 2),
     ("Capstone",   "Capstone Paper",     3),
 ]
@@ -1123,14 +1175,16 @@ def get_flagged_students(program_id=None):
     Returns an empty DataFrame on error (the dashboard then shows "—").
     """
     try:
-        conn = get_db_connection()
         sql = "SELECT * FROM v_student_stage_flags"
         params = None
         if program_id is not None:
             sql += " WHERE ProgramID = %s"
             params = (program_id,)
-        df = pd.read_sql(sql + " ORDER BY is_flagged DESC, days_in_stage DESC", conn, params=params)
-        conn.close()
+        conn = get_db_connection()
+        try:
+            df = pd.read_sql(sql + " ORDER BY is_flagged DESC, days_in_stage DESC", conn, params=params)
+        finally:
+            conn.close()
         return df
     except Exception as e:
         print(f"Failed to fetch stage flags: {e}")
@@ -1153,6 +1207,7 @@ _SCHEDULER_CHECK_SECONDS = 30
 _scheduler_lock = threading.Lock()
 _scheduler_started = False
 _settings_table_ready = False   # CREATE TABLE only runs once per app process, not on every read
+_last_handled_date = None       # SPEED: once today's run is done/claimed, skip the DB claim on later 30 s checks
 
 
 def _ensure_settings_table(cur):
@@ -1282,6 +1337,7 @@ def set_refresh_time(user_id, hhmm):
 
 
 def run_scheduled_refresh_if_due(now=None):
+    global _last_handled_date
     """Runs tonight's refresh if its time has passed and it hasn't run yet today. Returns True if it ran."""
     now = now or _now_local()
     try:
@@ -1292,6 +1348,8 @@ def run_scheduled_refresh_if_due(now=None):
         return False
 
     today = now.date().isoformat()
+    if _last_handled_date == today:
+        return False
     # claim today's run in the database, so only ONE process runs it even if several are up
     conn = get_db_connection()
     try:
@@ -1310,6 +1368,7 @@ def run_scheduled_refresh_if_due(now=None):
         cur.close()
     finally:
         conn.close()
+    _last_handled_date = today
     if not claimed:
         return False   # already ran today
 
@@ -1456,3 +1515,101 @@ def reset_kpi_tiles(program_id):
         return True, None
     except Exception as e:
         return False, str(e)
+
+
+# ===========================================================================
+# US-30: PROGRAM-SPECIFIC STAGE LABELS (terminology)
+#
+#   Each program can rename its 3 stages (e.g. "Capstone Paper" -> "Thesis").
+#   Labels live in Program_Stage.StageLabel (one row per program per stage),
+#   the same rows that hold the At-Risk threshold (ExpectedDays).
+#   Every page asks get_stage_labels(program_id) for the names, so one change
+#   in Admin Config shows up everywhere. The v_student_stage_flags view also
+#   reads StageLabel, so the At-Risk reasons use the new names too.
+# ===========================================================================
+
+# Default names = the ETYSB tracker's existing terms (used when a program has no label saved,
+# and when a page shows "All Programs").
+DEFAULT_STAGE_LABELS = {
+    "Coursework": "Coursework Completion",
+    "CompExam":   "Comprehensive Exam",
+    "Capstone":   "Capstone Paper",
+}
+STAGE_LABEL_MAX_LENGTH = 50
+_STAGE_ORDER_BY_PILLAR = {"Coursework": 1, "CompExam": 2, "Capstone": 3}
+
+
+def get_stage_labels(program_id=None):
+    """{"Coursework": ..., "CompExam": ..., "Capstone": ...} for one program.
+
+    program_id=None (e.g. "All Programs") or any error -> the default labels.
+    A stage with no saved label also falls back to its default.
+    """
+    labels = dict(DEFAULT_STAGE_LABELS)
+    if program_id is None:
+        return labels
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT Pillar, StageLabel FROM Program_Stage WHERE ProgramID = %s", (program_id,))
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"Failed to fetch stage labels: {e}")
+        return labels
+
+    by_lower = {k.lower(): k for k in DEFAULT_STAGE_LABELS}   # 'coursework' / 'Coursework' both match
+    for pillar, label in rows:
+        pillar = pillar.decode() if isinstance(pillar, (bytes, bytearray)) else str(pillar)
+        key = by_lower.get(pillar.strip().lower())
+        if key and label is not None and str(label).strip():
+            labels[key] = str(label).strip()
+    return labels
+
+
+def set_stage_label(user_id, program_id, pillar, label):
+    """Rename one stage for one program. Edit permission only (blocked attempts are logged).
+
+    Returns (True, message) or (False, error message).
+    """
+    if program_id is None:
+        return False, "Pick a program first."
+    if pillar not in DEFAULT_STAGE_LABELS:
+        return False, f"Unknown stage: {pillar!r}"
+    label = str(label or "").strip()
+    if not label:
+        return False, "A stage label can't be empty."
+    if len(label) > STAGE_LABEL_MAX_LENGTH:
+        return False, f"Keep stage labels under {STAGE_LABEL_MAX_LENGTH} characters."
+    if not can_edit(user_id):
+        log_permission_attempt(user_id)
+        return False, "You have View Only access, so you can't change stage labels."
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            # Row already there (usual case) -> only the label changes.
+            # No row yet -> create it, reusing the program's current At-Risk threshold.
+            cur.execute(
+                "INSERT INTO Program_Stage (ProgramID, Pillar, StageLabel, StageOrder, IsRequired, ExpectedDays) "
+                "VALUES (%s, %s, %s, %s, 1, %s) "
+                "ON DUPLICATE KEY UPDATE StageLabel = VALUES(StageLabel)",
+                (program_id, pillar, label, _STAGE_ORDER_BY_PILLAR[pillar], get_program_threshold(program_id)),
+            )
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+        return True, f'Saved "{label}".'
+    except mysql.connector.IntegrityError as e:
+        if e.errno == 1452:
+            return False, f"Program ID {program_id} does not exist."
+        return False, f"Integrity error: {e.msg}"
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+    except Exception as e:
+        return False, f"Unexpected error: {e}"

@@ -1,3 +1,4 @@
+# COMPONENTS.PY (speed-optimized: header repaints in place instead of rerunning the page)
 """
 Unified reusable UI components and styles for Student Roster and Student Profile.
 Responsive dual-theme (Light & Dark mode) enterprise styling with accessible contrast steps
@@ -1171,7 +1172,14 @@ def set_header_context(program=_UNSET, cohort=_UNSET):
     ctx = {"page": st.session_state.get("_hdr_page"), "program": program, "cohort": cohort}
     st.session_state["_hdr_ctx"] = ctx
     if st.session_state.get("_hdr_drawn") != ctx:
-        st.rerun()
+        # SPEED: repaint the header in place instead of st.rerun(). The old rerun made EVERY page run
+        # twice each time it was opened or a cohort/program filter changed.
+        slot = st.session_state.get("_hdr_slot")
+        if slot is not None:
+            _paint_header(slot, ctx, st.session_state.get("_hdr_initials", ""))
+            st.session_state["_hdr_drawn"] = ctx
+        else:
+            st.rerun()   # old behaviour, only if the header slot doesn't exist for some reason
 
 
 def _resolve_program(value, user_id):
@@ -1183,6 +1191,38 @@ def _resolve_program(value, user_id):
         if p["ProgramID"] == value or str(p["ProgramCode"]).strip().upper() == str(value).strip().upper():
             return p
     return None
+
+
+def _paint_header(slot, ctx, initials):
+    """Draws the red + yellow header bars into `slot` for the given context (None = All Programs / All Cohorts)."""
+    program = _resolve_program(ctx["program"] if ctx else _UNSET, None)
+    if program:
+        program_text = f'{program["ProgramCode"]} ({SCHOOL_NAME})'
+    else:
+        program_text = f"All Programs ({SCHOOL_NAME})"
+
+    cohort = ctx["cohort"] if ctx else _UNSET
+    # page hasn't picked a cohort -> "All Cohorts"
+    term = "All Cohorts" if cohort in (_UNSET, None, "", "All Cohorts") else cohort
+
+    slot.markdown(
+        f"""
+<div class="ps-header">
+  <div class="ps-red">
+    <div class="ps-logo">{_logo_html()}</div>
+    <div><div class="ps-kicker">{html.escape(UNIVERSITY_LINE)}</div><div class="ps-title">{html.escape(APP_TITLE)}</div></div>
+  </div>
+  <div class="ps-yellow">
+    <div class="ps-meta"><span class="ps-meta-label">Program Instance</span><span class="ps-meta-sep"></span>
+      <span class="ps-meta-value">{html.escape(program_text)}</span></div>
+    <div class="ps-meta"><span class="ps-meta-label">Cohort</span><span class="ps-meta-sep"></span>
+      <span class="ps-meta-value">{html.escape(str(term))}</span></div>
+  </div>
+</div>
+<div class="ps-rail"><div class="ps-avatar">{initials}</div></div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def render_app_shell(user: dict, on_logout=None, page_key=None):
@@ -1204,38 +1244,15 @@ def render_app_shell(user: dict, on_logout=None, page_key=None):
         ctx = None
     st.session_state["_hdr_drawn"] = ctx
 
-    program = _resolve_program(ctx["program"] if ctx else _UNSET, user_id)
-    if program:
-        program_text = f'{program["ProgramCode"]} ({SCHOOL_NAME})'
-    else:
-        program_text = f"All Programs ({SCHOOL_NAME})"
-
-    cohort = ctx["cohort"] if ctx else _UNSET
-    # page hasn't picked a cohort -> "All Cohorts"
-    term = "All Cohorts" if cohort in (_UNSET, None, "", "All Cohorts") else cohort
     access = _permission_for_user(user_id) if user_id is not None else "View Only"
 
     st.markdown(SHELL_CSS, unsafe_allow_html=True)
 
-    # header + rail in ONE markdown element (no extra gaps)
-    st.markdown(
-        f"""
-<div class="ps-header">
-  <div class="ps-red">
-    <div class="ps-logo">{_logo_html()}</div>
-    <div><div class="ps-kicker">{html.escape(UNIVERSITY_LINE)}</div><div class="ps-title">{html.escape(APP_TITLE)}</div></div>
-  </div>
-  <div class="ps-yellow">
-    <div class="ps-meta"><span class="ps-meta-label">Program Instance</span><span class="ps-meta-sep"></span>
-      <span class="ps-meta-value">{html.escape(program_text)}</span></div>
-    <div class="ps-meta"><span class="ps-meta-label">Cohort</span><span class="ps-meta-sep"></span>
-      <span class="ps-meta-value">{html.escape(str(term))}</span></div>
-  </div>
-</div>
-<div class="ps-rail"><div class="ps-avatar">{initials}</div></div>
-""",
-        unsafe_allow_html=True,
-    )
+    # header + rail in ONE markdown element (no extra gaps), inside a slot the page can repaint later
+    header_slot = st.empty()
+    st.session_state["_hdr_slot"] = header_slot
+    st.session_state["_hdr_initials"] = initials
+    _paint_header(header_slot, ctx, initials)
 
     # "Data" block: manual refresh for urgent updates (right under the page links, away from Log Out)
     with st.sidebar.container(key="ps_data_card"):

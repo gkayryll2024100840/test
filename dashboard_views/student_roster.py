@@ -1,6 +1,8 @@
-# STUDENT ROSTER.PY 9-30-26
+# STUDENT ROSTER.PY 9-30-26 (speed-optimized)
 
 import html
+from functools import lru_cache
+
 import streamlit as st
 from permissions import require_edit
 import re
@@ -17,6 +19,7 @@ from db_connect import (
     set_user_program,
     get_user_program,
     get_my_adviser_name,   # NEW -- see db_connect_addition.py, needs to be added to db_connect.py
+    get_stage_labels,      # US-30: program-specific stage names
     get_flagged_students,  # US-26/27: time in stage + At-Risk flag (v_student_stage_flags view)
 )
  
@@ -35,10 +38,48 @@ st.set_page_config(page_title="Student Roster", layout="wide")
 ROWS_VISIBLE = 10
 ROW_HEIGHT_PX = 58
 
+# SPEED: only this many students are drawn per page. Every row is ~10 Streamlit widgets, so drawing
+# hundreds of rows at once was the main reason the page felt slow. The first option is the default.
+PAGE_SIZE_OPTIONS = [25, 50, 100]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_stage_labels(program_id):
+    """US-30: this program's stage names (set in Admin Config)."""
+    return get_stage_labels(program_id)
+
+
+# SPEED: these wrap the database calls so a normal rerun (typing in search, changing a filter, etc.)
+# doesn't hit the database again. Saving on Student Profile calls st.cache_data.clear(), which empties all of these.
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_roster(program_id):
+    return get_student_roster_data(program_id=program_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_programs():
+    return get_all_programs()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_cohorts(program_id):
+    return get_available_cohorts(program_id=program_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_adviser_name(user_id):
+    return get_my_adviser_name(user_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_retry_count(session_id):
+    return get_max_retry_count(session_id)
+
 
 TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
 
 
+@lru_cache(maxsize=None)
 def cohort_sort_key(cohort):
     """'1Q2425' -> (2024, 1, ...) so cohorts sort by time. Falls back to the old '2025 - Fall' style."""
     s = str(cohort).strip().upper()
@@ -138,7 +179,7 @@ user = st.session_state.get("user", {})
 role = user.get("role")
  
 with st.expander("Active Program", expanded=not st.session_state.get("active_program_id")):
-    programs = get_all_programs()
+    programs = cached_programs()
     options = {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in programs}
  
     if options:
@@ -177,6 +218,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
             else:
                 ok, result = create_program(code.strip().upper(), name.strip())
                 if ok:
+                    st.cache_data.clear()   # Admin Config / header program lists must see the new program too
                     st.session_state["active_program_id"] = result
                     st.session_state["active_program_code"] = code.strip().upper()
                     set_user_program(user.get("UserID"), result)
@@ -206,7 +248,7 @@ active_code = st.session_state.get("active_program_code", "")
 active_login_id = st.session_state.get("session_id", None)
  
 if active_login_id:
-    retry_count = get_max_retry_count(active_login_id)
+    retry_count = cached_retry_count(active_login_id)
     if retry_count > 1:
         st.warning(
             f"Warning: Repeated sync failures detected for your session "
@@ -239,13 +281,26 @@ my_adviser_name = None
 is_advisor_view = (role == "FacultyAdvisor")
  
 if is_advisor_view:
-    my_adviser_name = get_my_adviser_name(user.get("UserID"))
+    my_adviser_name = cached_adviser_name(user.get("UserID"))
  
 cohort_choice = "All Cohorts"   # reported to the yellow header bar at the end of the page
 
+
+def _sync_cohort_range(changed_key, other_key):
+    """Keeps the From / To cohort boxes consistent (runs when either one changes):
+    - "All Cohorts" picked in one box -> the other box also goes back to "All Cohorts"
+    - a cohort picked while the other box is on "All Cohorts" -> the other box gets the same cohort
+    """
+    new_value = st.session_state.get(changed_key, "All Cohorts")
+    other_value = st.session_state.get(other_key, "All Cohorts")
+    if new_value == "All Cohorts":
+        st.session_state[other_key] = "All Cohorts"
+    elif other_value == "All Cohorts":
+        st.session_state[other_key] = new_value
+
 # Displays student roster in table format
 try:
-    df = get_student_roster_data(program_id=active_program_id)
+    df = cached_roster(active_program_id)
  
     if is_advisor_view:
         if my_adviser_name is None:
@@ -286,12 +341,19 @@ try:
 
         with col_cohort:
             # Cohort range: pick a From and/or To cohort. Both on "All Cohorts" = no cohort filter.
-            cohort_list = sorted(get_available_cohorts(program_id=active_program_id), key=cohort_sort_key)
+            cohort_list = sorted(cached_cohorts(active_program_id), key=cohort_sort_key)
+            cohort_options = ["All Cohorts"] + cohort_list
+            # after switching programs, a previously picked cohort may not exist here -> reset it
+            for _k in ("sr_cohort_from", "sr_cohort_to"):
+                if st.session_state.get(_k) not in cohort_options:
+                    st.session_state[_k] = "All Cohorts"
             c_from, c_to = st.columns(2)
             with c_from:
-                cohort_from = st.selectbox("Filter by Cohort -- From", ["All Cohorts"] + cohort_list)
+                cohort_from = st.selectbox("Filter by Cohort -- From", cohort_options, key="sr_cohort_from",
+                                           on_change=_sync_cohort_range, args=("sr_cohort_from", "sr_cohort_to"))
             with c_to:
-                cohort_to = st.selectbox("Filter by Cohort -- To", ["All Cohorts"] + cohort_list)
+                cohort_to = st.selectbox("Filter by Cohort -- To", cohort_options, key="sr_cohort_to",
+                                         on_change=_sync_cohort_range, args=("sr_cohort_to", "sr_cohort_from"))
 
         with col_sort:
             sort_map = {                     # first one = default
@@ -303,22 +365,22 @@ try:
             sort_choice = st.selectbox("Sort by", list(sort_map.keys()))
 
         # Apply Filters
-        df_filtered = df.copy()
+        df_filtered = df   # no copy needed: every step below returns a new frame
 
         if search_query and search_query.strip():
             q = search_query.strip().lower()
             df_filtered = df_filtered[
-                df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False) |
-                df_filtered["StudentNumber"].astype(str).str.contains(q, na=False)
+                df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False, regex=False) |
+                df_filtered["StudentNumber"].astype(str).str.contains(q, na=False, regex=False)
             ]
 
-        # cohort range (inclusive); if From is later than To they're swapped
+        # cohort range (inclusive). From later than To is not a valid range -> no results + a message
         lo = cohort_sort_key(cohort_from) if cohort_from != "All Cohorts" else None
         hi = cohort_sort_key(cohort_to) if cohort_to != "All Cohorts" else None
-        if lo and hi and lo > hi:
-            lo, hi = hi, lo
-            cohort_from, cohort_to = cohort_to, cohort_from
-        if lo or hi:
+        cohort_range_invalid = bool(lo and hi and lo > hi)
+        if cohort_range_invalid:
+            df_filtered = df_filtered.iloc[0:0]
+        elif lo or hi:
             keys = df_filtered["Cohort"].map(cohort_sort_key)
             keep = pd.Series(True, index=df_filtered.index)
             if lo:
@@ -354,6 +416,14 @@ try:
             )
 
  
+        if cohort_range_invalid:
+            st.warning(
+                f"Invalid cohort range: 'From' ({cohort_from}) comes after 'To' ({cohort_to}). "
+                "Pick a From cohort that is the same as or earlier than the To cohort."
+            )
+        elif df_filtered.empty:
+            st.info("No students match these filters.")
+
         # ----------------- Enterprise Roster Grid -----------------
         col_widths = [1.1, 2.0, 0.8, 1.9, 1.2, 1.2, 1.6, 1.1, 0.9]
         try:
@@ -361,10 +431,27 @@ try:
         except Exception:
             risk_flags = {}   # view missing / DB hiccup -> RISK column just shows "—"
  
+        # ---- paging (only the current page of rows is drawn) ----
+        total_rows = len(df_filtered)
+        page_size = st.session_state.get("sr_page_size", PAGE_SIZE_OPTIONS[0])
+        if page_size not in PAGE_SIZE_OPTIONS:
+            page_size = PAGE_SIZE_OPTIONS[0]
+        total_pages = max(1, -(-total_rows // page_size))
+        filter_sig = (active_program_id, search_query, cohort_from, cohort_to, adviser_choice, sort_choice, page_size)
+        if st.session_state.get("sr_filter_sig") != filter_sig:   # any filter/sort change -> back to page 1
+            st.session_state["sr_filter_sig"] = filter_sig
+            st.session_state["sr_page"] = 1
+        page_no = min(max(int(st.session_state.get("sr_page", 1)), 1), total_pages)
+        st.session_state["sr_page"] = page_no
+        page_start = (page_no - 1) * page_size
+        page_df = df_filtered.iloc[page_start:page_start + page_size]
+
+        stage_labels = cached_stage_labels(active_program_id)
         header_cols = st.columns(col_widths, vertical_alignment="center")
         header_labels = [
             "STUDENT ID", "STUDENT", "COHORT", "ADVISER",
-            "COURSEWORK", "COMP EXAM", "CAPSTONE", "LAST UPDATE", "RISK"
+            stage_labels["Coursework"].upper(), stage_labels["CompExam"].upper(),
+            stage_labels["Capstone"].upper(), "LAST UPDATE", "RISK"
         ]
         for col, label in zip(header_cols, header_labels):
             col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
@@ -377,9 +464,9 @@ try:
             # The column headers above stay put while the rows scroll.
             # (height is only passed when the list needs to scroll: this Streamlit version rejects height=None,
             #  which is what broke the page when a search left 10 or fewer students)
-            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(df_filtered) > ROWS_VISIBLE else {}
+            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
             with st.container(border=False, key="roster_scroll", **scroll_kwargs):
-                for _, row in df_filtered.iterrows():
+                for row in page_df.to_dict("records"):
                     s_id = str(row.get("StudentNumber", ""))
                     s_name = str(row.get("Student", "Unknown"))
                     cohort = str(row.get("Cohort", "N/A"))
@@ -434,11 +521,20 @@ try:
                         unsafe_allow_html=True
                     )
 
-        # Total Count Bar (under the table)
-        st.caption(
-            f"Showing {len(df_filtered)} of {len(df)} students. "
-            f"Click any student name to view their profile."
-        )
+        # Total Count Bar + pager (under the table)
+        if total_rows > PAGE_SIZE_OPTIONS[0]:
+            c_ps, c_pg, c_cap = st.columns([1, 1, 4], vertical_alignment="center")
+            c_ps.selectbox("Rows per page", PAGE_SIZE_OPTIONS, key="sr_page_size")
+            c_pg.number_input(f"Page (of {total_pages})", min_value=1, max_value=total_pages, step=1, key="sr_page")
+            c_cap.caption(
+                f"Showing {page_start + 1}-{min(page_start + page_size, total_rows)} of {total_rows} matching students "
+                f"({len(df)} in this program). Click any student name to view their profile."
+            )
+        else:
+            st.caption(
+                f"Showing {total_rows} of {len(df)} students. "
+                f"Click any student name to view their profile."
+            )
     else:
         # US-23 AC2: advisor exists but has zero assigned students right now
         if is_advisor_view and my_adviser_name is not None:
