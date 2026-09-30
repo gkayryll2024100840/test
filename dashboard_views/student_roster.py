@@ -431,20 +431,8 @@ try:
         except Exception:
             risk_flags = {}   # view missing / DB hiccup -> RISK column just shows "—"
  
-        # ---- paging (only the current page of rows is drawn) ----
-        total_rows = len(df_filtered)
-        page_size = st.session_state.get("sr_page_size", PAGE_SIZE_OPTIONS[0])
-        if page_size not in PAGE_SIZE_OPTIONS:
-            page_size = PAGE_SIZE_OPTIONS[0]
-        total_pages = max(1, -(-total_rows // page_size))
-        filter_sig = (active_program_id, search_query, cohort_from, cohort_to, adviser_choice, sort_choice, page_size)
-        if st.session_state.get("sr_filter_sig") != filter_sig:   # any filter/sort change -> back to page 1
-            st.session_state["sr_filter_sig"] = filter_sig
-            st.session_state["sr_page"] = 1
-        page_no = min(max(int(st.session_state.get("sr_page", 1)), 1), total_pages)
-        st.session_state["sr_page"] = page_no
-        page_start = (page_no - 1) * page_size
-        page_df = df_filtered.iloc[page_start:page_start + page_size]
+                
+        page_df = df_filtered
 
         stage_labels = cached_stage_labels(active_program_id)
         header_cols = st.columns(col_widths, vertical_alignment="center")
