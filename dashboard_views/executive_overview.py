@@ -16,6 +16,7 @@ from db_connect import (
     get_available_cohorts,
     check_column_exists,
     get_user_program,
+    get_kpi_tiles,
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
 
@@ -897,7 +898,55 @@ def log_export(filters: dict, row_count: int, file_name: str):
     except Exception as e:  # never block the download because logging failed
         st.toast(f"Export downloaded, but it couldn't be logged: {e}")
 
+# ---------------------------------------------------------------------------
+# US-29: KPI tile metric resolvers
+# ---------------------------------------------------------------------------
+def resolve_kpi_value(source, df, program_label, selected_cohort, hist):
+    """Return the value and optional tooltip for a KPI tile source key."""
+    src = (source or "").strip().lower()
 
+    if src == "total_enrolled":
+        return f"{len(df):,}", None
+    if src == "remaining":
+        return f"{int((~df['IsComplete']).sum()):,}", remaining_info_html(df)
+    if src == "at_risk":
+        return f"{int(df['IsAtRisk'].sum()):,}", None
+    if src == "on_time_rate":
+        return f"{on_time_rate(df):.1f}%", None
+    if src == "overall_completion":
+        return f"{completion_rate(df):.1f}%", None
+    if src == "completion_rate":
+        return f"{completion_rate(df):.1f}%", None
+    if src == "cohort_count":
+        try:
+            return f"{df['Cohort'].nunique():,}", None
+        except Exception:
+            return "0", None
+    if src == "program_label":
+        return program_label or "—", None
+    if src == "student_count":
+        return f"{len(df):,}", None
+
+    return "—", None
+
+
+def resolve_kpi_subtext(source, df, program_label, selected_cohort, hist):
+    """The small line under a KPI value."""
+    src = (source or "").strip().lower()
+
+    if src == "total_enrolled":
+        return f"{html.escape(program_label)} · {html.escape(selected_cohort)}"
+    if src == "on_time_rate":
+        return delta_html(hist, "OnTime", selected_cohort)
+    if src == "overall_completion" or src == "completion_rate":
+        return delta_html(hist, "Completion", selected_cohort)
+    if src == "remaining":
+        return delta_html(hist, "Remaining", selected_cohort, kind="count", higher_is_better=False)
+    if src == "at_risk":
+        return "Incomplete or Cancelled at current stage"
+    if src == "cohort_count":
+        return "distinct cohorts in view"
+    return "&nbsp;"
 # ---------------------------------------------------------------------------
 # PAGE ASSEMBLY
 # ---------------------------------------------------------------------------

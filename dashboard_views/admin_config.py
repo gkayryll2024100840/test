@@ -115,7 +115,130 @@ with col_status:
     else:
         st.success("All mappings valid and ready for production deployment.")
 
+# ============================================================
+# KPI TILES (US-29) — stored as JSON on Program.KpiTiles
+# ============================================================
+from db_connect import (
+    get_all_programs,
+    get_all_kpi_tiles,
+    save_kpi_tiles,
+    reset_kpi_tiles,
+)
 
+st.markdown("---")
+st.subheader("KPI Tiles")
+st.markdown(
+    "Configure the tiles shown on the Executive Overview. "
+    "Tiles are stored per program. Programs with no custom set — including any program "
+    "created later from the Student Roster — fall back to the built-in defaults."
+)
+
+programs = get_all_programs(active_only=False)
+if not programs:
+    st.info("No programs available yet.")
+else:
+    prog_choice = st.selectbox(
+        "Program",
+        programs,
+        format_func=lambda p: f"{p['ProgramCode']} — {p['ProgramName']}",
+        key="kpi_program",
+    )
+    pid = prog_choice["ProgramID"]
+
+    tiles = get_all_kpi_tiles(program_id=pid)
+
+    # ----- Edit existing tiles -----
+    for i, t in enumerate(tiles):
+        with st.container(border=True):
+            c1, c2, c3, c4, c5, c6 = st.columns([3, 2, 1.2, 1.2, 1.2, 1])
+            with c1:
+                t["label"] = st.text_input("Label", value=t.get("label", ""), key=f"kpi_l_{i}")
+            with c2:
+                st.text_input("Source", value=t.get("source", ""), disabled=True, key=f"kpi_s_{i}")
+            with c3:
+                t["visible"] = st.checkbox(
+                    "Visible", value=bool(t.get("visible", True)), key=f"kpi_v_{i}"
+                )
+            with c4:
+                t["order"] = st.number_input(
+                    "Order", value=int(t.get("order", i + 1)),
+                    step=1, min_value=0, key=f"kpi_o_{i}"
+                )
+            with c5:
+                t["color"] = st.color_picker(
+                    "Accent", value=t.get("color", "#1F3864"), key=f"kpi_c_{i}"
+                )
+            with c6:
+                st.write("")
+                if st.button("Delete", key=f"kpi_d_{i}"):
+                    require_edit()
+                    tiles.pop(i)
+                    ok, err = save_kpi_tiles(pid, tiles)
+                    if ok:
+                        st.success("Removed.")
+                        st.rerun()
+                    else:
+                        st.error(err)
+
+    # ----- Save / reset -----
+    col_a, col_b, col_c = st.columns([1, 1, 3])
+    with col_a:
+        if st.button("Save Tiles", type="primary", key="kpi_save_all"):
+            require_edit()
+            ok, err = save_kpi_tiles(pid, tiles)
+            if ok:
+                st.success("Saved.")
+                st.rerun()
+            else:
+                st.error(err)
+    with col_b:
+        if st.button("Reset to Defaults", key="kpi_reset"):
+            require_edit()
+            ok, err = reset_kpi_tiles(pid)
+            if ok:
+                st.success("Reset.")
+                st.rerun()
+            else:
+                st.error(err)
+
+    # ----- Add a new tile -----
+    st.markdown("#### Add a Tile")
+    with st.form("kpi_add"):
+        a1, a2, a3, a4 = st.columns([2, 3, 2, 1])
+        with a1:
+            new_key = st.text_input("Key (unique)", placeholder="retention_rate")
+        with a2:
+            new_label = st.text_input("Label", placeholder="Retention Rate")
+        with a3:
+            new_source = st.selectbox("Source", [
+                "total_enrolled", "remaining", "at_risk",
+                "on_time_rate", "overall_completion", "completion_rate",
+                "cohort_count", "program_label", "student_count",
+            ])
+        with a4:
+            new_color = st.color_picker("Accent", "#1F3864")
+
+        new_visible = st.checkbox("Visible", value=True)
+
+        if st.form_submit_button("Add"):
+            require_edit()
+            if not new_key or not new_label:
+                st.warning("Both Key and Label are required.")
+            else:
+                tiles.append({
+                    "key": new_key.strip().lower().replace(" ", "_"),
+                    "label": new_label.strip(),
+                    "source": new_source,
+                    "order": len(tiles) + 1,
+                    "visible": new_visible,
+                    "color": new_color,
+                })
+                ok, err = save_kpi_tiles(pid, tiles)
+                if ok:
+                    st.success(f"Added **{new_label}**.")
+                    st.rerun()
+                else:
+                    st.error(err)
 # ============================================================
 # USER PERMISSIONS SECTION (US-13)
 # ============================================================

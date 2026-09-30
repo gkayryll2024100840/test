@@ -1030,3 +1030,114 @@ def update_enrollment_status(student_number, new_status):
         return False, f"Enrollment status not saved: {msg}"
     finally:
         conn.close()
+# ------------------------------------------------------------------
+# US-29: Config-driven KPI tiles (stored as JSON on Program.KpiTiles)
+# ------------------------------------------------------------------
+
+DEFAULT_KPI_TILES = [
+    {"key": "total_enrolled",     "label": "Total Enrolled",          "source": "total_enrolled",     "order": 1, "visible": True, "color": "#b91b21"},
+    {"key": "on_time_rate",       "label": "On-Time Graduation Rate", "source": "on_time_rate",       "order": 2, "visible": True, "color": "#ffca06"},
+    {"key": "overall_completion", "label": "Overall Completion",      "source": "overall_completion", "order": 3, "visible": True, "color": "#1F3864"},
+    {"key": "remaining",          "label": "Remaining Students",      "source": "remaining",          "order": 4, "visible": True, "color": "#1F3864"},
+    {"key": "at_risk",            "label": "Students at Risk",        "source": "at_risk",            "order": 5, "visible": True, "color": "#C62828"},
+]
+
+
+def get_kpi_tiles(program_id=None, visible_only=True):
+    """Return the KPI tile list for a program.
+
+    Reads Program.KpiTiles (JSON). Programs created later from the dashboard
+    start with KpiTiles = NULL -> they fall back to DEFAULT_KPI_TILES.
+    """
+    import json as _json
+
+    tiles = None
+    if program_id is not None:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT KpiTiles FROM Program WHERE ProgramID = %s", (program_id,))
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if row and row.get("KpiTiles"):
+                raw = row["KpiTiles"]
+                tiles = _json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            tiles = None
+
+    if not tiles:
+        tiles = [dict(t) for t in DEFAULT_KPI_TILES]
+
+    tiles = sorted(tiles, key=lambda t: int(t.get("order", 0)))
+    if visible_only:
+        tiles = [t for t in tiles if t.get("visible", True)]
+    return tiles
+
+
+def get_all_kpi_tiles(program_id=None):
+    """Same as get_kpi_tiles but keeps hidden tiles too (for the Admin editor)."""
+    return get_kpi_tiles(program_id=program_id, visible_only=False)
+
+
+def save_kpi_tiles(program_id, tiles):
+    """Persist a list of tile dicts to Program.KpiTiles as JSON.
+
+    Args:
+        program_id: ProgramID to update. Must not be None.
+        tiles:      list[dict] with keys key, label, source, order, visible, color.
+
+    Returns: (True, None) on success, (False, error_message) on failure.
+    """
+    if program_id is None:
+        return False, "A specific program is required to save KPI tiles."
+
+    try:
+        import json as _json
+
+        clean = []
+        for i, t in enumerate(sorted(tiles, key=lambda x: int(x.get("order", 0))), start=1):
+            clean.append({
+                "key":     str(t.get("key", "")).strip().lower().replace(" ", "_"),
+                "label":   str(t.get("label", "")).strip(),
+                "source":  str(t.get("source", "")).strip(),
+                "order":   i,
+                "visible": bool(t.get("visible", True)),
+                "color":   str(t.get("color", "#1F3864")).strip(),
+            })
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE Program SET KpiTiles = %s WHERE ProgramID = %s",
+            (_json.dumps(clean), program_id)
+        )
+        if cursor.rowcount == 0:
+            cursor.execute("SELECT 1 FROM Program WHERE ProgramID = %s", (program_id,))
+            if cursor.fetchone() is None:
+                cursor.close()
+                conn.close()
+                return False, f"No program found with ProgramID {program_id}."
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def reset_kpi_tiles(program_id):
+    """Clear Program.KpiTiles so the program falls back to DEFAULT_KPI_TILES."""
+    if program_id is None:
+        return False, "A specific program is required."
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE Program SET KpiTiles = NULL WHERE ProgramID = %s", (program_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
