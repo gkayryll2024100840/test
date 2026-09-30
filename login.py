@@ -108,8 +108,6 @@ def verify_login(user_id, password):
 
 if not st.session_state.get('user'):
     # ----- Resolve logo + background from the assets folder -----
-    # (Falls back gracefully if the files aren't present, so the login page
-    #  still works on a fresh clone or on Streamlit Cloud.)
     logo_path = find_asset(
         "assets/mapua-university-logo.png",
         "assets/mapua_logo.png",
@@ -134,7 +132,6 @@ if not st.session_state.get('user'):
         '<span style="font-size:22px;font-weight:700;color:#B91C2C;">PULSE</span>'
     )
 
-    # ----- Hide sidebar + toggle buttons while on the login screen, apply the login skin -----
     st.markdown(
         f"""
         <style>
@@ -156,28 +153,30 @@ if not st.session_state.get('user'):
             background: rgba(0,0,0,0);
         }}
 
+        /* Card: narrower and shorter so it reads more like the Mapúa sign-in panel */
         section.main > div.block-container {{
-            padding-top: 2.5rem !important;
-            max-width: 460px;
+            padding-top: 3rem !important;
+            max-width: 340px;      /* was 460px — narrower card */
             margin: 0 auto;
         }}
 
         .st-key-login_card {{
             background: rgba(255, 255, 255, 0.16);
             border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 18px;
-            padding: 36px 32px 28px 32px;
+            border-radius: 16px;
+            padding: 24px 22px 20px 22px;    /* was 36px 32px 28px 32px — tighter padding */
             backdrop-filter: blur(8px);
             text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }}
 
+        /* Smaller logo circle so the card stays compact */
         .login-logo {{
-            width: 90px;
-            height: 90px;
+            width: 64px;
+            height: 64px;
             border-radius: 50%;
             background: #FFFFFF;
-            margin: 0 auto 18px auto;
+            margin: 0 auto 12px auto;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -185,51 +184,68 @@ if not st.session_state.get('user'):
         }}
 
         .login-logo img {{
-            width: 60px;
-            height: 60px;
+            width: 42px;
+            height: 42px;
             object-fit: contain;
         }}
 
         .login-title {{
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 700;
             color: #1A1F36;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             text-align: center;
             width: 100%;
         }}
 
-        .st-key-login_card [data-testid="stTextInput"] label {{
+        /* ---- Inputs: smaller labels and denser field boxes ---- */
+        .st-key-login_card [data-testid="stTextInput"] label p {{
+            font-size: 12px !important;
             color: #1A1F36 !important;
-            font-weight: 500;
-            text-align: left;
-            width: 100%;
+            font-weight: 500 !important;
+            margin-bottom: 2px !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] {{
+            margin-bottom: 6px !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] input {{
             background: #FFFFFF !important;
-            border-radius: 8px !important;
+            border-radius: 6px !important;
             border: none !important;
-            padding: 10px 14px !important;
+            font-size: 13px !important;
+            height: 34px !important;          /* was ~44px — shorter inputs */
+            padding: 4px 10px !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] div[data-baseweb="input"] {{
             background: #FFFFFF !important;
-            border-radius: 8px !important;
+            border-radius: 6px !important;
+            min-height: 34px !important;
+        }}
+        /* tighten the gap Streamlit inserts between successive widgets */
+        .st-key-login_card [data-testid="stVerticalBlock"] {{
+            gap: 4px !important;
+        }}
+        .st-key-login_card [data-testid="stElementContainer"] {{
+            margin-bottom: 4px !important;
         }}
         .st-key-login_card [data-testid="stTextInputField"]::-ms-reveal,
         .st-key-login_card [data-testid="stTextInputField"]::-ms-clear {{
             display: none;
         }}
 
+        /* ---- Login button: shorter and narrower to match the inputs ---- */
         .st-key-login_card button[kind="primary"],
         .st-key-login_card button {{
             background: #12172B !important;
             color: #FFFFFF !important;
             border: none !important;
-            border-radius: 8px !important;
+            border-radius: 6px !important;
             font-weight: 600 !important;
+            font-size: 13px !important;
             width: 100% !important;
-            padding: 10px 0 !important;
-            margin-top: 10px !important;
+            height: 36px !important;          /* was 40+px */
+            padding: 0 !important;
+            margin-top: 8px !important;
         }}
         </style>
         """,
