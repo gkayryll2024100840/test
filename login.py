@@ -151,11 +151,17 @@ if not st.session_state.get('user'):
             background-position: center;
             background-repeat: no-repeat;
         }}
-        [data-testid="stHeader"] {{
-            background: rgba(0,0,0,0);
+
+        /* Hide Streamlit's header on the login page — it reserves ~90px at the top
+           and was pushing the card up above the true middle of the viewport. */
+        [data-testid="stHeader"],
+        header[data-testid="stHeader"] {{
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
         }}
 
-        /* ===== PAGE CONTAINER: full height, contents vertically centered ===== */
+        /* Remove Streamlit's own padding on the block container. */
         [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
@@ -164,13 +170,19 @@ if not st.session_state.get('user'):
             max-width: 640px !important;
             margin-left: auto !important;
             margin-right: auto !important;
+        }}
+
+        /* Make the main area fill the viewport and center its content. */
+        [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"],
+        section.main {{
             min-height: 100vh !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
         }}
 
-        /* The card itself: also centered and full-width of its wrapper */
+        /* The card itself: centered and full-width of its wrapper */
         .st-key-login_card,
         .st-key-login_card > div,
         .st-key-login_card [data-testid="stVerticalBlock"] {{
