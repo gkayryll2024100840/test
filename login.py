@@ -254,16 +254,147 @@ if not st.session_state.get('user'):
 
     # ----- Card content -----
     with st.container(key="login_card"):
-        st.markdown(
-            f'<div class="login-logo">{logo_html}</div>'
-            '<div class="login-title">Welcome Back!</div>',
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+        f"""
+        <style>
+        [data-testid="stSidebar"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stExpandSidebarButton"] {{
+            display: none !important;
+        }}
 
-        input_id = st.text_input("UserID", key="login_userid")
-        input_pass = st.text_input("Password", type="password", key="login_password")
-        button_login = st.button("Login", key="login_button", use_container_width=True)
+        [data-testid="stAppViewContainer"] {{
+            background:
+                linear-gradient(160deg, rgba(185,28,44,0.75) 0%, rgba(217,98,43,0.75) 45%, rgba(240,169,58,0.75) 100%),
+                {bg_layer};
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }}
+        [data-testid="stHeader"] {{
+            background: rgba(0,0,0,0);
+        }}
 
+        /* Card: narrower and shorter */
+        section.main > div.block-container {{
+            padding-top: 3rem !important;
+            max-width: 340px;
+            margin: 0 auto;
+        }}
+
+        .st-key-login_card {{
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 16px;
+            padding: 24px 22px 20px 22px;
+            backdrop-filter: blur(8px);
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }}
+
+        /* Smaller logo circle */
+        .login-logo {{
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #FFFFFF;
+            margin: 0 auto 12px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }}
+        .login-logo img {{
+            width: 42px;
+            height: 42px;
+            object-fit: contain;
+        }}
+
+        .login-title {{
+            font-size: 20px;
+            font-weight: 700;
+            color: #1A1F36;
+            margin-bottom: 16px;
+            text-align: center;
+            width: 100%;
+        }}
+
+        /* ---- Inputs: smaller labels and denser field boxes ---- */
+        .st-key-login_card [data-testid="stTextInput"] label,
+        .st-key-login_card [data-testid="stTextInput"] label p,
+        .st-key-login_card .stTextInput label,
+        .st-key-login_card .stTextInput label p {{
+            font-size: 12px !important;
+            color: #1A1F36 !important;
+            font-weight: 500 !important;
+            margin-bottom: 2px !important;
+            line-height: 1.2 !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] {{
+            margin-bottom: 4px !important;
+        }}
+        /* Style every layer Streamlit draws for a text input */
+        .st-key-login_card [data-testid="stTextInput"] input,
+        .st-key-login_card [data-testid="stTextInput"] input:focus,
+        .st-key-login_card [data-testid="stTextInput"] input:active,
+        .st-key-login_card [data-baseweb="input"],
+        .st-key-login_card [data-baseweb="base-input"],
+        .st-key-login_card [data-baseweb="input"] > div,
+        .st-key-login_card div[data-testid="stTextInputRootElement"] {{
+            background: #FFFFFF !important;
+            border: none !important;
+            border-radius: 6px !important;
+            box-shadow: none !important;
+            min-height: 32px !important;
+            height: 32px !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] input {{
+            font-size: 13px !important;
+            height: 32px !important;
+            padding: 0 10px !important;
+            color: #1A1F36 !important;
+            line-height: 32px !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] > div {{
+            border: none !important;
+            box-shadow: none !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{
+            border: none !important;
+            box-shadow: none !important;
+        }}
+        /* Tighter stacking between widgets */
+        .st-key-login_card [data-testid="stVerticalBlock"],
+        .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
+            gap: 2px !important;
+        }}
+        .st-key-login_card [data-testid="stElementContainer"] {{
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+        .st-key-login_card [data-testid="stTextInputField"]::-ms-reveal,
+        .st-key-login_card [data-testid="stTextInputField"]::-ms-clear {{
+            display: none;
+        }}
+
+        /* ---- Login button ---- */
+        .st-key-login_card button[kind="primary"],
+        .st-key-login_card button {{
+            background: #12172B !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            font-size: 13px !important;
+            width: 100% !important;
+            height: 36px !important;
+            padding: 0 !important;
+            margin-top: 8px !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     if button_login:
         if not input_id or not input_pass:
             st.warning("Please enter both User ID and Password.")
