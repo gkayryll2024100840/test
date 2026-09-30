@@ -135,7 +135,7 @@ if not st.session_state.get('user'):
         '<span style="font-size:22px;font-weight:700;color:#B91C2C;">PULSE</span>'
     )
 
-    st.markdown(
+        st.markdown(
         f"""
         <style>
         [data-testid="stSidebar"],
@@ -156,11 +156,24 @@ if not st.session_state.get('user'):
             background: rgba(0,0,0,0);
         }}
 
-        /* Card: narrower and shorter */
+        /* ===== NARROW + CENTER THE PAGE CONTAINER ===== */
+        [data-testid="stMainBlockContainer"],
+        [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
             padding-top: 3rem !important;
-            max-width: 340px;
-            margin: 0 auto;
+            max-width: 360px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }}
+
+        /* The card itself: never wider than 360px, always centered */
+        .st-key-login_card,
+        .st-key-login_card > div,
+        .st-key-login_card [data-testid="stVerticalBlock"] {{
+            max-width: 360px !important;
+            width: 100% !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
         }}
 
         .st-key-login_card {{
@@ -173,7 +186,6 @@ if not st.session_state.get('user'):
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }}
 
-        /* Smaller logo circle */
         .login-logo {{
             width: 64px;
             height: 64px;
@@ -200,7 +212,7 @@ if not st.session_state.get('user'):
             width: 100%;
         }}
 
-        /* ---- Inputs: target every Streamlit wrapper layer so the height actually shrinks ---- */
+        /* ---- Inputs: target every Streamlit wrapper layer ---- */
         .st-key-login_card [data-testid="stTextInput"] label,
         .st-key-login_card [data-testid="stTextInput"] label p {{
             font-size: 12px !important;
@@ -239,7 +251,6 @@ if not st.session_state.get('user'):
             border: none !important;
             box-shadow: none !important;
         }}
-        /* tighter gap between widgets inside the card */
         .st-key-login_card [data-testid="stVerticalBlock"],
         .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
             gap: 2px !important;
