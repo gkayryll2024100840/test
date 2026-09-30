@@ -129,13 +129,11 @@ def get_max_retry_count(login_id):
 
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
 def get_student_roster_data(program_id=None):
-    """Fetches the roster filtered by the given program ID.
+    """Fetches the roster.
 
-    If program_id is None, returns an empty DataFrame.
+    program_id=None returns students from every program (used by the "All Programs"
+    option on the Student Roster). A specific program_id filters to that program.
     """
-    if program_id is None:
-        return pd.DataFrame()
-
     try:
         # 1. Load the mappings from the JSON file
         mappings = load_mappings()
@@ -149,11 +147,10 @@ def get_student_roster_data(program_id=None):
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. Run the program-scoped query
-        # SPEED: the adviser sub-query is limited to THIS program's students (it used to group the
-        # adviser table for every program in the school before joining).
+        # 3. Run the query (all programs when program_id is None)
+        conn = mysql.connector.connect(**db_config)
         query = """
-            SELECT
+            SELECT 
                 s.StudentNumber,
                 CONCAT(s.FirstName, ' ', s.LastName) AS Student,
                 s.Cohort,
@@ -162,31 +159,32 @@ def get_student_roster_data(program_id=None):
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus,
-                sl.LastUpdate
+                sl.LastUpdate,
+                p.ProgramCode
             FROM Students s
+            LEFT JOIN Program p ON s.ProgramID = p.ProgramID
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
             LEFT JOIN (
                 -- students with 2 advisers -> one row, e.g. "Dr. A, Dr. B"
                 SELECT sa.StudentNumber,
-                       GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
+                       GROUP_CONCAT(a.AdviserName ORDER BY a.AdviserName SEPARATOR ', ') AS AdviserName
                 FROM Student_Adviser sa
-                JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
-                JOIN Students sp ON sp.StudentNumber = sa.StudentNumber AND sp.ProgramID = %s
+                JOIN Adviser a ON sa.AdviserID = a.AdviserID
                 GROUP BY sa.StudentNumber
             ) a ON a.StudentNumber = s.StudentNumber
-            WHERE s.ProgramID = %s
         """
-        conn = get_db_connection()
-        try:
-            df = pd.read_sql(query, conn, params=(program_id, program_id))
-        finally:
-            conn.close()
+        params = None
+        if program_id is not None:
+            query += " WHERE s.ProgramID = %s"
+            params = (program_id,)
+        df = pd.read_sql(query, conn, params=params)
+        conn.close()
         return df
 
     except Exception as e:
         print(f"Mapping validation failed: {e}")
         raise e
-
+        
 def get_last_updated_time():
     """Checks last_sync.txt for the last successful sync timestamp."""
     try:
