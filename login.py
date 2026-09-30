@@ -1,5 +1,4 @@
-# LOGIN.PY
-# UPDATED: 9/30/2026 (7:34 pm)
+#LOGIN.PY 9/30/2026
 
 import os
 import base64
@@ -156,21 +155,21 @@ if not st.session_state.get('user'):
             background: rgba(0,0,0,0);
         }}
 
-        /* ===== NARROW + CENTER THE PAGE CONTAINER ===== */
+        /* ===== PAGE CONTAINER: widened to match the red guide ===== */
         [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
             padding-top: 3rem !important;
-            max-width: 550px !important;
+            max-width: 640px !important;      /* was 360px — card fills the red area */
             margin-left: auto !important;
             margin-right: auto !important;
         }}
 
-        /* The card itself: never wider than 550px, always centered */
+        /* The card itself: also widened so it fills its wrapper */
         .st-key-login_card,
         .st-key-login_card > div,
         .st-key-login_card [data-testid="stVerticalBlock"] {{
-            max-width: 550px !important;
+            max-width: 640px !important;      /* was 360px — matches the outer container */
             width: 100% !important;
             margin-left: auto !important;
             margin-right: auto !important;
@@ -179,8 +178,9 @@ if not st.session_state.get('user'):
         .st-key-login_card {{
             background: rgba(255, 255, 255, 0.16);
             border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 20px;
-            padding: 24px 22px 20px 22px;
+            border-radius: 16px;
+            padding: 28px 36px 26px 36px;     /* slightly more padding for the wider card */
+            backdrop-filter: blur(8px);
             text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         }}
@@ -216,9 +216,10 @@ if not st.session_state.get('user'):
         .st-key-login_card [data-testid="stTextInput"] label p {{
             font-size: 12px !important;
             color: #1A1F36 !important;
-            font-weight: 550 !important;
+            font-weight: 500 !important;
             margin-bottom: 2px !important;
             line-height: 1.2 !important;
+            text-align: left !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] {{
             margin-bottom: 4px !important;
@@ -233,14 +234,14 @@ if not st.session_state.get('user'):
             border: none !important;
             border-radius: 6px !important;
             box-shadow: none !important;
-            min-height: 32px !important;
-            height: 32px !important;
+            min-height: 36px !important;      /* slightly taller inputs now that they're wider */
+            height: 36px !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] input {{
-            font-size: 13px !important;
-            padding: 0 10px !important;
+            font-size: 14px !important;
+            padding: 0 12px !important;
             color: #1A1F36 !important;
-            line-height: 32px !important;
+            line-height: 36px !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] > div {{
             border: none !important;
@@ -252,7 +253,7 @@ if not st.session_state.get('user'):
         }}
         .st-key-login_card [data-testid="stVerticalBlock"],
         .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
-            gap: 2px !important;
+            gap: 6px !important;
         }}
         .st-key-login_card [data-testid="stElementContainer"] {{
             margin: 0 !important;
@@ -270,12 +271,12 @@ if not st.session_state.get('user'):
             color: #FFFFFF !important;
             border: none !important;
             border-radius: 6px !important;
-            font-weight: 550 !important;
-            font-size: 13px !important;
+            font-weight: 600 !important;
+            font-size: 14px !important;
             width: 100% !important;
-            height: 36px !important;
+            height: 40px !important;
             padding: 0 !important;
-            margin-top: 8px !important;
+            margin-top: 10px !important;
         }}
         </style>
         """,
