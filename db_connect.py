@@ -1030,6 +1030,321 @@ def update_enrollment_status(student_number, new_status):
         return False, f"Enrollment status not saved: {msg}"
     finally:
         conn.close()
+
+# ===========================================================================
+# US-27: AT-RISK THRESHOLD (one number per program, used for every stage)
+#
+# Stored in Program_Stage.ExpectedDays (one row per program per stage).
+# US-27 = the same threshold for every stage, so saving writes the number to
+# all of that program's stage rows at once.
+# The flags themselves come from the v_student_stage_flags view, which reads
+# Program_Stage every time -> a new threshold applies immediately.
+# ===========================================================================
+PROGRAM_STAGES = [
+    # Pillar,       StageLabel,           StageOrder
+    ("Coursework", "Coursework",         1),
+    ("CompExam",   "Comprehensive Exam", 2),
+    ("Capstone",   "Capstone Paper",     3),
+]
+
+
+def get_program_threshold(program_id):
+    """The program's At-Risk threshold in days, or None if it isn't set yet.
+
+    If the stages somehow have different numbers, the smallest one is returned
+    (the strictest one is what actually flags students first).
+    """
+    if program_id is None:
+        return None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT MIN(ExpectedDays) FROM Program_Stage WHERE ProgramID = %s", (program_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return int(row[0]) if row and row[0] is not None else None
+    except Exception as e:
+        print(f"Failed to fetch threshold: {e}")
+        return None
+
+
+def set_program_threshold(user_id, program_id, days):
+    """Set the At-Risk threshold for ALL stages of one program (US-27).
+
+    Only users with Edit permission can do this; a blocked attempt is logged
+    to Permission_Audit_Log (same as every other blocked write).
+    Missing stage rows for the program are created first.
+
+    Returns (True, message) or (False, error message).
+    """
+    if program_id is None:
+        return False, "Pick a program first."
+    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+        return False, "The threshold must be a whole number of days above 0."
+    if not can_edit(user_id):
+        log_permission_attempt(user_id)
+        return False, "You have View Only access, so you can't change the threshold."
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            # make sure the program has all 3 stage rows
+            for pillar, label, order in PROGRAM_STAGES:
+                cur.execute(
+                    "INSERT INTO Program_Stage (ProgramID, Pillar, StageLabel, StageOrder, IsRequired, ExpectedDays) "
+                    "SELECT %s, %s, %s, %s, 1, %s FROM DUAL "
+                    "WHERE NOT EXISTS (SELECT 1 FROM Program_Stage WHERE ProgramID = %s AND Pillar = %s)",
+                    (program_id, pillar, label, order, days, program_id, pillar),
+                )
+            # same number for every stage
+            cur.execute("UPDATE Program_Stage SET ExpectedDays = %s WHERE ProgramID = %s", (days, program_id))
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+        return True, f"At-Risk threshold saved: {days} days in a single stage."
+    except mysql.connector.IntegrityError as e:
+        if e.errno == 1452:
+            return False, f"Program ID {program_id} does not exist."
+        return False, f"Integrity error: {e.msg}"
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+
+def get_flagged_students(program_id=None):
+    """Time in stage + At-Risk flag per student, from the v_student_stage_flags view.
+
+    Columns: StudentNumber, ProgramID, current_stage, stage_label, stage_start,
+             days_in_stage, expected_days, is_flagged (0/1), flag_reason.
+    Returns an empty DataFrame on error (the dashboard then shows "—").
+    """
+    try:
+        conn = get_db_connection()
+        sql = "SELECT * FROM v_student_stage_flags"
+        params = None
+        if program_id is not None:
+            sql += " WHERE ProgramID = %s"
+            params = (program_id,)
+        df = pd.read_sql(sql + " ORDER BY is_flagged DESC, days_in_stage DESC", conn, params=params)
+        conn.close()
+        return df
+    except Exception as e:
+        print(f"Failed to fetch stage flags: {e}")
+        return pd.DataFrame()
+
+
+# ===========================================================================
+# NIGHTLY DATA REFRESH (scheduled sync)
+#   - Refresh runs every night at the time saved in Admin Configuration (default 02:00, Asia/Manila)
+#   - A failed scheduled refresh is logged by trigger_data_sync() -> local error log (US-16)
+#   - Manual "Refresh Now" (Student Roster) / "Run Sync Attempt" (Admin) still work for urgent updates
+# The schedule + last-run info live in the App_Settings table (created automatically).
+# A small background thread in the Streamlit server checks every 30 s whether tonight's run is due;
+# a database "claim" makes sure it runs only once per day even if several app processes are running.
+# ===========================================================================
+SETTINGS_TABLE = "App_Settings"
+DEFAULT_REFRESH_TIME = "02:00"
+REFRESH_TIMEZONE_LABEL = "Asia/Manila"
+_SCHEDULER_CHECK_SECONDS = 30
+_scheduler_lock = threading.Lock()
+_scheduler_started = False
+_settings_table_ready = False   # CREATE TABLE only runs once per app process, not on every read
+
+
+def _ensure_settings_table(cur):
+    global _settings_table_ready
+    if _settings_table_ready:
+        return
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {SETTINGS_TABLE} (
+            SettingKey   VARCHAR(64)  NOT NULL PRIMARY KEY,
+            SettingValue VARCHAR(255) NOT NULL,
+            UpdatedBy    VARCHAR(64)  NULL,
+            UpdatedAt    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+        """
+    )
+    _settings_table_ready = True
+
+
+def get_settings(keys):
+    """Read several App_Settings values with ONE connection + ONE query. Returns {key: value}."""
+    keys = list(keys)
+    if not keys:
+        return {}
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            _ensure_settings_table(cur)
+            cur.execute(
+                f"SELECT SettingKey, SettingValue FROM {SETTINGS_TABLE} "
+                f"WHERE SettingKey IN ({', '.join(['%s'] * len(keys))})",
+                keys,
+            )
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
+        return {k: v for k, v in rows}
+    except Exception as e:
+        print(f"Failed to read settings: {e}")
+        return {}
+
+
+def get_setting(key, default=None):
+    """Read one value from App_Settings (default if missing or on error)."""
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            _ensure_settings_table(cur)
+            cur.execute(f"SELECT SettingValue FROM {SETTINGS_TABLE} WHERE SettingKey = %s", (key,))
+            row = cur.fetchone()
+            cur.close()
+        finally:
+            conn.close()
+        return row[0] if row else default
+    except Exception as e:
+        print(f"Failed to read setting {key}: {e}")
+        return default
+
+
+def set_setting(key, value, user_id=None):
+    """Insert or update one value in App_Settings."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        _ensure_settings_table(cur)
+        cur.execute(
+            f"INSERT INTO {SETTINGS_TABLE} (SettingKey, SettingValue, UpdatedBy) VALUES (%s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE SettingValue = VALUES(SettingValue), UpdatedBy = VALUES(UpdatedBy)",
+            (key, str(value), None if user_id is None else str(user_id)),
+        )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+
+def _parse_hhmm(text):
+    """'02:00' -> (2, 0); raises ValueError if it isn't a valid 24-hour time."""
+    hh, mm = str(text).strip().split(":")[:2]
+    hh, mm = int(hh), int(mm)
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        raise ValueError("time must be between 00:00 and 23:59")
+    return hh, mm
+
+
+def get_refresh_schedule():
+    """What the Admin page / sidebar show:
+    {"time": "02:00", "timezone": "Asia/Manila", "last_run": "2026-09-29 02:00:04" | None,
+     "last_status": "Success" | "Failed" | None}
+    """
+    vals = get_settings(["refresh_time", "last_scheduled_run", "last_scheduled_status"])   # one round trip
+    time_txt = vals.get("refresh_time") or DEFAULT_REFRESH_TIME
+    try:
+        _parse_hhmm(time_txt)
+    except Exception:
+        time_txt = DEFAULT_REFRESH_TIME
+    return {
+        "time": time_txt,
+        "timezone": REFRESH_TIMEZONE_LABEL,
+        "last_run": vals.get("last_scheduled_run"),
+        "last_status": vals.get("last_scheduled_status"),
+    }
+
+
+def set_refresh_time(user_id, hhmm):
+    """Save the nightly refresh time ('HH:MM', Asia/Manila). Edit permission only; blocked attempts are logged.
+
+    Returns (True, message) or (False, error message).
+    """
+    try:
+        hh, mm = _parse_hhmm(hhmm)
+    except Exception:
+        return False, "Enter a valid time (HH:MM, 24-hour)."
+    if not can_edit(user_id):
+        log_permission_attempt(user_id)
+        return False, "You have View Only access, so you can't change the refresh schedule."
+    try:
+        set_setting("refresh_time", f"{hh:02d}:{mm:02d}", user_id)
+        return True, f"Data refresh scheduled nightly at {hh:02d}:{mm:02d} ({REFRESH_TIMEZONE_LABEL})."
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+
+def run_scheduled_refresh_if_due(now=None):
+    """Runs tonight's refresh if its time has passed and it hasn't run yet today. Returns True if it ran."""
+    now = now or _now_local()
+    try:
+        hh, mm = _parse_hhmm(get_setting("refresh_time", DEFAULT_REFRESH_TIME) or DEFAULT_REFRESH_TIME)
+    except Exception:
+        hh, mm = _parse_hhmm(DEFAULT_REFRESH_TIME)
+    if (now.hour, now.minute) < (hh, mm):
+        return False
+
+    today = now.date().isoformat()
+    # claim today's run in the database, so only ONE process runs it even if several are up
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        _ensure_settings_table(cur)
+        cur.execute(
+            f"INSERT IGNORE INTO {SETTINGS_TABLE} (SettingKey, SettingValue) VALUES ('last_scheduled_date', '')"
+        )
+        cur.execute(
+            f"UPDATE {SETTINGS_TABLE} SET SettingValue = %s, UpdatedBy = 'SCHEDULER' "
+            "WHERE SettingKey = 'last_scheduled_date' AND SettingValue <> %s",
+            (today, today),
+        )
+        claimed = cur.rowcount == 1
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+    if not claimed:
+        return False   # already ran today
+
+    ok = trigger_data_sync(login_id="SCHEDULED")   # failures are logged there (US-16)
+    try:
+        set_setting("last_scheduled_run", _now_local().strftime("%Y-%m-%d %H:%M:%S"), "SCHEDULER")
+        set_setting("last_scheduled_status", "Success" if ok else "Failed", "SCHEDULER")
+    except Exception as e:
+        print(f"Scheduled refresh ran but its status couldn't be saved: {e}")
+    return True
+
+
+def _refresh_scheduler_loop():
+    while True:
+        try:
+            run_scheduled_refresh_if_due()
+        except Exception as e:
+            print(f"Scheduled refresh check failed: {e}")
+        time.sleep(_SCHEDULER_CHECK_SECONDS)
+
+
+def start_refresh_scheduler():
+    """Starts the background checker once per app process (safe to call many times)."""
+    global _scheduler_started
+    if os.getenv("DISABLE_REFRESH_SCHEDULER") == "1":
+        return
+    with _scheduler_lock:
+        if _scheduler_started:
+            return
+        threading.Thread(target=_refresh_scheduler_loop, name="nightly-refresh", daemon=True).start()
+        _scheduler_started = True
+
+
+# every page imports db_connect, so the nightly refresh starts as soon as the app is running
+start_refresh_scheduler()
 # ------------------------------------------------------------------
 # US-29: Config-driven KPI tiles (stored as JSON on Program.KpiTiles)
 # ------------------------------------------------------------------

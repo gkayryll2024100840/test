@@ -155,9 +155,9 @@ else:
     elif role == "Program_Chair":
         allowed = [exec_page, roster_page, profile_page]
     elif role == "Faculty_Advisor":
-        allowed = [profile_page, roster_page, exec_page]
+        allowed = [exec_page, roster_page, profile_page]
     elif role == "Success_Advisor":
-        allowed = [profile_page, roster_page, exec_page]
+        allowed = [exec_page, roster_page, profile_page]
     else:
         allowed = []
 

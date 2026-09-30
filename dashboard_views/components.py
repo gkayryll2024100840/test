@@ -7,7 +7,7 @@ import base64
 import html
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
@@ -19,6 +19,8 @@ from db_connect import (
     get_last_updated_time,
     get_user_permission,
     get_user_program,
+    get_refresh_schedule,
+    trigger_data_sync,
 )
 
 
@@ -961,6 +963,34 @@ def _sync_label():
     return raw or "—"
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _refresh_time():
+    """Nightly refresh time 'HH:MM' from Admin Configuration (cached 1 min)."""
+    try:
+        return get_refresh_schedule()["time"]
+    except Exception:
+        return "02:00"
+
+
+def _next_refresh_label():
+    """'Today · 2:00 AM' / 'Tomorrow · 2:00 AM' (Asia/Manila)."""
+    now = datetime.now(timezone(timedelta(hours=8)))
+    try:
+        hh, mm = (int(x) for x in _refresh_time().split(":"))
+    except Exception:
+        hh, mm = 2, 0
+    day = "Today" if (now.hour, now.minute) < (hh, mm) else "Tomorrow"
+    return f"{day} · {hh % 12 or 12}:{mm:02d} {'AM' if hh < 12 else 'PM'}"
+
+
+def _manual_refresh():
+    """Sidebar "Refresh Now": runs a sync, then clears cached data so every page reloads fresh numbers.
+    A failed sync is logged by trigger_data_sync() (US-16), same as the nightly one."""
+    ok = trigger_data_sync(login_id=st.session_state.get("session_id"))
+    st.cache_data.clear()
+    st.session_state["_ps_refresh_msg"] = (ok, "Data refreshed." if ok else "Refresh failed. Check Admin logs.")
+
+
 @st.cache_data(show_spinner=False)
 def _logo_data_uri(path, mtime):
     ext = os.path.splitext(path)[1].lstrip(".").lower()
@@ -1062,8 +1092,30 @@ html[data-eo-theme="dark"] .stApp{
     box-shadow:var(--ps-shadow);}
 [data-testid="stSidebarNavLink"][aria-current="page"] span{color:var(--ps-red) !important;font-weight:600;}
 
-/* user card pinned to the bottom of the sidebar */
-[data-testid="stSidebarUserContent"]{margin-top:auto;padding:0 12px 14px 12px !important;}
+/* sidebar content fills the height: "Data" block right under the nav links,
+   user card (Log Out) pinned to the bottom */
+[data-testid="stSidebarUserContent"]{flex:1 1 auto;display:flex !important;flex-direction:column;
+    padding:0 12px 14px 12px !important;}
+[data-testid="stSidebarUserContent"] > div,
+[data-testid="stSidebarUserContent"] > div > [data-testid="stVerticalBlock"]{flex:1 1 auto;display:flex !important;
+    flex-direction:column;}
+[data-testid="stSidebarUserContent"] *:has(> .st-key-ps_user_card),
+.st-key-ps_user_card{margin-top:auto !important;}
+
+/* ---- "Data" block (manual refresh) under the nav links ---- */
+.st-key-ps_data_card{border-top:1px solid var(--ps-side-border);padding:14px 8px 0 8px;gap:8px;}
+.ps-data-label{font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--ps-muted);text-transform:uppercase;}
+.ps-data-line{font-size:12px;color:var(--ps-muted);line-height:1.45;text-align:center;width:100%;}
+.ps-data-line b{color:var(--ps-text);font-weight:600;}
+.st-key-ps_data_card [data-testid="stMarkdownContainer"]:has(.ps-data-line){justify-content:center !important;}
+.st-key-ps_data_card [data-testid="stMarkdown"],
+.st-key-ps_data_card [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
+.st-key-ps_data_card button{border-radius:8px !important;}
+.ps-refresh-note{font-size:12px;font-weight:600;text-align:center;width:100%;line-height:1.4;}
+.ps-refresh-note.ok{color:#15803D;}
+.ps-refresh-note.err{color:#B91C1C;}
+html[data-eo-theme="dark"] .ps-refresh-note.ok{color:#34D399;}
+html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
 .st-key-ps_user_card{background:var(--ps-card);border:1px solid var(--ps-card-border);border-radius:12px;
     padding:14px 14px 12px 14px;box-shadow:var(--ps-shadow);gap:10px;}
 .ps-user{display:flex;align-items:center;gap:10px;}
@@ -1185,7 +1237,23 @@ def render_app_shell(user: dict, on_logout=None, page_key=None):
         unsafe_allow_html=True,
     )
 
-    # sidebar user card (sits under the page links, pushed to the bottom by CSS)
+    # "Data" block: manual refresh for urgent updates (right under the page links, away from Log Out)
+    with st.sidebar.container(key="ps_data_card"):
+        st.markdown(
+            f'<div class="ps-data-line">Next auto-refresh: <b>{html.escape(_next_refresh_label())}</b></div>',
+            unsafe_allow_html=True,
+        )
+        st.button("⟳ Refresh Now", key="ps_refresh", width="stretch", on_click=_manual_refresh,
+                  help="Pull the latest data now instead of waiting for the nightly refresh.")
+        msg = st.session_state.pop("_ps_refresh_msg", None)
+        if msg:   # small one-line note under the button (instead of a big alert box)
+            ok, text = msg
+            st.markdown(
+                f'<div class="ps-refresh-note {"ok" if ok else "err"}">{"✓" if ok else "✕"} {html.escape(text)}</div>',
+                unsafe_allow_html=True,
+            )
+
+    # sidebar user card (pinned to the bottom by CSS)
     with st.sidebar.container(key="ps_user_card"):
         st.markdown(
             f"""
