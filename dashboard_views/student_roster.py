@@ -122,6 +122,15 @@ st.markdown(
 /* long text (e.g. 2 advisers) wraps onto more lines inside its column instead of running past it */
 .st-key-roster_scroll .roster-cell-text{display:block;white-space:normal !important;overflow-wrap:anywhere;
     word-break:break-word;line-height:1.35;}
+/* every cell in the roster row is allowed to wrap; nothing overflows horizontally */
+.st-key-roster_scroll [data-testid="stColumn"]{min-width:0 !important;overflow-wrap:anywhere;word-break:break-word;}
+/* status pills inside the roster stay inside their cell */
+.st-key-roster_scroll .status-pill,
+.st-key-roster_scroll [class*="status-pill"]{
+    white-space:normal !important;line-height:1.2 !important;
+    height:auto !important;min-height:26px !important;
+    padding:4px 10px !important;max-width:100% !important;
+    text-align:center;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 /* RISK column pill */
 .sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
@@ -143,6 +152,10 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 /* caption under the title */
 .sr-caption{font-size:14px !important;line-height:1.5 !important;color:var(--sr-h-label) !important;
         margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
+/* Roster column headers must be able to wrap ("Coursework Completion" is longer than
+   its column). Without this they overlap the neighbouring header. */
+.roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.2 !important;
+    display:block !important;}
 /* line under the whole header row */
 .st-key-sr_top{border-bottom:1px solid var(--sr-h-border);padding-bottom:10px;}
 .st-key-sr_top [data-testid="stElementContainer"]:has(.sr-title),
@@ -158,7 +171,7 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
     st.stop()
  
 # ---------------------------------------------------------------
-# Program selection — now includes "All Programs"
+# Program selection — includes "All Programs"
 # ---------------------------------------------------------------
 user = st.session_state.get("user", {})
 role = user.get("role")
@@ -402,9 +415,11 @@ try:
         # ----------------- Enterprise Roster Grid -----------------
         show_program_col = active_program_id is None   # "All Programs" -> show the PROGRAM column
         if show_program_col:
-            col_widths = [1.0, 1.6, 0.9, 1.6, 1.0, 1.0, 1.0, 1.4, 1.0, 0.8]
+            # 10 columns: ID | Student | Program | Cohort | Adviser | CW | CE | CP | Last Update | Risk
+            col_widths = [0.9, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
         else:
-            col_widths = [1.1, 2.0, 0.8, 1.9, 1.2, 1.2, 1.6, 1.1, 0.9]
+            # 9 columns: ID | Student | Cohort | Adviser | CW | CE | CP | Last Update | Risk
+            col_widths = [0.9, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
 
         try:
             risk_flags = get_risk_flags(active_program_id)
