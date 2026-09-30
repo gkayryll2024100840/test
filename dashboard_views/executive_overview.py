@@ -63,7 +63,8 @@ ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
 LAST_UPDATED_CANDIDATES = ["LastUpdated", "UpdatedAt", "DateUpdated", "LastModified", "ModifiedAt"]
 ENROLLMENT_OPTIONS = ["All", "Enrolled", "Conditionally Enrolled"]
 TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
-
+DRILL_STAGE_KEY = "eo_drill_stage"        # session_state key: the stage currently drilled into
+DRILL_CLEAR_LABEL = "← Back to all stages"
 
 # ---------------------------------------------------------------------------
 # STYLES
@@ -514,6 +515,26 @@ def cohort_compare(hist: pd.DataFrame, metric: str, cohort: str):
 # ---------------------------------------------------------------------------
 # UI PIECES
 # ---------------------------------------------------------------------------
+def render_drill_breadcrumb(stage, count):
+    """Breadcrumb bar shown above the student table when a stage is drilled into."""
+    chip = (f'<span style="display:inline-flex;align-items:center;gap:8px;'
+            f'padding:4px 12px;border-radius:999px;background:rgba(185,27,33,.08);'
+            f'border:1px solid rgba(185,27,33,.25);color:#B91B21;font-size:13px;font-weight:600;">'
+            f'Stage · {html.escape(stage)} · {count} student{"s" if count != 1 else ""}</span>')
+
+    c_left, c_right = st.columns([3, 1], vertical_alignment="center")
+    with c_left:
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:10px;">'
+            f'<span style="font-size:13px;color:var(--eo-muted);">Cohort by Lifecycle Stage</span>'
+            f'<span style="color:var(--eo-faint);">›</span>{chip}</div>',
+            unsafe_allow_html=True,
+        )
+    with c_right:
+        if st.button(DRILL_CLEAR_LABEL, key="eo_drill_back", use_container_width=True):
+            st.session_state.pop(DRILL_STAGE_KEY, None)
+            st.rerun()
+
 def delta_html(hist, metric, cohort, kind="pct", higher_is_better=True):
     """Current vs previous term. Green = better, red = worse, grey = no change / nothing to compare."""
     reason, info = cohort_compare(hist, metric, cohort)
@@ -601,6 +622,7 @@ def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
             textposition="outside",
             textfont=dict(size=12, color="#4B5563"),
             cliponaxis=False,
+            customdata=counts["Stage"].tolist(),      # ← what gets reported when a bar is clicked
             hovertemplate="%{x}: %{y} students<extra></extra>",
         )
     )
@@ -1301,9 +1323,28 @@ def render_executive_overview():
 
     with c1:
         with st.container(border=True):
-            card_header("Cohort by Lifecycle Stage", "Students per stage, including inactive (dropped out)")
-            st.plotly_chart(lifecycle_bar(lifecycle_counts(df)),
-                            use_container_width=True, config=chart_config)
+            card_header("Cohort by Lifecycle Stage",
+                        "Students per stage, including inactive (dropped out). "
+                        "Click a bar to see the students in that stage.")
+            stage_counts = lifecycle_counts(df)
+            chart_event = st.plotly_chart(
+                lifecycle_bar(stage_counts),
+                use_container_width=True,
+                config=chart_config,
+                key="eo_lifecycle_chart",
+                on_select="rerun",
+                selection_mode="points",
+            )
+            # Read the click: the selected bar's stage comes back in customdata
+            try:
+                pts = chart_event.selection.points
+            except Exception:
+                pts = []
+            if pts:
+                clicked_stage = pts[0].get("customdata")
+                if clicked_stage and st.session_state.get(DRILL_STAGE_KEY) != clicked_stage:
+                    st.session_state[DRILL_STAGE_KEY] = clicked_stage
+                    st.rerun()
 
     with c2:
         with st.container(border=True):
@@ -1344,8 +1385,17 @@ def render_executive_overview():
                 else:
                     st.info("At least two cohorts are needed to show a trend.")
 
-    # ---- Student table ----
-    render_student_table(df)
+        # ---- Student table (US-21: optionally filtered to the drilled-in stage) ----
+    drill_stage = st.session_state.get(DRILL_STAGE_KEY)
+    if drill_stage:
+        drilled_df = df[df["ActiveStage"] == drill_stage]
+        render_drill_breadcrumb(drill_stage, len(drilled_df))
+        if drilled_df.empty:
+            st.info(f"No students are currently in the '{drill_stage}' stage with these filters.")
+        else:
+            render_student_table(drilled_df)
+    else:
+        render_student_table(df)
 
 if __name__ == "__main__":
     render_executive_overview()
