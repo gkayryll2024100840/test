@@ -135,7 +135,7 @@ if not st.session_state.get('user'):
         '<span style="font-size:22px;font-weight:700;color:#B91C2C;">PULSE</span>'
     )
 
-        st.markdown(
+    st.markdown(
         f"""
         <style>
         [data-testid="stSidebar"],
