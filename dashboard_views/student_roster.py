@@ -1,5 +1,4 @@
-# STUDENT ROSTER.PY 9-29-26
-# STUDENT ROSTER.PY 9-28-26
+# STUDENT ROSTER.PY 9-30-26
 
 import html
 import streamlit as st
@@ -376,8 +375,10 @@ try:
         else:
             # Scrollable list: shows about ROWS_VISIBLE students, scroll for the rest.
             # The column headers above stay put while the rows scroll.
-            scroll_height = ROW_HEIGHT_PX * ROWS_VISIBLE if len(df_filtered) > ROWS_VISIBLE else None
-            with st.container(height=scroll_height, border=False, key="roster_scroll"):
+            # (height is only passed when the list needs to scroll: this Streamlit version rejects height=None,
+            #  which is what broke the page when a search left 10 or fewer students)
+            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(df_filtered) > ROWS_VISIBLE else {}
+            with st.container(border=False, key="roster_scroll", **scroll_kwargs):
                 for _, row in df_filtered.iterrows():
                     s_id = str(row.get("StudentNumber", ""))
                     s_name = str(row.get("Student", "Unknown"))
@@ -449,7 +450,12 @@ try:
             st.info(f"No students are currently tagged under the {active_code} program.")
  
 except Exception as e:
-    st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. Please check the Admin Configuration page. ({e})")
+    # only blame the field mappings when it really is a mapping problem
+    if "mapping" in str(e).lower():
+        st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. "
+                 f"Please check the Admin Configuration page. ({e})")
+    else:
+        st.error(f"The Student Roster couldn't load: {e}")
 
 # Yellow header bar: show this page's program + selected cohort
 # (kept outside the try/except above so it can't be swallowed by it)

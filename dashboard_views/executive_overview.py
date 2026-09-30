@@ -1,4 +1,4 @@
-# EXEC OVERVIEW 9-28-26
+# EXEC OVERVIEW 9-30-26
 import html
 import io
 import json
@@ -32,13 +32,16 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
-STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed"]
+INACTIVE_STAGE = "Inactive"   # students with any stage marked Inactive 
+
+STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed", INACTIVE_STAGE]
 
 STAGE_COLORS = {
     "Coursework": "#B91B21",
     "Comprehensive Exam": "#FFCA06",
     "Capstone": "#55AB22",
     "Completed": "#4A7CF2",
+    INACTIVE_STAGE: "#9CA3AF",   # gray
 }
 
 COURSEWORK_DONE = "Completed"
@@ -160,7 +163,7 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
         font-weight:400;letter-spacing:0;text-transform:none;color:var(--eo-body);text-align:left;cursor:default;
         white-space:normal;}
 .eo-info:hover .eo-tip,.eo-info:focus .eo-tip,.eo-info:focus-within .eo-tip{visibility:visible;opacity:1;}
-.eo-tip-formula{font-weight:600;color:var(--eo-text);margin-bottom:10px;white-space:nowrap;}
+.eo-tip-formula{font-weight:600;color:var(--eo-text);margin-bottom:10px;white-space:normal;}
 /* let the tooltip spill outside Streamlit's markdown wrappers instead of being clipped */
 [data-testid="stElementContainer"]:has(.eo-kpi-row),
 [data-testid="element-container"]:has(.eo-kpi-row),
@@ -378,12 +381,17 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
     cw_done = df["CourseworkStatus"].eq(COURSEWORK_DONE)
     ce_done = df["CompExamStatus"].eq(COMPEXAM_DONE)
     cs_done = df["CapstoneStatus"].eq(CAPSTONE_DONE)
+    # any stage marked Cancelled = the student dropped out -> Inactive (unless they finished everything)
+    is_cancelled = df[["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]].eq("Cancelled").any(axis=1)
+
+    # first matching rule wins
     df["ActiveStage"] = np.select(
-        [~cw_done, ~ce_done, ~cs_done],
-        ["Coursework", "Comprehensive Exam", "Capstone"],
-        default="Completed",
+        [cw_done & ce_done & cs_done, is_cancelled, ~cw_done, ~ce_done],
+        ["Completed", INACTIVE_STAGE, "Coursework", "Comprehensive Exam"],
+        default="Capstone",
     )
     df["IsComplete"] = df["ActiveStage"].eq("Completed")
+    df["IsInactive"] = df["ActiveStage"].eq(INACTIVE_STAGE)
     current_status = np.select(
         [df["ActiveStage"].eq(stage) for stage in STAGE_STATUS_COL],
         [df[col].astype(object) for col in STAGE_STATUS_COL.values()],
@@ -398,13 +406,17 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
 # BUSINESS LOGIC
 # ---------------------------------------------------------------------------
 def determine_active_stage(row) -> str:
+    """Single-row version of the rules in _prepare_executive_df (kept in sync)."""
+    statuses = (row.get("CourseworkStatus"), row.get("CompExamStatus"), row.get("CapstoneStatus"))
+    if statuses == (COURSEWORK_DONE, COMPEXAM_DONE, CAPSTONE_DONE):
+        return "Completed"
+    if "Cancelled" in statuses:
+        return INACTIVE_STAGE
     if row.get("CourseworkStatus") != COURSEWORK_DONE:
         return "Coursework"
     if row.get("CompExamStatus") != COMPEXAM_DONE:
         return "Comprehensive Exam"
-    if row.get("CapstoneStatus") != CAPSTONE_DONE:
-        return "Capstone"
-    return "Completed"
+    return "Capstone"
 
 
 def cohort_sort_key(cohort):
@@ -439,7 +451,7 @@ def cohort_history(df: pd.DataFrame) -> pd.DataFrame:
     has_flags = "IsFlagged" in df.columns
     rows = [
         {"Cohort": c, "Completion": completion_rate(g), "OnTime": on_time_rate(g),
-         "Remaining": int((~g["IsComplete"]).sum()),
+         "Remaining": int((~g["IsComplete"] & ~g["IsInactive"]).sum()),
          # students flagged At Risk in this cohort (count + % of the cohort)
          "AtRisk": int(g["IsFlagged"].sum()) if has_flags else 0,
          "AtRiskPct": round(g["IsFlagged"].mean() * 100, 1) if has_flags and len(g) else 0.0}
@@ -512,9 +524,11 @@ def render_kpi_row(cards):
 
 def remaining_info_html(df: pd.DataFrame) -> str:
     """Tooltip for the Remaining Students tile: the formula, then the split by lifecycle stage."""
-    total, completed = len(df), int(df["IsComplete"].sum())
+    total = len(df)
+    completed = int(df["IsComplete"].sum())
+    inactive = int(df["IsInactive"].sum())
     breakdown = (
-        df.loc[~df["IsComplete"], "ActiveStage"].value_counts()
+        df.loc[~df["IsComplete"] & ~df["IsInactive"], "ActiveStage"].value_counts()
         .reindex(["Coursework", "Comprehensive Exam", "Capstone"], fill_value=0)
     )
     rows = "".join(
@@ -524,9 +538,9 @@ def remaining_info_html(df: pd.DataFrame) -> str:
     )
     return (
         f'<div class="eo-tip-formula">Total Enrolled ({total:,}) &minus; Completed ({completed:,}) '
-        f'= Total ({total - completed:,})</div>{rows}'
-        '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed, '
-        'then split by the lifecycle stage each student is currently in.</div>'
+        f'&minus; Inactive ({inactive:,}) = Total ({total - completed - inactive:,})</div>{rows}'
+        '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed '
+        'and Inactive, then split by the lifecycle stage each student is currently in.</div>'
     )
 
 
@@ -715,7 +729,8 @@ def render_student_table(df: pd.DataFrame):
                 col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
 
         height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
-        with st.container(height=height, border=False, key="eo_table_rows"):
+        scroll_kwargs = {"height": height} if height else {}   # never pass height=None (older Streamlit rejects it)
+        with st.container(border=False, key="eo_table_rows", **scroll_kwargs):
             for r in df.to_dict("records"):
                 sid = str(r["StudentNumber"])
                 first = str(r["FirstName"] or "").strip()
@@ -871,21 +886,21 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         ov.cell(i, 1, stage); ov.cell(i, 2, int(n))
         for c in (1, 2):
             ov.cell(i, c).border = thin
-    # rows 18-21 = Coursework, Comprehensive Exam, Capstone, Completed
+    # rows 18-22 = Coursework, Comprehensive Exam, Capstone, Completed, Inactive
     yes = int(df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE).sum())
-    ov["A22"] = 'Graduate On Time = "yes"'; ov["B22"] = yes
-    ov["A22"].font = ov["B22"].font = Font(italic=True, color=grey)
+    ov["A23"] = 'Graduate On Time = "yes"'; ov["B23"] = yes
+    ov["A23"].font = ov["B23"].font = Font(italic=True, color=grey)
 
     # --- KPIs ---
     cohort = filters.get("Cohort", "All Cohorts")
     ov["A10"] = "KEY METRICS"; ov["A10"].font = section
     kpis = [
-        ("Total Enrolled", "=SUM(B18:B21)", "#,##0", ""),
-        ("On-Time Graduation Rate", "=IF(B11=0,0,B22/B11)", "0.0%",
+        ("Total Enrolled", "=SUM(B18:B22)", "#,##0", ""),
+        ("On-Time Graduation Rate", "=IF(B11=0,0,B23/B11)", "0.0%",
          compare_text(hist, "OnTime", cohort)),
         ("Overall Completion", "=IF(B11=0,0,B21/B11)", "0.0%",
          compare_text(hist, "Completion", cohort)),
-        ("Remaining Students", "=B11-B21", "#,##0",
+        ("Remaining Students", "=B11-B21-B22", "#,##0",
          compare_text(hist, "Remaining", cohort, kind="count", higher_is_better=False)),
     ]
     for i, (label, formula, fmt, cmp_txt) in enumerate(kpis, start=11):
@@ -897,7 +912,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         cmp_cell.font = Font(size=9, color=color, italic=color == "9CA3AF")
     ov["C10"] = f"Students at Risk: {int(at_risk_students(df).shape[0]):,}"
     ov["C10"].font = Font(bold=True, color="C62828")
-    ov["A15"] = "Remaining Students = Total Enrolled − Completed, split by current lifecycle stage."
+    ov["A15"] = "Remaining Students = Total Enrolled − Completed − Inactive, split by current lifecycle stage."
     ov["A15"].font = Font(size=9, italic=True, color=grey)
 
     # --- Completion trend data ---
@@ -921,8 +936,8 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     bar = BarChart()
     bar.title, bar.legend, bar.varyColors = "Cohort by Lifecycle Stage", None, False
     bar.y_axis.majorGridlines = None
-    bar.add_data(Reference(ov, min_col=2, min_row=17, max_row=21), titles_from_data=True)
-    bar.set_categories(Reference(ov, min_col=1, min_row=18, max_row=21))
+    bar.add_data(Reference(ov, min_col=2, min_row=17, max_row=22), titles_from_data=True)
+    bar.set_categories(Reference(ov, min_col=1, min_row=18, max_row=22))
     series = bar.series[0]
     for idx, stage in enumerate(STAGE_ORDER):
         pt = DataPoint(idx=idx)
@@ -1180,7 +1195,7 @@ def render_executive_overview():
                  delta_html(hist, "OnTime", selected_cohort)),
         kpi_card("Overall Completion", f"{completion_rate(df):.1f}%",
                  delta_html(hist, "Completion", selected_cohort)),
-        kpi_card("Remaining Students", f"{int((~df['IsComplete']).sum()):,}",
+        kpi_card("Remaining Students", f"{int((~df['IsComplete'] & ~df['IsInactive']).sum()):,}",
                  delta_html(hist, "Remaining", selected_cohort, kind="count", higher_is_better=False),
                  info_html=remaining_info_html(df)),
         kpi_card("Students at Risk", f"{int(df['IsFlagged'].sum()):,}",
@@ -1195,7 +1210,7 @@ def render_executive_overview():
 
     with c1:
         with st.container(border=True):
-            card_header("Cohort by Lifecycle Stage", "Students currently active per stage")
+            card_header("Cohort by Lifecycle Stage", "Students per stage, including inactive (dropped out)")
             st.plotly_chart(lifecycle_bar(lifecycle_counts(df)),
                             use_container_width=True, config=chart_config)
 
