@@ -1,4 +1,7 @@
 # DB_CONNECT.PY (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
+print("DB_HOST =", repr(os.getenv("DB_HOST")))
+print("DB_USER =", repr(os.getenv("DB_USER")))
+
 import os
 import time
 import threading
