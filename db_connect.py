@@ -3,7 +3,7 @@ import os
 import time
 import threading
 import mysql.connector
-from mysql.connector import pooling
+import queue
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv 
@@ -37,45 +37,126 @@ LIFECYCLE_STATUS_MAP = {
     "defended": "Defended for Completion"
 }
 
-# SPEED: opening a brand-new MySQL connection (TCP + login, sometimes TLS) costs far more than the
-# queries themselves, and every function used to open its own. This pool keeps a few connections open
-# and hands them out again. conn.close() still works exactly as before: for a pooled connection it just
-# returns it to the pool (and resets the session), so no caller has to change.
-_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 8))
-_pool = None
-_pool_failed_at = 0.0
+# SPEED (with a hard cap): opening a brand-new MySQL connection costs far more than the queries themselves,
+# so finished connections are kept and reused. Connections are opened ONLY when needed (never up front),
+# the total is capped (DB_POOL_SIZE, default 3 - hosted MySQL plans often allow only ~5-10 connections in
+# total), and idle ones are closed after DB_POOL_IDLE_SECONDS so they don't hog the limit.
+# If every connection is busy, callers wait (up to 10 s) instead of opening more -> no "Too many connections".
+# conn.close() still works as before: on a pooled connection it just hands it back.
+_MAX_OPEN = max(1, int(os.getenv("DB_POOL_SIZE", 3)))
+_IDLE_SECONDS = int(os.getenv("DB_POOL_IDLE_SECONDS", 60))
+_WAIT_SECONDS = 10
+_idle = queue.LifoQueue()        # items: (raw_connection, time_it_was_returned)
+_open_count = 0                  # raw connections currently alive (idle + in use)
 _pool_lock = threading.Lock()
 
 
-def _get_pool():
-    global _pool, _pool_failed_at
-    if _pool is not None:
-        return _pool
+class _PooledConn:
+    """Behaves like a normal MySQL connection, except close() returns it to the pool."""
+
+    def __init__(self, conn):
+        object.__setattr__(self, "_conn", conn)
+        object.__setattr__(self, "_released", False)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._conn, name, value)
+
+    def close(self):
+        if self._released:
+            return
+        object.__setattr__(self, "_released", True)
+        _release(self._conn)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+
+def _discard(raw):
+    """Really close a raw connection and free its slot."""
+    global _open_count
+    try:
+        raw.close()
+    except Exception:
+        pass
     with _pool_lock:
-        if _pool is None:
-            if time.monotonic() - _pool_failed_at < 30:      # DB was unreachable a moment ago: don't hammer it
-                raise pooling.PoolError("connection pool unavailable")
-            try:
-                _pool = pooling.MySQLConnectionPool(
-                    pool_name="etysb_pool", pool_size=_POOL_SIZE, pool_reset_session=True,
-                    connection_timeout=10, **db_config,
-                )
-            except Exception:
-                _pool_failed_at = time.monotonic()
-                raise
-    return _pool
+        _open_count = max(0, _open_count - 1)
+
+
+def _release(raw):
+    """Give a finished connection back (or drop it if it's broken)."""
+    try:
+        if raw.in_transaction:
+            raw.rollback()               # end any open read snapshot so the next user sees fresh data
+        _idle.put((raw, time.monotonic()))
+    except Exception:
+        _discard(raw)
+
+
+def _alive(raw):
+    try:
+        return raw.is_connected()        # pings the server
+    except Exception:
+        return False
+
+
+def reap_idle_connections():
+    """Close pooled connections that have been idle too long (called by the background checker)."""
+    keep = []
+    while True:
+        try:
+            raw, ts = _idle.get_nowait()
+        except queue.Empty:
+            break
+        if time.monotonic() - ts > _IDLE_SECONDS:
+            _discard(raw)
+        else:
+            keep.append((raw, ts))
+    for item in keep:
+        _idle.put(item)
 
 
 def get_db_connection():
-    """Return a live MySQL connection (from the pool). Callers must call .close() when done -
-    that hands it back to the pool. Falls back to a plain connection if the pool is full/unavailable."""
-    try:
-        conn = _get_pool().get_connection()
-        if not conn.is_connected():            # idle connection dropped by the server -> reconnect it
-            conn.reconnect(attempts=2, delay=0)
-        return conn
-    except (pooling.PoolError, mysql.connector.Error):
-        return mysql.connector.connect(**db_config)
+    """Return a live MySQL connection. Callers must call .close() when done (hands it back to the pool)."""
+    global _open_count
+    deadline = time.monotonic() + _WAIT_SECONDS
+    while True:
+        try:
+            raw, ts = _idle.get_nowait()
+        except queue.Empty:
+            with _pool_lock:
+                can_open = _open_count < _MAX_OPEN
+                if can_open:
+                    _open_count += 1
+            if can_open:
+                try:
+                    cfg = {**db_config, "connection_timeout": db_config.get("connection_timeout", 10)}
+                    return _PooledConn(mysql.connector.connect(**cfg))
+                except Exception:
+                    with _pool_lock:
+                        _open_count = max(0, _open_count - 1)
+                    raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise mysql.connector.Error(
+                    msg="Database is busy (all connections are in use). Please try again in a moment.",
+                    errno=1040,
+                )
+            try:
+                raw, ts = _idle.get(timeout=min(remaining, 1.0))
+            except queue.Empty:
+                continue
+        # got an idle connection - make sure it's still good
+        if time.monotonic() - ts > _IDLE_SECONDS or not _alive(raw):
+            _discard(raw)
+            continue
+        return _PooledConn(raw)
 
 def format_mysql_error(err):
     """Translates MySQL error codes into clean error messages."""
@@ -129,11 +210,13 @@ def get_max_retry_count(login_id):
 
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
 def get_student_roster_data(program_id=None):
-    """Fetches the roster.
+    """Fetches the roster filtered by the given program ID.
 
-    program_id=None returns students from every program (used by the "All Programs"
-    option on the Student Roster). A specific program_id filters to that program.
+    If program_id is None, returns an empty DataFrame.
     """
+    if program_id is None:
+        return pd.DataFrame()
+
     try:
         # 1. Load the mappings from the JSON file
         mappings = load_mappings()
@@ -147,10 +230,11 @@ def get_student_roster_data(program_id=None):
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. Run the query (all programs when program_id is None)
-        conn = mysql.connector.connect(**db_config)
+        # 3. Run the program-scoped query
+        # SPEED: the adviser sub-query is limited to THIS program's students (it used to group the
+        # adviser table for every program in the school before joining).
         query = """
-            SELECT 
+            SELECT
                 s.StudentNumber,
                 CONCAT(s.FirstName, ' ', s.LastName) AS Student,
                 s.Cohort,
@@ -159,32 +243,31 @@ def get_student_roster_data(program_id=None):
                 sl.CourseworkStatus,
                 sl.CompExamStatus,
                 sl.CapstoneStatus,
-                sl.LastUpdate,
-                p.ProgramCode
+                sl.LastUpdate
             FROM Students s
-            LEFT JOIN Program p ON s.ProgramID = p.ProgramID
             LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
             LEFT JOIN (
                 -- students with 2 advisers -> one row, e.g. "Dr. A, Dr. B"
                 SELECT sa.StudentNumber,
-                       GROUP_CONCAT(a.AdviserName ORDER BY a.AdviserName SEPARATOR ', ') AS AdviserName
+                       GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
                 FROM Student_Adviser sa
-                JOIN Adviser a ON sa.AdviserID = a.AdviserID
+                JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
+                JOIN Students sp ON sp.StudentNumber = sa.StudentNumber AND sp.ProgramID = %s
                 GROUP BY sa.StudentNumber
             ) a ON a.StudentNumber = s.StudentNumber
+            WHERE s.ProgramID = %s
         """
-        params = None
-        if program_id is not None:
-            query += " WHERE s.ProgramID = %s"
-            params = (program_id,)
-        df = pd.read_sql(query, conn, params=params)
-        conn.close()
+        conn = get_db_connection()
+        try:
+            df = pd.read_sql(query, conn, params=(program_id, program_id))
+        finally:
+            conn.close()
         return df
 
     except Exception as e:
         print(f"Mapping validation failed: {e}")
         raise e
-        
+
 def get_last_updated_time():
     """Checks last_sync.txt for the last successful sync timestamp."""
     try:
@@ -1385,6 +1468,7 @@ def _refresh_scheduler_loop():
             run_scheduled_refresh_if_due()
         except Exception as e:
             print(f"Scheduled refresh check failed: {e}")
+        reap_idle_connections()
         time.sleep(_SCHEDULER_CHECK_SECONDS)
 
 
