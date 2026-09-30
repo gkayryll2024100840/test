@@ -161,16 +161,16 @@ if not st.session_state.get('user'):
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
             padding-top: 3rem !important;
-            max-width: 600px !important;
+            max-width: 550px !important;
             margin-left: auto !important;
             margin-right: auto !important;
         }}
 
-        /* The card itself: never wider than 600px, always centered */
+        /* The card itself: never wider than 550px, always centered */
         .st-key-login_card,
         .st-key-login_card > div,
         .st-key-login_card [data-testid="stVerticalBlock"] {{
-            max-width: 600px !important;
+            max-width: 550px !important;
             width: 100% !important;
             margin-left: auto !important;
             margin-right: auto !important;
@@ -216,7 +216,7 @@ if not st.session_state.get('user'):
         .st-key-login_card [data-testid="stTextInput"] label p {{
             font-size: 12px !important;
             color: #1A1F36 !important;
-            font-weight: 600 !important;
+            font-weight: 550 !important;
             margin-bottom: 2px !important;
             line-height: 1.2 !important;
         }}
@@ -270,7 +270,7 @@ if not st.session_state.get('user'):
             color: #FFFFFF !important;
             border: none !important;
             border-radius: 6px !important;
-            font-weight: 600 !important;
+            font-weight: 550 !important;
             font-size: 13px !important;
             width: 100% !important;
             height: 36px !important;
