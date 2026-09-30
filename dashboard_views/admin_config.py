@@ -470,3 +470,7 @@ def sync_logs_section():
 
 
 sync_logs_section()
+if logs:
+    st.dataframe(logs, use_container_width=True)
+else:
+    st.info("No system logs found in the local_logs.db")
