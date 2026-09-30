@@ -1,4 +1,4 @@
-# EXEC OVERVIEW 9-28-26
+# EXEC OVERVIEW 9-30-26
 import html
 import io
 import json
@@ -15,9 +15,13 @@ from db_connect import (
     format_mysql_error,
     get_available_cohorts,
     check_column_exists,
+    find_invalid_mappings,
+    get_schema_load_error,
     get_user_program,
+    get_flagged_students,
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
+from field_mapping import load_mappings
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -31,13 +35,16 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
-STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed"]
+INACTIVE_STAGE = "Inactive"   # students with any stage marked Cancelled (dropped out)
+
+STAGE_ORDER = ["Coursework", "Comprehensive Exam", "Capstone", "Completed", INACTIVE_STAGE]
 
 STAGE_COLORS = {
     "Coursework": "#B91B21",
     "Comprehensive Exam": "#FFCA06",
     "Capstone": "#55AB22",
     "Completed": "#4A7CF2",
+    INACTIVE_STAGE: "#9CA3AF",   # gray
 }
 
 COURSEWORK_DONE = "Completed"
@@ -71,6 +78,8 @@ PAGE_CSS = """
   --pg-bg:#ECFDF3; --pg-fg:#15803D; --pg-bd:#BBF7D0;   --pr-bg:#FEF2F2; --pr-fg:#B91C1C; --pr-bd:#FECACA;
   --pb-bg:#EFF6FF; --pb-fg:#1D4ED8; --pb-bd:#BFDBFE;   --pa-bg:#FFFBEB; --pa-fg:#B45309; --pa-bd:#FDE68A;
   --px-bg:#F3F4F6; --px-fg:#4B5563; --px-bd:#E5E7EB;
+  --py-bg:#FEF9C3; --py-fg:#A16207; --py-bd:#FDE047;
+  --eo-seg-bg:#F1F2F4;
 }
 html[data-eo-theme="dark"] .stApp{
   --eo-surface:#161D2B; --eo-surface-2:#1B2333; --eo-border:#263044; --eo-border-soft:#1E293B; --eo-line:#334155;
@@ -82,13 +91,33 @@ html[data-eo-theme="dark"] .stApp{
   --pb-bg:rgba(59,130,246,.15); --pb-fg:#93C5FD; --pb-bd:rgba(59,130,246,.3);
   --pa-bg:rgba(245,158,11,.14); --pa-fg:#FCD34D; --pa-bd:rgba(245,158,11,.3);
   --px-bg:rgba(148,163,184,.12);--px-fg:#CBD5E1; --px-bd:rgba(148,163,184,.24);
+  --py-bg:rgba(234,179,8,.15);  --py-fg:#FDE047; --py-bd:rgba(234,179,8,.35);
+  --eo-seg-bg:#111827;
 }
 /* Plotly draws with inline colours; these rules make chart text/lines/grid follow the theme */
 .stApp .js-plotly-plot .xtick text,
 .stApp .js-plotly-plot .bars .textpoint text{fill:var(--eo-chart-text) !important;}
-.stApp .js-plotly-plot .scatterlayer .textpoint text{fill:var(--eo-chart-line) !important;}
-.stApp .js-plotly-plot .scatterlayer .js-line{stroke:var(--eo-chart-line) !important;}
-.stApp .js-plotly-plot .scatterlayer .point{fill:var(--eo-chart-line) !important;}
+.stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .textpoint text{fill:var(--eo-chart-line) !important;}
+.stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .js-line{stroke:var(--eo-chart-line) !important;}
+.stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .point{fill:var(--eo-chart-line) !important;}
+/* the two chart cards: same height, top-aligned (the app-wide CSS centres columns vertically) */
+.st-key-eo_charts [data-testid="stHorizontalBlock"]{align-items:stretch !important;}
+.st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{justify-content:flex-start !important;}
+.st-key-eo_charts [data-testid="stVerticalBlockBorderWrapper"]{height:100%;}
+/* trend card title row: title + subtitle on the left, Completion % / Students at Risk switch on the right */
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"]{align-items:flex-start !important;}
+.st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:4px;}
+.st-key-eo_trend_switch [data-testid="stElementContainer"]{justify-content:flex-end !important;width:100%;}
+.st-key-eo_trend_switch [data-testid="stButtonGroup"],
+.st-key-eo_trend_switch [role="radiogroup"]{justify-content:flex-end;flex-wrap:nowrap;margin-left:auto;}
+/* selected option in the brand red */
+.st-key-eo_trend_switch [data-testid="stBaseButton-segmented_controlActive"],
+.st-key-eo_trend_switch [data-testid="stBaseButton-segmented_controlActive"] p{color:#B91B21 !important;}
+.st-key-eo_trend_switch [data-testid="stBaseButton-segmented_controlActive"]{border-color:#B91B21 !important;
+        background:rgba(185,27,33,.06) !important;}
+html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-segmented_controlActive"],
+html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-segmented_controlActive"] p{color:#F87171 !important;}
+.st-key-eo_trend_switch [data-testid^="stBaseButton-segmented_control"] p{font-size:13px;font-weight:600;white-space:nowrap;}
 .stApp .js-plotly-plot .gridlayer path{stroke:var(--eo-chart-grid) !important;}
 .stApp .js-plotly-plot .xlines-above{stroke:var(--eo-line) !important;}
 /* page padding + Streamlit header are handled by render_app_shell() in components.py (shared across pages) */
@@ -137,7 +166,7 @@ html[data-eo-theme="dark"] .stApp{
         font-weight:400;letter-spacing:0;text-transform:none;color:var(--eo-body);text-align:left;cursor:default;
         white-space:normal;}
 .eo-info:hover .eo-tip,.eo-info:focus .eo-tip,.eo-info:focus-within .eo-tip{visibility:visible;opacity:1;}
-.eo-tip-formula{font-weight:600;color:var(--eo-text);margin-bottom:10px;white-space:nowrap;}
+.eo-tip-formula{font-weight:600;color:var(--eo-text);margin-bottom:10px;white-space:normal;}
 /* let the tooltip spill outside Streamlit's markdown wrappers instead of being clipped */
 [data-testid="stElementContainer"]:has(.eo-kpi-row),
 [data-testid="element-container"]:has(.eo-kpi-row),
@@ -173,6 +202,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .pill-red{background:var(--pr-bg);color:var(--pr-fg);border-color:var(--pr-bd);}
 .pill-blue{background:var(--pb-bg);color:var(--pb-fg);border-color:var(--pb-bd);}
 .pill-amber{background:var(--pa-bg);color:var(--pa-fg);border-color:var(--pa-bd);}
+.pill-yellow{background:var(--py-bg);color:var(--py-fg);border-color:var(--py-bd);}
 .pill-gray{background:var(--px-bg);color:var(--px-fg);border-color:var(--px-bd);}
 .eo-muted{color:var(--eo-muted);}
 
@@ -184,14 +214,41 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows{gap:0 !important;}
 .st-key-eo_table_rows [data-testid="stHorizontalBlock"]{padding:10px 18px;border-bottom:1px solid var(--eo-border-soft);
         align-items:center;}
-.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stVerticalBlock"]{gap:2px !important;}
+/* name + student number sit right on top of each other */
+.st-key-eo_table_rows [data-testid="stColumn"],
+.st-key-eo_table_rows [data-testid="stColumn"] > div,
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stVerticalBlock"]{gap:0 !important;row-gap:0 !important;}
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stElementContainer"],
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stMarkdown"],
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stTooltipHoverTarget"]{min-height:0 !important;height:auto !important;}
+.st-key-eo_table_rows [data-testid="stColumn"] [data-testid="stElementContainer"]{margin:0 !important;}
+.st-key-eo_table_rows [data-testid="stButton"]{margin:0 !important;padding:0 !important;line-height:1.3;}
+.st-key-eo_table_rows .eo-id{margin-top:2px;line-height:1.3;}   /* space between name and student number */
 .st-key-eo_table [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
 .eo-cell{font-size:14px;color:var(--eo-text-2);}
 /* student name = clickable link-style button that opens their Student Profile */
-.st-key-eo_table_rows button[kind="tertiary"]{padding:0 !important;min-height:0 !important;height:auto !important;
-        justify-content:flex-start;}
-.st-key-eo_table_rows button[kind="tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);}
-.st-key-eo_table_rows button[kind="tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
+/* strip the button look completely (any button type, overrides the app-wide button styling):
+   no box, no border, no fill, no shadow, no focus ring -> just the name as text */
+.st-key-eo_table_rows [data-testid="stButton"] button,
+.st-key-eo_table_rows [data-testid^="stBaseButton"],
+.st-key-eo_table_rows [data-testid="stButton"] button:hover,
+.st-key-eo_table_rows [data-testid="stButton"] button:focus,
+.st-key-eo_table_rows [data-testid="stButton"] button:focus-visible,
+.st-key-eo_table_rows [data-testid="stButton"] button:active{
+        border:none !important;outline:none !important;box-shadow:none !important;background:transparent !important;
+        padding:0 !important;margin:0 !important;min-height:0 !important;height:auto !important;width:auto !important;
+        max-width:100% !important;border-radius:0 !important;justify-content:flex-start !important;text-align:left !important;}
+.st-key-eo_table_rows [data-testid="stButton"] button p{font-size:14px !important;font-weight:600 !important;
+        color:var(--eo-text-2) !important;margin:0 !important;line-height:1.3 !important;
+        white-space:normal !important;overflow:visible !important;text-overflow:clip !important;text-decoration:none !important;}
+.st-key-eo_table_rows [data-testid="stButton"] button:hover p{color:#B91B21 !important;text-decoration:underline !important;}
+.st-key-eo_table_rows button[kind="tertiary"],
+.st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]{padding:0 !important;min-height:0 !important;height:auto !important;
+        line-height:1.3 !important;justify-content:flex-start;}
+.st-key-eo_table_rows button[kind="tertiary"] p,
+.st-key-eo_table_rows [data-testid="stBaseButton-tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);margin:0 !important;line-height:1.3;}
+.st-key-eo_table_rows button[kind="tertiary"]:hover p,
+.st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
 </style>
 """
 
@@ -200,9 +257,9 @@ PILL_CLASS = {
     "Passed": "pill-green",
     "Defended for Completion": "pill-green",
     "Cancelled": "pill-red",
-    "In-Progress": "pill-blue",
-    "Pending": "pill-amber",
-    "Incomplete": "pill-amber",
+    "In-Progress": "pill-yellow",
+    "Pending": "pill-yellow",
+    "Incomplete": "pill-red",
 }
 
 
@@ -327,12 +384,17 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
     cw_done = df["CourseworkStatus"].eq(COURSEWORK_DONE)
     ce_done = df["CompExamStatus"].eq(COMPEXAM_DONE)
     cs_done = df["CapstoneStatus"].eq(CAPSTONE_DONE)
+    # any stage marked Cancelled = the student dropped out -> Inactive (unless they finished everything)
+    is_cancelled = df[["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]].eq("Cancelled").any(axis=1)
+
+    # first matching rule wins
     df["ActiveStage"] = np.select(
-        [~cw_done, ~ce_done, ~cs_done],
-        ["Coursework", "Comprehensive Exam", "Capstone"],
-        default="Completed",
+        [cw_done & ce_done & cs_done, is_cancelled, ~cw_done, ~ce_done],
+        ["Completed", INACTIVE_STAGE, "Coursework", "Comprehensive Exam"],
+        default="Capstone",
     )
     df["IsComplete"] = df["ActiveStage"].eq("Completed")
+    df["IsInactive"] = df["ActiveStage"].eq(INACTIVE_STAGE)
     current_status = np.select(
         [df["ActiveStage"].eq(stage) for stage in STAGE_STATUS_COL],
         [df[col].astype(object) for col in STAGE_STATUS_COL.values()],
@@ -344,16 +406,43 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# FIELD MAPPING CHECK (US-10)
+#   Same rule as the Student Roster: if any saved mapping in Admin Configuration
+#   points to a column that doesn't exist, the page shows an error instead of data.
+#   Uses the schema snapshot in db_connect, so this costs no extra database queries
+#   on most reruns (the snapshot refreshes every 60 s, or via "Re-check schema").
+# ---------------------------------------------------------------------------
+def check_field_mappings():
+    """Returns an error message if the saved field mappings are invalid, else None."""
+    try:
+        mappings = load_mappings()
+    except Exception as e:
+        return f"Could not load field mappings: {e}"
+    invalid = find_invalid_mappings(mappings)
+    if not invalid:
+        return None
+    schema_error = get_schema_load_error()
+    if schema_error:
+        return f"Could not verify field mappings: {schema_error}"
+    details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
+    return f"Invalid or unverified mapping(s) - {details}"
+
+
+# ---------------------------------------------------------------------------
 # BUSINESS LOGIC
 # ---------------------------------------------------------------------------
 def determine_active_stage(row) -> str:
+    """Single-row version of the rules in _prepare_executive_df (kept in sync)."""
+    statuses = (row.get("CourseworkStatus"), row.get("CompExamStatus"), row.get("CapstoneStatus"))
+    if statuses == (COURSEWORK_DONE, COMPEXAM_DONE, CAPSTONE_DONE):
+        return "Completed"
+    if "Cancelled" in statuses:
+        return INACTIVE_STAGE
     if row.get("CourseworkStatus") != COURSEWORK_DONE:
         return "Coursework"
     if row.get("CompExamStatus") != COMPEXAM_DONE:
         return "Comprehensive Exam"
-    if row.get("CapstoneStatus") != CAPSTONE_DONE:
-        return "Capstone"
-    return "Completed"
+    return "Capstone"
 
 
 def cohort_sort_key(cohort):
@@ -385,12 +474,16 @@ def lifecycle_counts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def cohort_history(df: pd.DataFrame) -> pd.DataFrame:
+    has_flags = "IsFlagged" in df.columns
     rows = [
         {"Cohort": c, "Completion": completion_rate(g), "OnTime": on_time_rate(g),
-         "Remaining": int((~g["IsComplete"]).sum())}
+         "Remaining": int((~g["IsComplete"] & ~g["IsInactive"]).sum()),
+         # students flagged At Risk in this cohort (count + % of the cohort)
+         "AtRisk": int(g["IsFlagged"].sum()) if has_flags else 0,
+         "AtRiskPct": round(g["IsFlagged"].mean() * 100, 1) if has_flags and len(g) else 0.0}
         for c, g in df.groupby("Cohort")
     ]
-    hist = pd.DataFrame(rows, columns=["Cohort", "Completion", "OnTime", "Remaining"])
+    hist = pd.DataFrame(rows, columns=["Cohort", "Completion", "OnTime", "Remaining", "AtRisk", "AtRiskPct"])
     if hist.empty:
         return hist
     hist = hist.iloc[sorted(range(len(hist)), key=lambda i: cohort_sort_key(hist.loc[i, "Cohort"]))]
@@ -457,9 +550,11 @@ def render_kpi_row(cards):
 
 def remaining_info_html(df: pd.DataFrame) -> str:
     """Tooltip for the Remaining Students tile: the formula, then the split by lifecycle stage."""
-    total, completed = len(df), int(df["IsComplete"].sum())
+    total = len(df)
+    completed = int(df["IsComplete"].sum())
+    inactive = int(df["IsInactive"].sum())
     breakdown = (
-        df.loc[~df["IsComplete"], "ActiveStage"].value_counts()
+        df.loc[~df["IsComplete"] & ~df["IsInactive"], "ActiveStage"].value_counts()
         .reindex(["Coursework", "Comprehensive Exam", "Capstone"], fill_value=0)
     )
     rows = "".join(
@@ -469,9 +564,9 @@ def remaining_info_html(df: pd.DataFrame) -> str:
     )
     return (
         f'<div class="eo-tip-formula">Total Enrolled ({total:,}) &minus; Completed ({completed:,}) '
-        f'= Total ({total - completed:,})</div>{rows}'
-        '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed, '
-        'then split by the lifecycle stage each student is currently in.</div>'
+        f'&minus; Inactive ({inactive:,}) = Total ({total - completed - inactive:,})</div>{rows}'
+        '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed '
+        'and Inactive (dropped out), then split by the lifecycle stage each student is currently in.</div>'
     )
 
 
@@ -482,6 +577,8 @@ def card_header(title, subtitle):
         unsafe_allow_html=True,
     )
 
+
+TREND_HEIGHT = 300   # same height as the bar chart, so both cards line up
 
 BASE_LAYOUT = dict(
     height=300,
@@ -513,6 +610,33 @@ def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def at_risk_trend(hist: pd.DataFrame) -> go.Figure:
+    """Students flagged At Risk per cohort (same look as the completion trend, in the at-risk red)."""
+    red = "#C62828"
+    fig = go.Figure(
+        go.Scatter(
+            x=hist["Cohort"],
+            y=hist["AtRisk"],
+            mode="lines+markers+text",
+            line=dict(color=red, width=1.5),
+            marker=dict(size=6, color=red),
+            text=[f"<b>{int(n)}</b>" for n in hist["AtRisk"]],
+            textposition="top center",
+            textfont=dict(size=12, color=red),
+            cliponaxis=False,
+            customdata=hist["AtRiskPct"],
+            hovertemplate="%{x}: %{y} students at risk (%{customdata:.1f}% of cohort)<extra></extra>",
+        )
+    )
+    lo, hi = hist["AtRisk"].min(), hist["AtRisk"].max()
+    pad = max((hi - lo) * 0.35, 2)
+    fig.update_layout(**BASE_LAYOUT)
+    fig.update_yaxes(showgrid=True, gridcolor="#E5E7EB", zeroline=False,
+                     showticklabels=False, range=[max(lo - pad, 0), hi + pad])
+    fig.update_xaxes(showgrid=False, type="category", tickfont=dict(size=10, color="#6B7280"))
+    return fig
+
+
 def completion_trend(hist: pd.DataFrame) -> go.Figure:
     fig = go.Figure(
         go.Scatter(
@@ -541,7 +665,9 @@ def status_pill(value):
     if value is None or pd.isna(value) or str(value).strip().lower() in ("", "none", "nan"):
         return '<span class="eo-muted">—</span>'
     value = str(value)
-    cls = PILL_CLASS.get(value, "pill-gray")
+    # case/spacing-insensitive match, so "In Progress" / "in-progress" still get their colour
+    lookup = {k.lower().replace(" ", "-"): v for k, v in PILL_CLASS.items()}
+    cls = lookup.get(value.strip().lower().replace(" ", "-"), "pill-gray")
     return f'<span class="eo-pill {cls}">{html.escape(value)}</span>'
 
 
@@ -552,21 +678,46 @@ EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
 
 
-def time_in_stage(row):
-    """Days the student has been in their current stage. Not built yet -> None (shows "—").
+@st.cache_data(ttl=300, show_spinner=False)
+def get_stage_flags() -> pd.DataFrame:
+    """Time in stage + At-Risk flag for every student, from the v_student_stage_flags view.
 
-    Plan (from the ER diagram): days since the date they entered ActiveStage, i.e. the previous
-    stage's *UpdateAt in Student_Lifecycle (CourseworkUpdateAt / CompExamUpdateAt / CapstoneUpdateAt).
+    The view compares each student's days in their current stage with the program's
+    At-Risk threshold (set in Admin Configuration). Completed and Cancelled students are
+    never flagged. Saving a new threshold clears this cache, so the table updates right away.
     """
-    return None
+    flags = get_flagged_students()
+    if flags is None or flags.empty:
+        return pd.DataFrame(columns=["StudentNumber", "DaysInStage", "ExpectedDays", "IsFlagged", "FlagReason"])
+    flags = flags.rename(columns={"days_in_stage": "DaysInStage", "expected_days": "ExpectedDays",
+                                  "is_flagged": "IsFlagged", "flag_reason": "FlagReason"})
+    flags["StudentNumber"] = flags["StudentNumber"].astype(str)
+    return flags[["StudentNumber", "DaysInStage", "ExpectedDays", "IsFlagged", "FlagReason"]]
+
+
+def add_stage_flags(df: pd.DataFrame) -> pd.DataFrame:
+    """Adds DaysInStage / ExpectedDays / IsFlagged / FlagReason to the student rows."""
+    out = df.copy()
+    out["_sn"] = out["StudentNumber"].astype(str)
+    try:
+        flags = get_stage_flags().rename(columns={"StudentNumber": "_sn"})
+    except Exception as e:
+        st.warning(f"Couldn't load at-risk flags: {e}")
+        flags = pd.DataFrame(columns=["_sn", "DaysInStage", "ExpectedDays", "IsFlagged", "FlagReason"])
+    out = out.merge(flags, on="_sn", how="left").drop(columns="_sn")
+    out["IsFlagged"] = pd.to_numeric(out["IsFlagged"], errors="coerce").fillna(0).astype(int).astype(bool)
+    return out
+
+
+def time_in_stage(row):
+    """Days the student has been in their current stage (None -> shows "—")."""
+    days = row.get("DaysInStage")
+    return int(days) if days is not None and pd.notna(days) else None
 
 
 def risk_flag(row, days):
-    """True when the student is past the stage's expected duration. Not built yet -> None (shows "—").
-
-    Plan: compare `days` with Program_Stage.ExpectedDays for this student's ProgramID + stage.
-    """
-    return None
+    """True when the student is past the program's At-Risk threshold and not finished."""
+    return bool(row.get("IsFlagged"))
 
 
 def open_student_profile(student_id, program_id, program_code):
@@ -580,11 +731,22 @@ def open_student_profile(student_id, program_id, program_code):
 
 
 def render_student_table(df: pd.DataFrame):
+    """Students At Risk table: only students past their program's At-Risk threshold
+    (and not finished with every stage), longest time in stage first."""
+    st.markdown(
+        '<div class="eo-card-head" style="margin-top:18px;">'
+        '<div class="eo-card-title">Students At Risk — Requires Follow-Up</div>'
+        '<div class="eo-card-sub">Auto-flagged when a student stays in a stage longer than the '
+        "program's At-Risk threshold (US-26 / US-27)</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    df = df[df["IsFlagged"]] if "IsFlagged" in df.columns else df.iloc[0:0]
     if df.empty:
-        st.info("No students match these filters.")
+        st.success("No students are at risk for these filters.")
         return
 
-    df = df.sort_values(["LastUpdated", "LastName"], ascending=[False, True], na_position="last")
+    df = df.sort_values(["DaysInStage", "LastName"], ascending=[False, True], na_position="last")
 
     with st.container(key="eo_table"):
         # header row (stays put while the rows scroll)
@@ -593,7 +755,8 @@ def render_student_table(df: pd.DataFrame):
                 col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
 
         height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
-        with st.container(height=height, border=False, key="eo_table_rows"):
+        scroll_kwargs = {"height": height} if height else {}   # never pass height=None (older Streamlit rejects it)
+        with st.container(border=False, key="eo_table_rows", **scroll_kwargs):
             for r in df.to_dict("records"):
                 sid = str(r["StudentNumber"])
                 first = str(r["FirstName"] or "").strip()
@@ -605,8 +768,8 @@ def render_student_table(df: pd.DataFrame):
 
                 c = st.columns(EO_COL_WIDTHS, vertical_alignment="center")
                 with c[0]:
-                    if st.button(name, key=f"eo_open_{sid}", type="tertiary",
-                                 help="Open this student's profile"):
+                    # no help= tooltip here: its wrapper added extra space under the name
+                    if st.button(name, key=f"eo_open_{sid}", type="tertiary"):
                         open_student_profile(sid, r["ProgramID"], r.get("ProgramCode"))
                     st.markdown(f'<div class="eo-id">{html.escape(sid)}</div>', unsafe_allow_html=True)
                 c[1].markdown(f'<div class="eo-cell">{html.escape(str(cohort))}</div>', unsafe_allow_html=True)
@@ -619,7 +782,8 @@ def render_student_table(df: pd.DataFrame):
                     unsafe_allow_html=True,
                 )
                 c[6].markdown(
-                    '<span class="eo-pill pill-red">AT RISK</span>' if flag
+                    f'<span class="eo-pill pill-red" title="{html.escape(str(r.get("FlagReason") or ""))}">AT RISK</span>'
+                    if flag
                     else '<span class="eo-muted">—</span>',
                     unsafe_allow_html=True,
                 )
@@ -640,17 +804,32 @@ EXPORT_COLUMNS = {                      # DataFrame column -> header in the expo
     "CourseworkStatus": "Coursework Status",
     "CompExamStatus": "Comp Exam Status",
     "CapstoneStatus": "Capstone Status",
+    "DaysInStage": "Time in Stage (days)",
+    "ExpectedDays": "At-Risk Threshold (days)",
+    "FlagReason": "Flag Reason",
     "GraduateOnTime": "Graduate On Time",
     "LastUpdated": "Last Updated",
 }
 
 
+def at_risk_students(df: pd.DataFrame) -> pd.DataFrame:
+    """Same rows as the "Students At Risk" table on the page (active filters already applied)."""
+    if "IsFlagged" not in df.columns:
+        return df.iloc[0:0]
+    return df[df["IsFlagged"]]
+
+
 def export_table(df: pd.DataFrame) -> pd.DataFrame:
-    """The student table as it goes into the export: readable headers, sorted, dates as text."""
+    """The at-risk table as it goes into the export: readable headers, longest time in stage first,
+    dates as text."""
     out = df[[c for c in EXPORT_COLUMNS if c in df.columns]].copy()
     if "LastUpdated" in out:
         out["LastUpdated"] = out["LastUpdated"].dt.strftime("%Y-%m-%d %H:%M").fillna("")
-    out = out.sort_values(["ProgramCode", "Cohort", "LastName", "FirstName"], na_position="last")
+    for c in ("DaysInStage", "ExpectedDays"):
+        if c in out:
+            out[c] = pd.to_numeric(out[c], errors="coerce").astype("Int64")
+    sort_cols = [c for c in ("DaysInStage", "LastName", "FirstName") if c in out]
+    out = out.sort_values(sort_cols, ascending=[c != "DaysInStage" for c in sort_cols], na_position="last")
     out = out.astype(object).where(out.notna(), "")
     return out.rename(columns=EXPORT_COLUMNS)
 
@@ -690,7 +869,8 @@ def _value_labels(DataLabelList):
 
 
 def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
-    """Excel export with two tabs: 'Overview' (filters, KPIs, both charts) and 'Students' (the table)."""
+    """Excel export with two tabs: 'Overview' (filters, KPIs, both charts) and
+    'At-Risk Students' (the same students as the "Students At Risk" table on the page)."""
     from openpyxl import Workbook
     from openpyxl.chart import BarChart, LineChart, Reference
     from openpyxl.chart.label import DataLabelList
@@ -732,21 +912,21 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         ov.cell(i, 1, stage); ov.cell(i, 2, int(n))
         for c in (1, 2):
             ov.cell(i, c).border = thin
-    # rows 18-21 = Coursework, Comprehensive Exam, Capstone, Completed
+    # rows 18-22 = Coursework, Comprehensive Exam, Capstone, Completed, Inactive
     yes = int(df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE).sum())
-    ov["A22"] = 'Graduate On Time = "yes"'; ov["B22"] = yes
-    ov["A22"].font = ov["B22"].font = Font(italic=True, color=grey)
+    ov["A23"] = 'Graduate On Time = "yes"'; ov["B23"] = yes
+    ov["A23"].font = ov["B23"].font = Font(italic=True, color=grey)
 
     # --- KPIs ---
     cohort = filters.get("Cohort", "All Cohorts")
     ov["A10"] = "KEY METRICS"; ov["A10"].font = section
     kpis = [
-        ("Total Enrolled", "=SUM(B18:B21)", "#,##0", ""),
-        ("On-Time Graduation Rate", "=IF(B11=0,0,B22/B11)", "0.0%",
+        ("Total Enrolled", "=SUM(B18:B22)", "#,##0", ""),
+        ("On-Time Graduation Rate", "=IF(B11=0,0,B23/B11)", "0.0%",
          compare_text(hist, "OnTime", cohort)),
         ("Overall Completion", "=IF(B11=0,0,B21/B11)", "0.0%",
          compare_text(hist, "Completion", cohort)),
-        ("Remaining Students", "=B11-B21", "#,##0",
+        ("Remaining Students", "=B11-B21-B22", "#,##0",
          compare_text(hist, "Remaining", cohort, kind="count", higher_is_better=False)),
     ]
     for i, (label, formula, fmt, cmp_txt) in enumerate(kpis, start=11):
@@ -756,7 +936,9 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         cmp_cell = ov.cell(i, 3, cmp_txt)
         color = "2E9E3E" if "better" in cmp_txt else "C62828" if "worse" in cmp_txt else "9CA3AF"
         cmp_cell.font = Font(size=9, color=color, italic=color == "9CA3AF")
-    ov["A15"] = "Remaining Students = Total Enrolled − Completed, split by current lifecycle stage."
+    ov["C10"] = f"Students at Risk: {int(at_risk_students(df).shape[0]):,}"
+    ov["C10"].font = Font(bold=True, color="C62828")
+    ov["A15"] = "Remaining Students = Total Enrolled − Completed − Inactive, split by current lifecycle stage."
     ov["A15"].font = Font(size=9, italic=True, color=grey)
 
     # --- Completion trend data ---
@@ -780,8 +962,8 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     bar = BarChart()
     bar.title, bar.legend, bar.varyColors = "Cohort by Lifecycle Stage", None, False
     bar.y_axis.majorGridlines = None
-    bar.add_data(Reference(ov, min_col=2, min_row=17, max_row=21), titles_from_data=True)
-    bar.set_categories(Reference(ov, min_col=1, min_row=18, max_row=21))
+    bar.add_data(Reference(ov, min_col=2, min_row=17, max_row=22), titles_from_data=True)
+    bar.set_categories(Reference(ov, min_col=1, min_row=18, max_row=22))
     series = bar.series[0]
     for idx, stage in enumerate(STAGE_ORDER):
         pt = DataPoint(idx=idx)
@@ -813,12 +995,46 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         line.width, line.height = 17, 8.5
         ov.add_chart(line, "E21")
 
-    # --- Students tab ---
-    st_ws = wb.create_sheet("Students")
-    table = export_table(df)
+    # --- Students At Risk trend (same numbers as the "Students at Risk" view of the trend chart) ---
+    ov["A33"] = "STUDENTS AT RISK — TREND (last 4 cohorts, program-wide)"; ov["A33"].font = section
+    ov["A34"], ov["B34"], ov["C34"] = "Cohort", "Students at Risk", "% of Cohort"
+    for c in ("A34", "B34", "C34"):
+        ov[c].font = Font(bold=True, color="FFFFFF"); ov[c].fill = head_fill
+    for i, r in recent.iterrows():
+        ov.cell(35 + i, 1, r["Cohort"])
+        ov.cell(35 + i, 2, int(r.get("AtRisk", 0) or 0))
+        pct = ov.cell(35 + i, 3, round(float(r.get("AtRiskPct", 0) or 0) / 100, 4))
+        pct.number_format = "0.0%"
+        for c in (1, 2, 3):
+            ov.cell(35 + i, c).border = thin
+
+    if len(recent) >= 2:
+        risk = LineChart()
+        risk.title, risk.legend, risk.varyColors = "Students At Risk — Trend", None, False
+        risk.y_axis.number_format = "0"
+        risk.add_data(Reference(ov, min_col=2, min_row=34, max_row=34 + len(recent)), titles_from_data=True)
+        risk.set_categories(Reference(ov, min_col=1, min_row=35, max_row=34 + len(recent)))
+        r0 = risk.series[0]
+        r0.graphicalProperties.line.solidFill, r0.graphicalProperties.line.width = "C62828", 19050
+        r0.marker.symbol, r0.marker.size = "circle", 6
+        r0.marker.graphicalProperties = GraphicalProperties(solidFill="C62828")
+        r0.marker.graphicalProperties.line.solidFill = "C62828"
+        r0.smooth = False
+        r0.dLbls = _value_labels(DataLabelList); r0.dLbls.position = "t"
+        risk.x_axis.delete = risk.y_axis.delete = False
+        risk.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="E5E7EB"))
+        _tidy_chart(risk, GraphicalProperties, LineProperties)
+        risk.width, risk.height = 17, 8.5
+        ov.add_chart(risk, "E39")
+
+    # --- At-Risk Students tab (same rows as the on-page table, with the active filters) ---
+    st_ws = wb.create_sheet("At-Risk Students")
+    table = export_table(at_risk_students(df))
     st_ws.append(list(table.columns))
     for row in table.itertuples(index=False):
-        st_ws.append(list(row))
+        st_ws.append([None if pd.isna(v) else v for v in row])
+    if table.empty:
+        st_ws.append(["No students are at risk for these filters."])
     for c in st_ws[1]:
         c.font, c.fill = Font(bold=True, color="FFFFFF"), head_fill
         c.alignment = Alignment(vertical="center", wrap_text=True)
@@ -839,7 +1055,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
 
 
 def export_file_name(program_label, cohort, status) -> str:
-    parts = ["executive_overview", program_label, cohort, status, datetime.now().strftime("%Y-%m-%d")]
+    parts = ["at_risk_students", program_label, cohort, status, datetime.now().strftime("%Y-%m-%d")]
     return "_".join(re.sub(r"[^A-Za-z0-9]+", "-", str(p)).strip("-") for p in parts) + ".xlsx"
 
 
@@ -913,6 +1129,16 @@ def render_executive_overview():
         unsafe_allow_html=True,
     )
 
+    # ---- Field mapping gate: no data is shown while a mapping is broken ----
+    mapping_error = check_field_mappings()
+    if mapping_error:
+        st.error(
+            "Executive Overview is unavailable because a field mapping is invalid. "
+            "Ask an admin to fix it in Admin Configuration → Field Mapping."
+        )
+        st.caption(mapping_error)
+        return
+
     # ---- Data ----
     try:
         all_df = get_executive_data()
@@ -923,15 +1149,15 @@ def render_executive_overview():
         st.error(f"Failed to fetch executive overview data: {e}")
         return
 
-    # ---- Filters: Enrollment | Cohort | Program ----
+    # ---- Filters: Program | Cohort | Enrollment ----
     with st.container(key="eo_filters"):
         f1, f2, f3, f4 = st.columns(4, gap="small", vertical_alignment="bottom")
 
-        with f1:
+        with f3:
             selected_status = st.selectbox("Enrollment Status", ENROLLMENT_OPTIONS)
 
-        # Program is chosen before Cohort in code (it still displays third)
-        with f3:
+        # Program is chosen before Cohort in code (the cohort list depends on it)
+        with f1:
             programs_by_id = {p["ProgramID"]: p for p in get_program_options()}
             selected_program_id = st.selectbox(
                 "Program", list(programs_by_id),
@@ -960,6 +1186,13 @@ def render_executive_overview():
     if selected_cohort != "All Cohorts":
         df = status_df[status_df["Cohort"] == selected_cohort]
 
+    # Time in Stage + At-Risk flag (threshold from Admin Configuration); added before the cohort
+    # filter so the at-risk trend can compare cohorts
+    status_df = add_stage_flags(status_df)
+    df = status_df
+    if selected_cohort != "All Cohorts":
+        df = status_df[status_df["Cohort"] == selected_cohort]
+
     hist = cohort_history(status_df)
 
     # ---- Export (far right of the filter row) ----
@@ -979,9 +1212,10 @@ def render_executive_overview():
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
-            help="Excel file with the current filters: Overview tab (KPIs + charts) and Students tab",
+            help="Excel file with the current filters: Overview tab (KPIs + charts) and "
+                 "At-Risk Students tab (the Students At Risk table below)",
             on_click=log_export,
-            args=(export_filters, len(df), file_name),
+            args=(export_filters, int(at_risk_students(df).shape[0]), file_name),
         )
 
     # ---- KPI row ----
@@ -997,36 +1231,66 @@ def render_executive_overview():
                  delta_html(hist, "OnTime", selected_cohort)),
         kpi_card("Overall Completion", f"{completion_rate(df):.1f}%",
                  delta_html(hist, "Completion", selected_cohort)),
-        kpi_card("Remaining Students", f"{int((~df['IsComplete']).sum()):,}",
+        kpi_card("Remaining Students", f"{int((~df['IsComplete'] & ~df['IsInactive']).sum()):,}",
                  delta_html(hist, "Remaining", selected_cohort, kind="count", higher_is_better=False),
                  info_html=remaining_info_html(df)),
-        kpi_card("Students at Risk", "&nbsp;"),
+        kpi_card("Students at Risk", f"{int(df['IsFlagged'].sum()):,}",
+                 '<span class="eo-risk">Past the at-risk threshold</span>' if df["IsFlagged"].any()
+                 else "Past the at-risk threshold"),
     ])
 
     # ---- Charts ----
-    c1, c2 = st.columns(2, gap="medium")
+    charts_row = st.container(key="eo_charts")
+    c1, c2 = charts_row.columns(2, gap="medium")
     chart_config = {"displayModeBar": False}
 
     with c1:
         with st.container(border=True):
-            card_header("Cohort by Lifecycle Stage", "Students currently active per stage")
+            card_header("Cohort by Lifecycle Stage", "Students per stage, including inactive (dropped out)")
             st.plotly_chart(lifecycle_bar(lifecycle_counts(df)),
                             use_container_width=True, config=chart_config)
 
     with c2:
         with st.container(border=True):
             recent = hist.tail(4)
-            card_header("Overall Completion % — Trend",
-                        f"Last {len(recent)} cohorts, program-wide")
-            if len(recent) >= 2:
-                st.plotly_chart(completion_trend(recent),
-                                use_container_width=True, config=chart_config)
+            # title + subtitle on the left, Completion % / Students at Risk switch on the same line (right)
+            options = ["Completion %", "Students at Risk"]
+            if st.session_state.get("eo_trend_view") not in (None, *options):
+                st.session_state.pop("eo_trend_view")   # old option name from an earlier version
+            with st.container(key="eo_trend_head"):
+                h_title, h_switch = st.columns([1.15, 1], vertical_alignment="top")
+                with h_switch:
+                    with st.container(key="eo_trend_switch"):
+                        if hasattr(st, "segmented_control"):      # pill toggle (Streamlit 1.40+)
+                            trend_view = st.segmented_control("Trend", options, default="Completion %",
+                                                              label_visibility="collapsed", key="eo_trend_view")
+                        else:                                    # older Streamlit: plain radio buttons
+                            trend_view = st.radio("Trend", options, horizontal=True,
+                                                  label_visibility="collapsed", key="eo_trend_view")
+                trend_view = trend_view or "Completion %"      # clicking the selected pill again un-selects it
+                with h_title:
+                    if trend_view == "Students at Risk":
+                        card_header("Students At Risk — Trend",
+                                    f"Last {len(recent)} cohorts · past the At-Risk threshold")
+                    else:
+                        card_header("Overall Completion % — Trend", f"Last {len(recent)} cohorts, program-wide")
+            if trend_view == "Students at Risk":
+                if len(recent) >= 2:
+                    with st.container(key="eo_trend_risk"):
+                        st.plotly_chart(at_risk_trend(recent).update_layout(height=TREND_HEIGHT),
+                                        use_container_width=True, config=chart_config)
+                else:
+                    st.info("At least two cohorts are needed to show a trend.")
             else:
-                st.info("At least two cohorts are needed to show a trend.")
+                if len(recent) >= 2:
+                    with st.container(key="eo_trend_completion"):
+                        st.plotly_chart(completion_trend(recent).update_layout(height=TREND_HEIGHT),
+                                        use_container_width=True, config=chart_config)
+                else:
+                    st.info("At least two cohorts are needed to show a trend.")
 
     # ---- Student table ----
     render_student_table(df)
-
 
 if __name__ == "__main__":
     render_executive_overview()
