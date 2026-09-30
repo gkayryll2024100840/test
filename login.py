@@ -1,5 +1,3 @@
-#LOGIN.PY 9/30/2026
-
 import os
 import base64
 import hashlib
@@ -151,42 +149,25 @@ if not st.session_state.get('user'):
             background-position: center;
             background-repeat: no-repeat;
         }}
-
-        /* Hide Streamlit's header on the login page — it reserves ~90px at the top
-           and was pushing the card up above the true middle of the viewport. */
-        [data-testid="stHeader"],
-        header[data-testid="stHeader"] {{
-            display: none !important;
-            height: 0 !important;
-            min-height: 0 !important;
+        [data-testid="stHeader"] {{
+            background: rgba(0,0,0,0);
         }}
 
-        /* Remove Streamlit's own padding on the block container. */
+        /* ===== PAGE CONTAINER: widened to match the red guide ===== */
         [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            max-width: 640px !important;
+            padding-top: 3rem !important;
+            max-width: 640px !important;      /* was 360px — card fills the red area */
             margin-left: auto !important;
             margin-right: auto !important;
         }}
 
-        /* Make the main area fill the viewport and center its content. */
-        [data-testid="stMain"],
-        [data-testid="stMainBlockContainer"],
-        section.main {{
-            min-height: 100vh !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-        }}
-
-        /* The card itself: centered and full-width of its wrapper */
+        /* The card itself: also widened so it fills its wrapper */
         .st-key-login_card,
         .st-key-login_card > div,
         .st-key-login_card [data-testid="stVerticalBlock"] {{
-            max-width: 640px !important;
+            max-width: 640px !important;      /* was 360px — matches the outer container */
             width: 100% !important;
             margin-left: auto !important;
             margin-right: auto !important;
@@ -196,7 +177,7 @@ if not st.session_state.get('user'):
             background: rgba(255, 255, 255, 0.16);
             border: 1px solid rgba(255, 255, 255, 0.22);
             border-radius: 16px;
-            padding: 28px 36px 26px 36px;
+            padding: 28px 36px 26px 36px;     /* slightly more padding for the wider card */
             backdrop-filter: blur(8px);
             text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
@@ -228,7 +209,7 @@ if not st.session_state.get('user'):
             width: 100%;
         }}
 
-        /* ---- Inputs ---- */
+        /* ---- Inputs: target every Streamlit wrapper layer ---- */
         .st-key-login_card [data-testid="stTextInput"] label,
         .st-key-login_card [data-testid="stTextInput"] label p {{
             font-size: 12px !important;
@@ -251,7 +232,7 @@ if not st.session_state.get('user'):
             border: none !important;
             border-radius: 6px !important;
             box-shadow: none !important;
-            min-height: 36px !important;
+            min-height: 36px !important;      /* slightly taller inputs now that they're wider */
             height: 36px !important;
         }}
         .st-key-login_card [data-testid="stTextInput"] input {{
