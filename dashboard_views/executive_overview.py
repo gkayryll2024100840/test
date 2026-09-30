@@ -731,7 +731,6 @@ STUDENT_PROFILE_PAGE = "dashboard_views/student_profile.py"   # same page the St
 EO_ROWS_VISIBLE = 10    # students shown before the table scrolls
 EO_ROW_HEIGHT_PX = 64   # height of one row in px (nudge if 10 rows show a bit more / less)
 EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
-EO_PAGE_SIZES = [25, 50, 100]   # rows drawn per page (first = default)
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
 
 
@@ -822,20 +821,9 @@ def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
         sort_cols, ascending = ["IsFlagged"] + sort_cols, [False] + ascending
     df = df.sort_values(sort_cols, ascending=ascending, na_position="last")
 
-    # ---- paging: only the current page of rows is drawn ----
+        # The table scrolls, so all matching rows are drawn
     total_rows = len(df)
-    page_size = st.session_state.get("eo_page_size", EO_PAGE_SIZES[0])
-    if page_size not in EO_PAGE_SIZES:
-        page_size = EO_PAGE_SIZES[0]
-    total_pages = max(1, -(-total_rows // page_size))
-    sig = (page_sig, drill_stage, page_size)
-    if st.session_state.get("eo_page_sig") != sig:       # filters / drilled stage changed -> back to page 1
-        st.session_state["eo_page_sig"] = sig
-        st.session_state["eo_page"] = 1
-    page_no = min(max(int(st.session_state.get("eo_page", 1)), 1), total_pages)
-    st.session_state["eo_page"] = page_no
-    page_start = (page_no - 1) * page_size
-    page_df = df.iloc[page_start:page_start + page_size]
+    page_df = df
 
     with st.container(key="eo_table"):
         # header row (stays put while the rows scroll)
@@ -877,11 +865,7 @@ def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
                     unsafe_allow_html=True,
                 )
 
-    if total_rows > EO_PAGE_SIZES[0]:
-        c_ps, c_pg, c_cap = st.columns([1, 1, 4], vertical_alignment="center")
-        c_ps.selectbox("Rows per page", EO_PAGE_SIZES, key="eo_page_size")
-        c_pg.number_input(f"Page (of {total_pages})", min_value=1, max_value=total_pages, step=1, key="eo_page")
-        c_cap.caption(f"Showing {page_start + 1}-{min(page_start + page_size, total_rows)} of {total_rows} students.")
+        st.caption(f"Showing {total_rows} student{'s' if total_rows != 1 else ''}.")
 
 
 # ---------------------------------------------------------------------------
