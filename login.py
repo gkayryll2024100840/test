@@ -170,7 +170,8 @@ if not st.session_state.get('user'):
         [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
-            padding-top: 3rem !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
             max-width: 640px !important;      /* was 360px — card fills the red area */
             margin-left: auto !important;
             margin-right: auto !important;
@@ -194,6 +195,22 @@ if not st.session_state.get('user'):
             backdrop-filter: blur(8px);
             text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }}
+
+        /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
+           position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is.
+           To make the card wider/narrower, change the 540px. */
+        .st-key-login_card {{
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: min(540px, 92vw) !important;
+            max-width: none !important;
+            max-height: 96vh;
+            overflow-y: auto;
+            margin: 0 !important;
+            z-index: 10;
         }}
 
         .login-logo {{
@@ -275,9 +292,29 @@ if not st.session_state.get('user'):
             display: none;
         }}
 
-        /* ---- Login button ---- */
-        .st-key-login_card button[kind="primary"],
-        .st-key-login_card button {{
+        /* ---- password show/hide (eye) button: white, inside the input, grey icon ---- */
+        .st-key-login_card [data-testid="stTextInput"] button {{
+            background: #FFFFFF !important;
+            color: #6B7280 !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: auto !important;
+            min-width: 36px !important;
+            height: 36px !important;
+            margin: 0 !important;
+            padding: 0 10px !important;
+            border-radius: 0 6px 6px 0 !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] button:hover {{
+            color: #12172B !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] button svg {{
+            fill: currentColor !important;
+            color: inherit !important;
+        }}
+
+        /* ---- Login button (only this one: the old rule also hit the password's eye button) ---- */
+        .st-key-login_button button {{
             background: #12172B !important;
             color: #FFFFFF !important;
             border: none !important;
@@ -305,11 +342,12 @@ if not st.session_state.get('user'):
         input_id = st.text_input("UserID", key="login_userid")
         input_pass = st.text_input("Password", type="password", key="login_password")
         button_login = st.button("Login", key="login_button", use_container_width=True)
+        msg_slot = st.container()   # login messages show inside the card (the card is pinned to the centre)
 
     # ↓↓↓ Handlers MUST be indented inside the same `if` block that defines the widgets
     if button_login:
         if not input_id or not input_pass:
-            st.warning("Please enter both User ID and Password.")
+            msg_slot.warning("Please enter both User ID and Password.")
         else:
             success, result = verify_login(input_id, input_pass)
             if success:
@@ -321,7 +359,7 @@ if not st.session_state.get('user'):
                     ).strip()
                 st.rerun()
             else:
-                st.error(result)
+                msg_slot.error(result)
 
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
