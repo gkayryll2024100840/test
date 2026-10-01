@@ -212,13 +212,11 @@ def get_max_retry_count(login_id):
 
 # Connects to database > queries rows from Students table > converts results into a Pandas Dataframe  
 def get_student_roster_data(program_id=None):
-    """Fetches the roster filtered by the given program ID.
+    """Fetches the roster.
 
-    If program_id is None, returns an empty DataFrame.
+    program_id=None returns students from every program (used by the "All Programs"
+    option on the Student Roster). A specific program_id filters to that program.
     """
-    if program_id is None:
-        return pd.DataFrame()
-
     try:
         # 1. Load the mappings from the JSON file
         mappings = load_mappings()
@@ -232,36 +230,64 @@ def get_student_roster_data(program_id=None):
             details = "; ".join(f"'{label}': '{path}'" for label, path in invalid)
             raise ValueError(f"Invalid or unverified mapping(s) - {details}")
 
-        # 3. Run the program-scoped query
-        # SPEED: the adviser sub-query is limited to THIS program's students (it used to group the
-        # adviser table for every program in the school before joining).
-        query = """
-            SELECT
-                s.StudentNumber,
-                CONCAT(s.FirstName, ' ', s.LastName) AS Student,
-                s.Cohort,
-                s.EnrollmentStatus,
-                a.AdviserName AS Adviser,
-                sl.CourseworkStatus,
-                sl.CompExamStatus,
-                sl.CapstoneStatus,
-                sl.LastUpdate
-            FROM Students s
-            LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
-            LEFT JOIN (
-                -- students with 2 advisers -> one row, e.g. "Dr. A, Dr. B"
-                SELECT sa.StudentNumber,
-                       GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
-                FROM Student_Adviser sa
-                JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
-                JOIN Students sp ON sp.StudentNumber = sa.StudentNumber AND sp.ProgramID = %s
-                GROUP BY sa.StudentNumber
-            ) a ON a.StudentNumber = s.StudentNumber
-            WHERE s.ProgramID = %s
-        """
+        # 3. Run the query (all programs when program_id is None)
+        # SPEED: the adviser sub-query is limited to the target students (never a full-school scan).
+        if program_id is None:
+            query = """
+                SELECT
+                    s.StudentNumber,
+                    CONCAT(s.FirstName, ' ', s.LastName) AS Student,
+                    p.ProgramCode,
+                    s.Cohort,
+                    s.EnrollmentStatus,
+                    a.AdviserName AS Adviser,
+                    sl.CourseworkStatus,
+                    sl.CompExamStatus,
+                    sl.CapstoneStatus,
+                    sl.LastUpdate
+                FROM Students s
+                LEFT JOIN Program p ON s.ProgramID = p.ProgramID
+                LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
+                LEFT JOIN (
+                    SELECT sa.StudentNumber,
+                           GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
+                    FROM Student_Adviser sa
+                    JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
+                    GROUP BY sa.StudentNumber
+                ) a ON a.StudentNumber = s.StudentNumber
+            """
+            params = None
+        else:
+            query = """
+                SELECT
+                    s.StudentNumber,
+                    CONCAT(s.FirstName, ' ', s.LastName) AS Student,
+                    p.ProgramCode,
+                    s.Cohort,
+                    s.EnrollmentStatus,
+                    a.AdviserName AS Adviser,
+                    sl.CourseworkStatus,
+                    sl.CompExamStatus,
+                    sl.CapstoneStatus,
+                    sl.LastUpdate
+                FROM Students s
+                LEFT JOIN Program p ON s.ProgramID = p.ProgramID
+                LEFT JOIN Student_Lifecycle sl ON s.StudentNumber = sl.StudentNumber
+                LEFT JOIN (
+                    SELECT sa.StudentNumber,
+                           GROUP_CONCAT(ad.AdviserName ORDER BY ad.AdviserName SEPARATOR ', ') AS AdviserName
+                    FROM Student_Adviser sa
+                    JOIN Adviser ad ON sa.AdviserID = ad.AdviserID
+                    JOIN Students sp ON sp.StudentNumber = sa.StudentNumber AND sp.ProgramID = %s
+                    GROUP BY sa.StudentNumber
+                ) a ON a.StudentNumber = s.StudentNumber
+                WHERE s.ProgramID = %s
+            """
+            params = (program_id, program_id)
+
         conn = get_db_connection()
         try:
-            df = pd.read_sql(query, conn, params=(program_id, program_id))
+            df = pd.read_sql(query, conn, params=params)
         finally:
             conn.close()
         return df
