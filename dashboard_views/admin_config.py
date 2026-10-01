@@ -1,4 +1,4 @@
-# ADMIN CONFIG.PY 9-29-26 (speed/cache-consistency pass)
+# ADMIN CONFIG.PY 9-29-26
 #
 # SPEED NOTES
 #  - Each section is an @st.fragment: clicking/typing in one section only re-runs THAT section,
@@ -88,29 +88,29 @@ def current_user_id():
 
 
 # ---------------------------------------------------------------------------
-# Cached reads (short TTL; cleared right after the matching save)
+# Cached reads (cleared right after the matching save, so longer TTLs are safe)
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def cached_programs():
     return get_all_programs() or []
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cached_threshold(program_id):
     return get_program_threshold(program_id)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cached_schedule():
     return get_refresh_schedule()
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def cached_users(query):
     return search_users(query)
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
 def cached_audit_rows():
     conn = get_db_connection()
     try:
@@ -214,8 +214,8 @@ def field_mapping_section():
     if save_clicked:
         require_edit()                # US-13 gate
         save_mappings(updated_mappings)
+        st.cache_data.clear()         # Student Roster / Profile re-check the mappings right away
         st.session_state["current_mappings"] = updated_mappings
-        st.cache_data.clear()         # roster / overview data was cached under the OLD mappings -> reload it
 
     with col_status:
         if save_clicked and validation_errors:
@@ -439,7 +439,7 @@ STAGE_LABEL_FIELDS = [      # (stage key in the database, short tag, name shown 
 ]
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cached_stage_labels(program_id):
     return get_stage_labels(program_id)
 
@@ -586,9 +586,10 @@ def kpi_tiles_section():
             with c_title:
                 st.markdown(
                     '<div class="ac-card-title">KPI Tiles</div>'
-                    '<div class="ac-card-desc">Tiles shown on the Executive Overview, stored per program. '
-                    "Programs with no custom set — including any created later from the Student Roster — "
-                    "use the built-in defaults.</div>",
+                    '<div class="ac-card-desc">The cards at the top of the Executive Overview, saved per program. '
+                    "To see them, pick that program in the Executive Overview's Program filter "
+                    "(All Programs always shows the built-in defaults). Accent = the coloured bar on top of the card."
+                    "</div>",
                     unsafe_allow_html=True,
                 )
             with c_prog:
@@ -778,7 +779,7 @@ def user_permissions_section():
                     ok, err = set_user_permission(u["UserID"], new_perm)
                     if ok:
                         st.success(f"{u['UserID']} → {new_perm}")
-                        st.cache_data.clear()   # other pages cache each user's permission for a short time
+                        cached_users.clear()
                         st.rerun(scope="fragment")
                     else:
                         st.error(f"Failed: {err}")
@@ -819,6 +820,11 @@ section_header(
 )
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_sync_logs():
+    return get_system_logs_local()
+
+
 @st.fragment
 def sync_logs_section():
     active_login_id = st.session_state.get("session_id", "default_admin")
@@ -827,6 +833,7 @@ def sync_logs_section():
     if st.button("Run Sync Attempt"):
         # Sync is a read-only operation — no permission gate needed
         success = trigger_data_sync(login_id=active_login_id)
+        cached_sync_logs.clear()      # show the new attempt in the table
         if success:
             st.success("Sync executed successfully!")
             st.rerun()   # full page rerun so the sidebar's Live Sync Status updates too
@@ -834,7 +841,7 @@ def sync_logs_section():
             st.error("Sync failed! Error logged to SQL Local_Logs table.")
             st.rerun()
 
-    logs = get_system_logs_local()
+    logs = cached_sync_logs()
 
     if logs:
         st.dataframe(logs, use_container_width=True)

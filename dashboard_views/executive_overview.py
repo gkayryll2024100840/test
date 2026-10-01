@@ -1,5 +1,5 @@
 # EXEC OVERVIEW MERGE
-# EXEC OVERVIEW 9-30-26 (speed-optimized)
+# EXEC OVERVIEW 9-30-26
 import html
 import io
 import json
@@ -83,8 +83,9 @@ def cached_stage_labels(program_id):
     return get_stage_labels(program_id)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cached_kpi_tiles(program_id):
+    """KPI tile config (Admin Config clears this cache when tiles are saved)."""
     return get_kpi_tiles(program_id=program_id, visible_only=True)
 
 
@@ -589,11 +590,18 @@ def delta_html(hist, metric, cohort, kind="pct", higher_is_better=True):
     return f'<span class="{cls}">{arrow} {amount} vs {prev_c} ({prev_txt})</span>'
 
 
-def kpi_card(label, value, sub_html="&nbsp;", info_html=None):
+_HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def kpi_card(label, value, sub_html="&nbsp;", info_html=None, accent=None):
+    """One KPI tile. accent = the tile's colour from Admin Config → KPI Tiles (US-29),
+    drawn as a thin bar along the top edge of the card."""
     info = (f'<div class="eo-info" tabindex="0">i<div class="eo-tip">{info_html}</div></div>'
             if info_html else "")
+    style = (f' style="border-top:4px solid {accent};"'
+             if accent and _HEX_COLOR.match(str(accent)) else "")
     return (
-        f'<div class="eo-kpi">{info}<div class="eo-kpi-label">{label}</div>'
+        f'<div class="eo-kpi"{style}>{info}<div class="eo-kpi-label">{label}</div>'
         f'<div class="eo-kpi-value">{value}</div>'
         f'<div class="eo-kpi-sub">{sub_html}</div></div>'
     )
@@ -729,6 +737,7 @@ def status_pill(value):
 
 STUDENT_PROFILE_PAGE = "dashboard_views/student_profile.py"   # same page the Student Roster links to
 EO_ROWS_VISIBLE = 10    # students shown before the table scrolls
+EO_MAX_ROWS = 50        # rows built at first (a big drill-down, e.g. 122 Completed, is slow to draw)
 EO_ROW_HEIGHT_PX = 64   # height of one row in px (nudge if 10 rows show a bit more / less)
 EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
@@ -786,7 +795,7 @@ def open_student_profile(student_id, program_id, program_code):
     st.switch_page(STUDENT_PROFILE_PAGE)
 
 
-def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
+def render_student_table(df: pd.DataFrame, drill_stage=None):
     """Student table.
 
     Default: "Students At Risk" = only students past their program's At-Risk threshold,
@@ -821,9 +830,12 @@ def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
         sort_cols, ascending = ["IsFlagged"] + sort_cols, [False] + ascending
     df = df.sort_values(sort_cols, ascending=ascending, na_position="last")
 
-        # The table scrolls, so all matching rows are drawn
+    # speed: draw the first EO_MAX_ROWS rows; "Show all" draws the rest
     total_rows = len(df)
-    page_df = df
+    show_all_key = f"eo_show_all_{drill_stage or 'risk'}"
+    truncated = total_rows > EO_MAX_ROWS and not st.session_state.get(show_all_key)
+    if truncated:
+        df = df.head(EO_MAX_ROWS)
 
     with st.container(key="eo_table"):
         # header row (stays put while the rows scroll)
@@ -831,10 +843,10 @@ def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
             for col, label in zip(st.columns(EO_COL_WIDTHS, vertical_alignment="center"), eo_col_labels()):
                 col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
 
-        height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(page_df) > EO_ROWS_VISIBLE else None
+        height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
         scroll_kwargs = {"height": height} if height else {}   # never pass height=None (older Streamlit rejects it)
         with st.container(border=False, key="eo_table_rows", **scroll_kwargs):
-            for r in page_df.to_dict("records"):
+            for r in df.to_dict("records"):
                 sid = str(r["StudentNumber"])
                 first = str(r["FirstName"] or "").strip()
                 last = str(r["LastName"] or "").strip()
@@ -865,7 +877,12 @@ def render_student_table(df: pd.DataFrame, drill_stage=None, page_sig=None):
                     unsafe_allow_html=True,
                 )
 
-        st.caption(f"Showing {total_rows} student{'s' if total_rows != 1 else ''}.")
+    if truncated:
+        c_note, c_btn = st.columns([4, 1], vertical_alignment="center")
+        c_note.caption(f"Showing the first {EO_MAX_ROWS} of {total_rows} students.")
+        if c_btn.button(f"Show all {total_rows}", key=f"{show_all_key}_btn", use_container_width=True):
+            st.session_state[show_all_key] = True
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -1139,12 +1156,11 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     return buf.getvalue()
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def cached_export_xlsx(df, hist, filters, exported_by, labels):
-    """SPEED: building the workbook (tables + 3 charts) used to run on every rerun, even when you only
-    clicked a chart bar. Now it's built once per set of filters. `labels` (the program's stage names)
-    is only here so a renamed stage produces a fresh file."""
-    return build_export_xlsx(df, hist, filters, exported_by)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=20)
+def cached_export_xlsx(df, hist, filters_json, exported_by, labels_key):
+    """The Excel file is rebuilt only when the filters / data / stage labels change,
+    not on every click on the page (building it with charts is the slowest part of a rerun)."""
+    return build_export_xlsx(df, hist, json.loads(filters_json), exported_by)
 
 
 def export_file_name(program_label, cohort, status) -> str:
@@ -1353,8 +1369,8 @@ def render_executive_overview():
     with f4:
         st.download_button(
             "⬇ Export Excel",
-            data=(cached_export_xlsx(df, hist, export_filters, _current_user_label(),
-                                     tuple(sorted(_stage_labels.items()))) if not df.empty else b""),
+            data=cached_export_xlsx(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
+                                    tuple(sorted(_stage_labels.items()))) if not df.empty else b"",
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
@@ -1387,7 +1403,7 @@ def render_executive_overview():
             value, info = resolve_kpi_value(src, df, program_label, selected_cohort, hist)
             sub = resolve_kpi_subtext(src, df, program_label, selected_cohort, hist)
 
-            cards.append(kpi_card(label, value, sub, info_html=info))
+            cards.append(kpi_card(label, value, sub, info_html=info, accent=t.get("color")))
 
         render_kpi_row(cards)
 
@@ -1418,8 +1434,8 @@ def render_executive_overview():
             if pts:
                 clicked_stage = pts[0].get("customdata")
                 if clicked_stage and st.session_state.get(DRILL_STAGE_KEY) != clicked_stage:
-                    # no st.rerun() needed: the student table further down reads this value in the same run
                     st.session_state[DRILL_STAGE_KEY] = clicked_stage
+                    st.rerun()
 
     with c2:
         with st.container(border=True):
@@ -1462,13 +1478,12 @@ def render_executive_overview():
 
     # ---- Student table (US-21: a clicked bar shows every student in that stage) ----
     drill_stage = st.session_state.get(DRILL_STAGE_KEY)
-    table_sig = (selected_program["ProgramID"], selected_status, selected_cohort)
     if drill_stage:
         drilled_df = df[df["ActiveStage"] == drill_stage]
         render_drill_breadcrumb(drill_stage, len(drilled_df))
-        render_student_table(drilled_df, drill_stage=drill_stage, page_sig=table_sig)
+        render_student_table(drilled_df, drill_stage=drill_stage)
     else:
-        render_student_table(df, page_sig=table_sig)
+        render_student_table(df)
 
 if __name__ == "__main__":
     render_executive_overview()

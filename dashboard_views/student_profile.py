@@ -1,4 +1,4 @@
-# STUDENT PROFILE.PY 9-28-26 (speed-optimized)
+# STUDENT PROFILE.PY 9-28-26 (speed-optimized + US-30 stage labels)
 
 import html
 import pandas as pd
@@ -7,6 +7,7 @@ import streamlit as st
 from db_connect import (
     can_edit,
     get_lifecycle_status_options,
+    get_stage_labels,          # US-30: program-specific stage names
     get_student_lifecycle_detail,
     get_student_roster_data,
     get_user_program,
@@ -33,7 +34,7 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 # Statuses
 # ---------------------------------------------------------------
 PILLARS = [
-    # key,         tag,  title,                   dropdown options
+    # key,         tag,  title (default; the program's label from Admin Config is shown instead), dropdown options
     ("coursework", "CW", "Coursework Completion", ["Cancelled", "Completed", "Pending"]),
     ("compexam",   "CE", "Comprehensive Exam",    ["In-Progress", "Passed", "Incomplete"]),
     ("capstone",   "CP", "Capstone Paper",        ["In-Progress", "Defended for Completion"]),
@@ -69,6 +70,17 @@ def cached_lifecycle_detail(student_id):
 @st.cache_data(ttl=300, show_spinner=False)
 def cached_status_options(key, preferred):
     return get_lifecycle_status_options(key, list(preferred))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_stage_labels(program_id):
+    """US-30: this program's stage names (set in Admin Config → Stage Labels).
+    Saving labels there clears this cache, so new names show up right away."""
+    return get_stage_labels(program_id)
+
+
+# PILLARS key -> the stage key used by get_stage_labels()
+PILLAR_LABEL_KEY = {"coursework": "Coursework", "compexam": "CompExam", "capstone": "Capstone"}
 
 
 def tone_of(status):
@@ -319,6 +331,7 @@ elif selected_label:
     updated = {k: detail.get(f"{k}_updated") for k, *_ in PILLARS}
 
     editable = bool(user_id) and cached_can_edit(user_id)
+    stage_labels = cached_stage_labels(active_program_id)   # US-30: this program's stage names
     pick_keys = [f"sp_pick_{k}_{selected_id}" for k, *_ in PILLARS] + [f"sp_pick_enroll_{selected_id}"]
 
     # ----------------- Student card -----------------
@@ -353,8 +366,9 @@ elif selected_label:
     if editable:
         st.markdown(
             '<div class="sp-note"><span class="sp-note-icon">!</span><div>'
-            "<b>Manual Milestone Override Active:</b> Enrollment, Coursework, Comprehensive Exam, and Capstone "
-            "Paper statuses can be updated here. Saving logs each change in its status history table and "
+            f"<b>Manual Milestone Override Active:</b> Enrollment, {html.escape(stage_labels['Coursework'])}, "
+            f"{html.escape(stage_labels['CompExam'])}, and {html.escape(stage_labels['Capstone'])} "
+            "statuses can be updated here. Saving logs each change in its status history table and "
             "updates the student's Last Updated timestamp.</div></div>",
             unsafe_allow_html=True,
         )
@@ -377,6 +391,7 @@ elif selected_label:
     with st.container(key="sp_pillars"):
         cols = st.columns(3)
         for col, (key, tag, title, preferred) in zip(cols, PILLARS):
+            title = stage_labels.get(PILLAR_LABEL_KEY[key], title)   # US-30: label for this program
             options = cached_status_options(key, tuple(preferred))
             if current[key] and current[key] not in options:
                 options = [current[key]] + options          # keep an unexpected DB value visible
@@ -385,7 +400,7 @@ elif selected_label:
                     st.markdown(
                         f'<div class="sp-block"><div class="sp-pill-top"><span class="sp-tag">{tag}</span>'
                         f'<span class="sp-override">{"Step Manual Override" if editable else "Read only"}</span></div>'
-                        f'<div class="sp-pillar-title">{title}</div>'
+                        f'<div class="sp-pillar-title">{html.escape(title)}</div>'
                         f'<div class="sp-pillar-sub">Current Academic Evaluation Status</div></div>',
                         unsafe_allow_html=True,
                     )
