@@ -12,6 +12,19 @@ from dashboard_views.components import render_app_shell
 
 load_dotenv()
 
+# ---- Show the whole app at 90% (like zooming the browser out to 90%) ----
+# To change the size, edit APP_ZOOM only (1 = normal, 0.9 = 90%).
+# The second rule keeps the main area as tall as the screen; without it, zooming leaves an empty
+# white strip at the bottom of the page.
+APP_ZOOM = 0.9
+st.markdown(
+    f"""<style>
+    html {{ zoom: {APP_ZOOM}; }}
+    [data-testid="stMain"] {{ height: calc(100vh / {APP_ZOOM}) !important; }}
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 # Creates session ID
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"

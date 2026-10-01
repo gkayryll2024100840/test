@@ -6,8 +6,10 @@ import streamlit as st
 
 from db_connect import (
     can_edit,
+    get_all_programs,
     get_lifecycle_status_options,
     get_stage_labels,          # US-30: program-specific stage names
+    get_student_email,
     get_student_lifecycle_detail,
     get_student_roster_data,
     get_user_program,
@@ -77,6 +79,18 @@ def cached_stage_labels(program_id):
     """US-30: this program's stage names (set in Admin Config → Stage Labels).
     Saving labels there clears this cache, so new names show up right away."""
     return get_stage_labels(program_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_student_email(student_id):
+    """Students.StudentEmail for the email button on the student card (None if blank)."""
+    return get_student_email(student_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_program_ids():
+    """{"MBA": 1, "BIA": 2, ...}: with "All Programs", each student's own program is looked up by its code."""
+    return {p["ProgramCode"]: p["ProgramID"] for p in (get_all_programs() or [])}
 
 
 # PILLARS key -> the stage key used by get_stage_labels()
@@ -151,6 +165,12 @@ html[data-eo-theme="dark"] .stApp{
 .st-key-sp_head [data-testid="stColumn"] + [data-testid="stColumn"]{border-left:1px solid var(--sp-border);}
 .sp-who{display:flex;align-items:center;gap:16px;}
 .sp-name{font-size:22px;font-weight:700;color:var(--sp-text);line-height:1.2;}
+/* name + email button on one line */
+.sp-name-row{display:flex;align-items:center;gap:10px;}
+.sp-mail, .sp-mail:visited{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+    border-radius:50%;border:1px solid var(--sp-border);background:var(--sp-surface);color:var(--sp-muted) !important;
+    text-decoration:none !important;font-size:15px;line-height:1;flex-shrink:0;transition:all .15s;}
+.sp-mail:hover{border-color:#B31B21;color:#B31B21 !important;background:rgba(179,27,33,.06);}
 .sp-id{font-size:13px;color:var(--sp-muted);margin-top:2px;}
 .sp-id b{color:var(--sp-text);}
 .sp-fact-label{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--sp-muted);}
@@ -261,12 +281,14 @@ user_id = user.get("userid") or user.get("UserID")   # login.py stores keys in l
 
 # The program must be picked on the Student Roster first. No pinned / default program is loaded here,
 # so opening Student Profile straight from the sidebar shows nothing until that's done.
-active_program_id = st.session_state.get("roster_program_id")
-active_code = st.session_state.get("roster_program_code", "")
-
-if not active_program_id:
+# "All Programs" on the roster is saved as roster_program_id = None -> students from EVERY program are listed.
+if "roster_program_id" not in st.session_state:
     st.warning("⏳ No program selected yet. Go to the Student Roster page and pick a program first.")
     st.stop()
+
+active_program_id = st.session_state.get("roster_program_id")   # None = All Programs
+active_code = st.session_state.get("roster_program_code", "") or ("All Programs" if active_program_id is None else "")
+all_programs = active_program_id is None
 
 df = cached_roster(active_program_id)
 header_cohort = "All Cohorts"
@@ -285,10 +307,17 @@ with st.container(key="sp_top"):
             unsafe_allow_html=True,
         )
     if not df.empty:
-        student_options = {
-            f"{num} — {name}": str(num)
-            for num, name in zip(df["StudentNumber"], df["Student"])
-        }
+        if all_programs and "ProgramCode" in df.columns:
+            # All Programs: show each student's program in the list, e.g. "2024101001 — Andres Abad (MBA)"
+            student_options = {
+                f"{num} — {name} ({code})" if code else f"{num} — {name}": str(num)
+                for num, name, code in zip(df["StudentNumber"], df["Student"], df["ProgramCode"].fillna(""))
+            }
+        else:
+            student_options = {
+                f"{num} — {name}": str(num)
+                for num, name in zip(df["StudentNumber"], df["Student"])
+            }
         student_ids = list(student_options.values())
         labels = list(student_options.keys())
         # A student clicked on the Student Roster (?student_id=...) or on the Executive Overview table
@@ -308,7 +337,8 @@ with st.container(key="sp_top"):
                                               placeholder="Choose a student")
 
 if df.empty:
-    st.info(f"No student records available for the {active_code} program.")
+    st.info("No student records available." if all_programs
+            else f"No student records available for the {active_code} program.")
 
 elif not selected_label:
     st.info("Select a student from the list above, or click a student's name on the Student Roster.")
@@ -331,16 +361,25 @@ elif selected_label:
     updated = {k: detail.get(f"{k}_updated") for k, *_ in PILLARS}
 
     editable = bool(user_id) and cached_can_edit(user_id)
-    stage_labels = cached_stage_labels(active_program_id)   # US-30: this program's stage names
+    # US-30: stage names of the student's program (with "All Programs", the student's own program)
+    student_program_code = str(student.get("ProgramCode") or "")
+    label_program_id = active_program_id if not all_programs else cached_program_ids().get(student_program_code)
+    stage_labels = cached_stage_labels(label_program_id)
     pick_keys = [f"sp_pick_{k}_{selected_id}" for k, *_ in PILLARS] + [f"sp_pick_enroll_{selected_id}"]
 
     # ----------------- Student card -----------------
     with st.container(key="sp_head"):
         c_who, c_cohort, c_adv, c_enroll = st.columns([2.2, 1.1, 1.5, 1.2])
         with c_who:
+            email = cached_student_email(selected_id)
+            mail_btn = (f'<a class="sp-mail" href="mailto:{html.escape(email, quote=True)}" '
+                        f'title="Email {html.escape(email, quote=True)}">✉</a>') if email else ""
             st.markdown(
-                f'<div class="sp-block"><div class="sp-name">{html.escape(student_name)}</div>'
-                f'<div class="sp-id">Student Number · <b>{html.escape(selected_id)}</b></div></div>',
+                f'<div class="sp-block"><div class="sp-name-row"><div class="sp-name">{html.escape(student_name)}</div>'
+                f'{mail_btn}</div>'
+                f'<div class="sp-id">Student Number · <b>{html.escape(selected_id)}</b>'
+                + (f' · Program · <b>{html.escape(student_program_code)}</b>' if student_program_code else '')
+                + '</div></div>',
                 unsafe_allow_html=True,
             )
         with c_cohort:
