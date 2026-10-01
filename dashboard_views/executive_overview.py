@@ -162,12 +162,15 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
     width: 220px !important;
     min-width: 220px !important;
 }
-/* export button: last column in the filter row, pushed to the far right */
-.st-key-eo_filters [data-testid="stColumn"]:last-child,
-.st-key-eo_filters [data-testid="column"]:last-child {
+/* export buttons (Excel + PDF): the last two columns in the filter row, pushed to the far right */
+.st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
+.st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) {
     flex: 0 0 auto !important;
     width: auto !important;
     min-width: 0 !important;
+}
+.st-key-eo_filters [data-testid="stColumn"]:nth-last-child(2),
+.st-key-eo_filters [data-testid="column"]:nth-last-child(2) {
     margin-left: auto !important;
 }
 
@@ -1163,9 +1166,266 @@ def cached_export_xlsx(df, hist, filters_json, exported_by, labels_key):
     return build_export_xlsx(df, hist, json.loads(filters_json), exported_by)
 
 
-def export_file_name(program_label, cohort, status) -> str:
+# ---------------------------------------------------------------------------
+# PDF EXPORT (same content as the Excel export, as a printable report)
+#   Page 1: filters, the KPI cards exactly as shown on screen, Cohort by Lifecycle Stage chart,
+#           Completion % and Students at Risk trend charts.
+#   Page 2+: the At-Risk Students table (same rows as the on-page table).
+#   Charts are drawn by reportlab itself (no browser / kaleido needed on the server).
+# ---------------------------------------------------------------------------
+def _pdf_text(s) -> str:
+    """Plain text for the PDF: the built-in PDF fonts have no ▲ ▼ ● glyphs (they'd print as black boxes)."""
+    s = str(s if s is not None else "")
+    for a, b in (("▲ ", "+"), ("▼ ", "-"), ("▲", "+"), ("▼", "-"), ("● ", ""), ("●", ""), ("&#9679; ", "")):
+        s = s.replace(a, b)
+    return html.unescape(re.sub(r"<[^>]+>", "", s)).strip()
+
+
+def kpi_pdf_items(cards_data):
+    """(label, value, sub_html, accent) from the on-screen KPI tiles -> plain items for the PDF."""
+    items = []
+    for label, value, sub_html, accent in cards_data:
+        tone = "up" if 'class="eo-up"' in (sub_html or "") else \
+               "down" if ('class="eo-down"' in (sub_html or "") or 'class="eo-risk"' in (sub_html or "")) else "flat"
+        items.append((_pdf_text(label), _pdf_text(value), _pdf_text(sub_html), tone,
+                      accent if accent and _HEX_COLOR.match(str(accent)) else "#D1D5DB"))
+    return tuple(items)
+
+
+def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items) -> bytes:
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.graphics.charts.linecharts import HorizontalLineChart
+    from reportlab.graphics.shapes import Drawing, String
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
+                                    TableStyle)
+
+    C = colors.HexColor
+    navy, grey, border = C("#0F172A"), C("#6B7280"), C("#E5E7EB")
+    tone_color = {"up": C("#2E9E3E"), "down": C("#C62828"), "flat": C("#9CA3AF")}
+    page_w, page_h = landscape(letter)
+    margin = 0.5 * inch
+    usable_w = page_w - 2 * margin
+
+    def style(name, **kw):
+        base = dict(fontName="Helvetica", fontSize=9, leading=12, textColor=navy, alignment=TA_LEFT)
+        base.update(kw)
+        return ParagraphStyle(name, **base)
+
+    s_title = style("t", fontName="Helvetica-Bold", fontSize=20, leading=24)
+    s_meta = style("m", fontSize=8, textColor=grey)
+    s_section = style("s", fontName="Helvetica-Bold", fontSize=11, leading=14)
+    s_kpi_label = style("kl", fontSize=7, leading=9, textColor=C("#4B5563"))
+    s_kpi_value = style("kv", fontName="Helvetica-Bold", fontSize=18, leading=22)
+    s_cell = style("c", fontSize=7.5, leading=9)
+    s_head = style("h", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.white)
+
+    def footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(grey)
+        canvas.drawString(margin, 0.3 * inch, "ETYSB Dashboard · Executive Overview")
+        canvas.drawRightString(page_w - margin, 0.3 * inch, f"Page {doc.page}")
+        canvas.restoreState()
+
+    story = [
+        Paragraph("Executive Overview", s_title),
+        Paragraph(f"Exported {datetime.now():%b %d, %Y %H:%M} by {html.escape(str(exported_by))}", s_meta),
+        Spacer(1, 6),
+        Paragraph("  ·  ".join(f'<font color="#6B7280">{html.escape(k)}:</font> <b>{html.escape(str(v))}</b>'
+                               for k, v in filters.items()), style("f", fontSize=9)),
+        Spacer(1, 10),
+    ]
+
+    # ---- KPI cards (same tiles, labels, order and accent colours as on screen) ----
+    if kpi_items:
+        cells, accents = [], []
+        for label, value, sub, tone, accent in kpi_items:
+            cells.append([Paragraph(html.escape(label.upper()), s_kpi_label),
+                          Paragraph(html.escape(value), s_kpi_value),
+                          Paragraph(html.escape(sub) or "&nbsp;",
+                                    style("ks", fontSize=7, leading=9, textColor=tone_color[tone]))])
+            accents.append(C(accent))
+        n = len(cells)
+        gap = 8
+        col_w = (usable_w - gap * (n - 1)) / n
+        row, widths = [], []
+        for i, cell in enumerate(cells):
+            inner = Table([[c] for c in cell], colWidths=[col_w - 16])
+            inner.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                       ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+            row.append(inner); widths.append(col_w)
+            if i < n - 1:
+                row.append(""); widths.append(gap)
+        kpi_table = Table([row], colWidths=widths)
+        ts = [("VALIGN", (0, 0), (-1, -1), "TOP"),
+              ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+              ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]
+        for i in range(n):
+            col = i * 2
+            ts += [("BOX", (col, 0), (col, 0), 0.6, border),
+                   ("LINEABOVE", (col, 0), (col, 0), 3, accents[i])]
+        kpi_table.setStyle(TableStyle(ts))
+        story += [kpi_table, Spacer(1, 14)]
+
+    # ---- Charts: one per row, full width, styled like the Excel export's charts ----
+    #   rounded frame, centred title, value axis with numbers, light gridlines on the trends,
+    #   value labels above each bar / point.
+    from reportlab.graphics.shapes import Rect
+    from reportlab.graphics.widgets.markers import makeMarker
+
+    counts = lifecycle_counts(df)
+    recent = hist.tail(4).reset_index(drop=True)
+    chart_w = usable_w
+
+    def nice_axis(lo, hi, ticks=6):
+        """Round axis limits + step (e.g. 0 / 140 / 20), like Excel picks them."""
+        span = max(hi - lo, 1e-9)
+        raw = span / ticks
+        mag = 10 ** int(np.floor(np.log10(raw)))
+        step = next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= raw)
+        return np.floor(lo / step) * step, np.ceil(hi / step) * step, step
+
+    def frame(height, title):
+        """Drawing with a rounded border and a centred title (the 'chart card')."""
+        d = Drawing(chart_w, height)
+        d.add(Rect(0.5, 0.5, chart_w - 1, height - 1, rx=8, ry=8,
+                   strokeColor=C("#9CA3AF"), strokeWidth=0.8, fillColor=None))
+        d.add(String(chart_w / 2, height - 18, title, fontName="Helvetica-Bold", fontSize=10,
+                     fillColor=navy, textAnchor="middle"))
+        return d
+
+    def style_axes(chart, value_fmt, grid):
+        va, ca = chart.valueAxis, chart.categoryAxis
+        va.labels.fontName, va.labels.fontSize, va.labels.fillColor = "Helvetica", 8, C("#4B5563")
+        va.labelTextFormat = value_fmt
+        va.strokeColor = C("#D1D5DB") if not grid else None
+        va.visibleGrid = grid
+        va.gridStrokeColor, va.gridStrokeWidth = C("#E5E7EB"), 0.6
+        va.visibleTicks = False
+        ca.labels.fontName, ca.labels.fontSize, ca.labels.fillColor = "Helvetica", 8, C("#111827")
+        ca.labels.dy = -4
+        ca.strokeColor = C("#D1D5DB")
+        ca.visibleTicks = False
+
+    def bar_chart():
+        height = 3.4 * inch
+        d = frame(height, "Cohort by Lifecycle Stage")
+        values = [int(v) for v in counts["Count"]]
+        lo, hi, step = nice_axis(0, max(max(values), 1) * 1.08)
+        bc = VerticalBarChart()
+        bc.x, bc.y, bc.width, bc.height = 50, 42, chart_w - 80, height - 80
+        bc.data = [values]
+        bc.valueAxis.valueMin, bc.valueAxis.valueMax, bc.valueAxis.valueStep = 0, hi, step
+        style_axes(bc, "%d", grid=False)
+        bc.categoryAxis.categoryNames = [stage_name(s) for s in counts["Stage"]]
+        bc.barWidth, bc.groupSpacing = 10, 14   # relative units: bar ≈ 40% of each slot, like Excel
+        bc.bars.strokeColor = None
+        for i, stage in enumerate(counts["Stage"]):
+            bc.bars[(0, i)].fillColor = C(STAGE_COLORS[stage])
+        bc.barLabelFormat = "%d"
+        bc.barLabels.nudge = 8
+        bc.barLabels.fontName, bc.barLabels.fontSize, bc.barLabels.fillColor = "Helvetica", 8, C("#111827")
+        d.add(bc)
+        return d
+
+    def line_chart(title, values, labels, color, axis_fmt, label_fmt, start_at_zero):
+        height = 3.25 * inch
+        d = frame(height, title)
+        if len(values) < 2:
+            d.add(String(chart_w / 2, height / 2, "At least two cohorts are needed to show a trend.",
+                         fontName="Helvetica", fontSize=9, fillColor=grey, textAnchor="middle"))
+            return d
+        lo_v, hi_v = min(values), max(values)
+        lo, hi, step = nice_axis(0 if start_at_zero else max(lo_v - (hi_v - lo_v) * 0.6 - 1, 0),
+                                 hi_v + max((hi_v - lo_v) * 0.15, 1))
+        lc = HorizontalLineChart()
+        lc.x, lc.y, lc.width, lc.height = 50, 42, chart_w - 80, height - 80
+        lc.data = [values]
+        lc.valueAxis.valueMin, lc.valueAxis.valueMax, lc.valueAxis.valueStep = lo, hi, step
+        style_axes(lc, axis_fmt, grid=True)
+        lc.categoryAxis.categoryNames = [str(x) for x in labels]
+        lc.joinedLines = 1
+        lc.lines[0].strokeColor, lc.lines[0].strokeWidth = C(color), 1.6
+        lc.lines[0].symbol = makeMarker("FilledCircle", size=5, fillColor=C(color), strokeColor=C(color))
+        lc.lineLabelFormat = label_fmt
+        lc.lineLabels.fontName, lc.lineLabels.fontSize = "Helvetica", 8
+        lc.lineLabels.fillColor, lc.lineLabels.dy = C("#111827"), 10
+        d.add(lc)
+        return d
+
+    # page 1: KPI cards + the stage bar chart; page 2: the two trend charts
+    story += [bar_chart(), PageBreak(),
+              line_chart("Overall Completion % — Trend", [float(v) for v in recent["Completion"]],
+                         recent["Cohort"], "#111827", "%d%%", "%.1f%%", start_at_zero=True),
+              Spacer(1, 14),
+              line_chart("Students At Risk — Trend", [int(v) for v in recent.get("AtRisk", [])],
+                         recent["Cohort"], "#C62828", "%d", "%d", start_at_zero=False)]
+
+    # ---- At-Risk Students table ----
+    story += [PageBreak(), Paragraph("Students At Risk — Requires Follow-Up", s_section),
+              Paragraph("Students who have stayed in their current stage longer than the program's "
+                        "At-Risk threshold (with the filters above).", s_meta), Spacer(1, 8)]
+    risk = at_risk_students(df)
+    if risk.empty:
+        story.append(Paragraph("No students are at risk for these filters.", style("e", textColor=grey)))
+    else:
+        risk = risk.sort_values(["DaysInStage", "LastName"], ascending=[False, True], na_position="last")
+        headers = ["Student No.", "Name", "Program", "Cohort", "Current Stage",
+                   stage_name("Coursework"), stage_name("Comprehensive Exam"), stage_name("Capstone"),
+                   "Days in Stage", "Threshold"]
+        data = [[Paragraph(html.escape(h), s_head) for h in headers]]
+        for r in risk.to_dict("records"):
+            def v(x):
+                return "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x)
+            days = r.get("DaysInStage")
+            exp = r.get("ExpectedDays")
+            data.append([Paragraph(html.escape(v(c)), s_cell) for c in (
+                r.get("StudentNumber"), f'{v(r.get("FirstName"))} {v(r.get("LastName"))}'.strip(),
+                r.get("ProgramCode"), r.get("Cohort"), stage_name(r.get("ActiveStage")),
+                r.get("CourseworkStatus"), r.get("CompExamStatus"), r.get("CapstoneStatus"),
+                f"{int(days):,}" if days is not None and pd.notna(days) else "",
+                f"{int(exp):,}" if exp is not None and pd.notna(exp) else "",
+            )])
+        widths = [0.9, 1.6, 0.7, 0.7, 1.2, 1.1, 1.1, 1.2, 0.8, 0.7]
+        scale = usable_w / sum(widths)
+        table = Table(data, colWidths=[w * scale for w in widths], repeatRows=1)
+        ts = [("BACKGROUND", (0, 0), (-1, 0), C("#1F2937")),
+              ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+              ("LINEBELOW", (0, 1), (-1, -1), 0.4, border),
+              ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]
+        for i in range(2, len(data), 2):
+            ts.append(("BACKGROUND", (0, i), (-1, i), C("#F3F4F6")))
+        table.setStyle(TableStyle(ts))
+        story.append(table)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(letter), leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=0.6 * inch,
+                            title="Executive Overview", author=str(exported_by))
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
+
+
+# Bump this whenever build_export_pdf() changes: it's part of the cache key, so an already-built
+# PDF from the old layout is never handed out again (Streamlit doesn't notice changes inside
+# build_export_pdf on its own and would keep serving the cached old file for up to 5 minutes).
+PDF_EXPORT_VERSION = 2
+
+
+@st.cache_data(ttl=300, show_spinner=False, max_entries=20)
+def cached_export_pdf(df, hist, filters_json, exported_by, labels_key, kpi_items, version=PDF_EXPORT_VERSION):
+    """PDF is rebuilt only when the filters / data / labels / KPI tiles / PDF layout version change."""
+    return build_export_pdf(df, hist, json.loads(filters_json), exported_by, kpi_items)
+
+
+def export_file_name(program_label, cohort, status, ext="xlsx") -> str:
     parts = ["at_risk_students", program_label, cohort, status, datetime.now().strftime("%Y-%m-%d")]
-    return "_".join(re.sub(r"[^A-Za-z0-9]+", "-", str(p)).strip("-") for p in parts) + ".xlsx"
+    return "_".join(re.sub(r"[^A-Za-z0-9]+", "-", str(p)).strip("-") for p in parts) + f".{ext}"
 
 
 def _current_user_label() -> str:
@@ -1213,7 +1473,8 @@ def log_export(filters: dict, row_count: int, file_name: str):
             cur.execute(
                 "INSERT INTO Export_Log (ExportedBy, Page, Filters, RowCount, FileName) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (_current_user_label(), "Executive Overview", json.dumps(filters), row_count, file_name),
+                (_current_user_label(), "Executive Overview (PDF)" if file_name.endswith(".pdf")
+                 else "Executive Overview (Excel)", json.dumps(filters), row_count, file_name),
             )
             conn.commit()
             cur.close()
@@ -1309,7 +1570,7 @@ def render_executive_overview():
 
     # ---- Filters: Program | Cohort | Enrollment ----
     with st.container(key="eo_filters"):
-        f1, f2, f3, f4 = st.columns(4, gap="small", vertical_alignment="bottom")
+        f1, f2, f3, f4, f5 = st.columns(5, gap="small", vertical_alignment="bottom")   # f4 = Excel, f5 = PDF
 
         with f3:
             selected_status = st.selectbox("Enrollment Status", ENROLLMENT_OPTIONS)
@@ -1356,6 +1617,22 @@ def render_executive_overview():
 
     hist = cohort_history(status_df)
 
+    # ---- KPI tiles (US-29), worked out first because the PDF export includes them ----
+    program_label = (
+        "All Programs" if selected_program["ProgramID"] is None
+        else (selected_program["ProgramCode"] or selected_program["ProgramName"])
+    )
+    tiles = cached_kpi_tiles(selected_program["ProgramID"])
+    cards_data = []   # (label, value, sub_html, accent) for each tile, in order
+    for t in tiles or []:
+        src = (t.get("source") or "").strip().lower()
+        label = html.escape(str(t.get("label", "")))
+        if src == "total_enrolled" and selected_status != "All":   # keep the enrollment-filter wording
+            label = f"Total {html.escape(selected_status)}"
+        value, info = resolve_kpi_value(src, df, program_label, selected_cohort, hist)
+        sub = resolve_kpi_subtext(src, df, program_label, selected_cohort, hist)
+        cards_data.append((label, value, sub, t.get("color"), info))
+
     # ---- Export (far right of the filter row) ----
     program_label_for_file = (
         "All-Programs" if selected_program["ProgramID"] is None else selected_program["ProgramCode"]
@@ -1379,33 +1656,30 @@ def render_executive_overview():
             on_click=log_export,
             args=(export_filters, int(at_risk_students(df).shape[0]), file_name),
         )
+    pdf_name = export_file_name(program_label_for_file, selected_cohort, selected_status, ext="pdf")
+    with f5:
+        st.download_button(
+            "⬇ Export PDF",
+            data=cached_export_pdf(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
+                                   tuple(sorted(_stage_labels.items())),
+                                   kpi_pdf_items([c[:4] for c in cards_data]),
+                                   PDF_EXPORT_VERSION) if not df.empty else b"",
+            file_name=pdf_name,
+            mime="application/pdf",
+            disabled=df.empty,
+            help="Printable PDF report with the current filters: KPI cards, the charts, "
+                 "and the Students At Risk table",
+            on_click=log_export,
+            args=(export_filters, int(at_risk_students(df).shape[0]), pdf_name),
+            key="eo_export_pdf",
+        )
 
     # ---- KPI row (US-29: driven by Program.KpiTiles config) ----
-    program_label = (
-        "All Programs" if selected_program["ProgramID"] is None
-        else (selected_program["ProgramCode"] or selected_program["ProgramName"])
-    )
-
-    tiles = cached_kpi_tiles(selected_program["ProgramID"])
-
-    if not tiles:
+    if not cards_data:
         st.info("No KPI tiles are configured for this program. Add them in Admin Config.")
     else:
-        cards = []
-        for t in tiles:
-            src = (t.get("source") or "").strip().lower()
-            label = html.escape(str(t.get("label", "")))
-
-            # Preserve the enrollment-filter wording on the Total tile
-            if src == "total_enrolled" and selected_status != "All":
-                label = f"Total {html.escape(selected_status)}"
-
-            value, info = resolve_kpi_value(src, df, program_label, selected_cohort, hist)
-            sub = resolve_kpi_subtext(src, df, program_label, selected_cohort, hist)
-
-            cards.append(kpi_card(label, value, sub, info_html=info, accent=t.get("color")))
-
-        render_kpi_row(cards)
+        render_kpi_row([kpi_card(label, value, sub, info_html=info, accent=accent)
+                        for label, value, sub, accent, info in cards_data])
 
     # ---- Charts ----
     charts_row = st.container(key="eo_charts")

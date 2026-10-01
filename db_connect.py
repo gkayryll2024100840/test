@@ -1742,3 +1742,21 @@ def set_stage_label(user_id, program_id, pillar, label):
         return False, format_mysql_error(e)
     except Exception as e:
         return False, f"Unexpected error: {e}"
+
+def get_student_email(student_number):
+    """The student's email address (Students.StudentEmail), or None if it's blank / not found."""
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT StudentEmail FROM Students WHERE StudentNumber = %s", (str(student_number),))
+            row = cur.fetchone()
+            cur.close()
+        finally:
+            conn.close()
+        email = (row[0] if row else None) or ""
+        email = email.decode() if isinstance(email, (bytes, bytearray)) else str(email)
+        return email.strip() or None
+    except Exception as e:
+        print(f"Failed to fetch student email: {e}")
+        return None

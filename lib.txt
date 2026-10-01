@@ -6,3 +6,8 @@ git checkout -b your-branch-name
 git add .
 git commit -m "your message here"
 git push -u origin your-branch-name
+
+git fetch origin
+git checkout -f main
+git reset --hard origin/main
+git clean -fd
