@@ -23,6 +23,7 @@ db_config = {
 }
 print("DB_HOST =", repr(os.getenv("DB_HOST")))
 print("DB_USER =", repr(os.getenv("DB_USER")))
+
 # Standardized status mapping for US-07, US-08, and US-09
 LIFECYCLE_STATUS_MAP = {
     # US-07: Pending, Cancelled, Completed
@@ -1290,6 +1291,7 @@ _scheduler_lock = threading.Lock()
 _scheduler_started = False
 _settings_table_ready = False   # CREATE TABLE only runs once per app process, not on every read
 _last_handled_date = None       # SPEED: once today's run is done/claimed, skip the DB claim on later 30 s checks
+_last_unreachable_logged = None  # date we already wrote a "database unreachable" row to the sync log (once per day)
 
 
 def _ensure_settings_table(cur):
@@ -1418,6 +1420,20 @@ def set_refresh_time(user_id, hhmm):
         return False, f"Unexpected error: {e}"
 
 
+def _log_scheduler_unreachable(today, message):
+    """The nightly refresh is due but the database can't be reached. Before, this only printed to the
+    console, so the Sync Logs table never showed it. Now it is logged (FAILED), once per day, so it can
+    be seen in Admin Config > System Sync Logs as soon as the connection works again."""
+    global _last_unreachable_logged
+    if _last_unreachable_logged == today:
+        return
+    _last_unreachable_logged = today
+    try:
+        log_sync_attempt_local("FAILED", error_message=f"Scheduled refresh could not start: {message}", login_id="SCHEDULED")
+    except Exception as e:
+        print(f"Could not write the sync log: {e}")
+
+
 def run_scheduled_refresh_if_due(now=None):
     global _last_handled_date
     """Runs tonight's refresh if its time has passed and it hasn't run yet today. Returns True if it ran."""
@@ -1433,7 +1449,11 @@ def run_scheduled_refresh_if_due(now=None):
     if _last_handled_date == today:
         return False
     # claim today's run in the database, so only ONE process runs it even if several are up
-    conn = get_db_connection()
+    try:
+        conn = get_db_connection()
+    except mysql.connector.Error as err:      # database unreachable (wrong host, DNS, server down, full...)
+        _log_scheduler_unreachable(today, format_mysql_error(err))
+        return False                           # not marked as handled -> it retries on the next 30 s check
     try:
         cur = conn.cursor()
         _ensure_settings_table(cur)
