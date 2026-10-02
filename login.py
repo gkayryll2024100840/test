@@ -12,6 +12,8 @@ from dashboard_views.components import render_app_shell
 
 load_dotenv()
 
+st.set_page_config(page_title="Project Pulse", layout="wide")
+
 # ---- Show the whole app at 90% (like zooming the browser out to 90%) ----
 # To change the size, edit APP_ZOOM only (1 = normal, 0.9 = 90%).
 # The second rule keeps the main area as tall as the screen; without it, zooming leaves an empty
@@ -166,15 +168,12 @@ if not st.session_state.get('user'):
             background: rgba(0,0,0,0);
         }}
 
-        /* ===== PAGE CONTAINER: widened to match the red guide ===== */
+        /* ===== PAGE CONTAINER ===== */
         [data-testid="stMainBlockContainer"],
         [data-testid="stAppViewBlockContainer"],
         section.main > div.block-container {{
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-            max-width: 640px !important;      /* was 360px — card fills the red area */
-            margin-left: auto !important;
-            margin-right: auto !important;
         }}
 
         /* The card itself: also widened so it fills its wrapper */

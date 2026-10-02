@@ -162,8 +162,27 @@ html[data-eo-theme="dark"] .stApp{
 .st-key-eo_charts .js-plotly-plot .svg-container{margin-left:auto !important;margin-right:auto !important;
     flex:0 0 auto;max-width:100%;}
 /* trend card title row: title + subtitle on the left, Completion % / Students at Risk switch on the right */
-.st-key-eo_trend_head [data-testid="stHorizontalBlock"]{align-items:flex-start !important;}
-.st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:4px;}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"]{
+    align-items:flex-start !important;
+    flex-wrap:wrap !important;
+    gap:12px !important;
+}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child{
+    flex:1 1 260px !important;
+    min-width:240px !important;
+}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child{
+    flex:0 0 auto !important;
+    min-width:max-content !important;
+}
+.st-key-eo_trend_head .eo-card-title{
+    white-space:normal !important;
+    line-height:1.25 !important;
+}
+.st-key-eo_trend_head .eo-card-sub{
+    margin:0 0 4px 4px !important;
+}
+.st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:2px;}
 .st-key-eo_trend_switch [data-testid="stElementContainer"]{justify-content:flex-end !important;width:100%;}
 .st-key-eo_trend_switch [data-testid="stButtonGroup"],
 .st-key-eo_trend_switch [role="radiogroup"]{justify-content:flex-end;flex-wrap:nowrap;margin-left:auto;}
@@ -207,19 +226,78 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
     min-width: 0 !important;
 }
 
+@media (max-width: 1024px) {
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"],
+  .st-key-eo_filters [data-testid="column"] {
+    flex: 1 1 calc(33.33% - 10px) !important;
+    width: auto !important;
+    min-width: 160px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
+  .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) {
+    flex: 1 1 calc(50% - 10px) !important;
+    width: auto !important;
+    margin-left: 0 !important;
+    margin-top: 6px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) button,
+  .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) button {
+    width: 100% !important;
+  }
+}
+@media (max-width: 768px) {
+  .st-key-eo_filters [data-testid="stColumn"],
+  .st-key-eo_filters [data-testid="column"] {
+    flex: 1 1 calc(50% - 10px) !important;
+  }
+}
+
 /* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
 .eo-header{padding-bottom:10px;border-bottom:1px solid var(--eo-border);margin:0;}
 .eo-title{font-size:2.75rem;font-weight:700;line-height:1.15;color:var(--eo-text);letter-spacing:-.01em;margin:0;}
 /* caption under the title: change margin-top to move it closer to / further from the title */
 .eo-caption{color:var(--eo-label);font-size:14px;line-height:1.5;margin:4px 0 0 0;}
+@media (max-width: 1024px) {
+  .eo-title{font-size:2.15rem !important;}
+  .eo-caption{font-size:13px !important;}
+}
+@media (max-width: 768px) {
+  .eo-title{font-size:1.85rem !important;}
+}
+
 /* SPACE BETWEEN THE TITLE LINE AND THE FILTERS: change padding-top */
 .st-key-eo_filters{padding-top:16px;}
 /* SPACE BETWEEN EACH FILTER LABEL (e.g. "Enrollment Status") AND ITS DROPDOWN: change margin-bottom */
 .st-key-eo_filters [data-testid="stWidgetLabel"]{margin-bottom:4px;min-height:0;}
 .eo-subtitle{color:var(--eo-label);font-size:14px;margin:-14px 0 14px 0;}
+
+/* KPI Grid Responsive Layout: single row on desktop & tablet landscape, compact 3+2 on portrait */
 .eo-kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:6px 0 18px 0;}
-@media (max-width:1200px){.eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));}}
-@media (max-width:700px){.eo-kpi-row{grid-template-columns:repeat(1,minmax(0,1fr));}}
+@media (max-width:1200px) and (min-width:881px){
+  .eo-kpi-row{grid-template-columns:repeat(5,minmax(0,1fr)) !important;gap:10px !important;}
+  .eo-kpi{padding:12px 14px !important;min-height:98px !important;}
+  .eo-kpi-value{font-size:26px !important;margin:6px 0 4px 0 !important;}
+  .eo-kpi-label{font-size:10.5px !important;}
+  .eo-kpi-sub{font-size:11px !important;}
+}
+@media (max-width:880px) and (min-width:601px){
+  .eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:10px !important;}
+  .eo-kpi{padding:12px 14px !important;min-height:95px !important;}
+  .eo-kpi-value{font-size:26px !important;margin:6px 0 4px 0 !important;}
+  .eo-kpi-label{font-size:10.5px !important;}
+  .eo-kpi-sub{font-size:11px !important;}
+}
+@media (max-width:600px){
+  .eo-kpi-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:8px !important;}
+  .eo-kpi{padding:10px 12px !important;min-height:90px !important;}
+  .eo-kpi-value{font-size:22px !important;margin:4px 0 3px 0 !important;}
+  .eo-kpi-label{font-size:10px !important;}
+}
+
 .eo-kpi{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;padding:18px 20px;
         box-shadow:var(--eo-shadow);min-height:122px;display:flex;flex-direction:column;}
 .eo-kpi-label{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-label);}
@@ -249,6 +327,20 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .eo-flat{color:var(--eo-muted);}
 .eo-up{color:var(--eo-up);} .eo-down{color:var(--eo-down);} .eo-risk{color:var(--eo-down);}
 
+/* ---- Responsive Charts Layout (stack to 100% width on tablet viewports <= 1150px) ---- */
+@media (max-width: 1150px) {
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+
 div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);border:1px solid var(--eo-border) !important;
         border-radius:12px !important;box-shadow:var(--eo-shadow);}
 .eo-card-head{display:flex;flex-direction:column;align-items:flex-start;}
@@ -260,14 +352,18 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .eo-table{width:100%;border-collapse:collapse;font-size:14px;color:var(--eo-text-2);margin:0;}
 .eo-table th{position:sticky;top:0;z-index:1;background:var(--eo-surface-2);text-align:left;font-size:12px;
         font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);
-        padding:12px 18px;border:none;border-bottom:1px solid var(--eo-border);}
-.eo-table td{padding:10px 18px;border:none;border-bottom:1px solid var(--eo-border-soft);vertical-align:middle;white-space:nowrap;}
+        padding:12px 18px;border:none;border-bottom:1px solid var(--eo-border);white-space:nowrap !important;}
+.eo-table td{padding:10px 18px;border:none;border-bottom:1px solid var(--eo-border-soft);vertical-align:middle;white-space:nowrap !important;}
 .eo-table tr:last-child td{border-bottom:none;}
 .eo-student{display:flex;align-items:center;gap:12px;}
 .eo-avatar{width:34px;height:34px;border-radius:50%;background:#475569;color:#FFFFFF;font-size:13px;
         font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.eo-name{font-weight:600;color:var(--eo-text-2);} .eo-id{font-size:12px;color:var(--eo-muted);}
-.eo-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
+.eo-name{font-weight:600;color:var(--eo-text-2);white-space:nowrap !important;word-break:keep-all !important;}
+.eo-id{font-size:12px;color:var(--eo-muted);white-space:nowrap !important;word-break:keep-all !important;}
+.eo-pill{display:inline-flex !important;align-items:center !important;justify-content:center !important;
+        white-space:nowrap !important;line-height:1 !important;padding:4px 10px;border-radius:999px;
+        font-size:12px;font-weight:600;border:1px solid;width:auto !important;max-width:none !important;
+        word-break:keep-all !important;flex-wrap:nowrap !important;}
 .pill-green{background:var(--pg-bg);color:var(--pg-fg);border-color:var(--pg-bd);}
 .pill-red{background:var(--pr-bg);color:var(--pr-fg);border-color:var(--pr-bd);}
 .pill-blue{background:var(--pb-bg);color:var(--pb-fg);border-color:var(--pb-bd);}
@@ -278,12 +374,18 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 
 /* ---- student table (built from Streamlit rows so the names can open Student Profile) ---- */
 .st-key-eo_table{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;
-        box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow:hidden;}
-.st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;}
-.eo-th{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);}
-.st-key-eo_table_rows{gap:0 !important;}
+        box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow-x:auto !important;
+        -webkit-overflow-scrolling:touch !important;width:100% !important;}
+.st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;
+        min-width:1000px !important;}
+.st-key-eo_table_head [data-testid="stHorizontalBlock"]{min-width:1000px !important;}
+.eo-th{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);
+       white-space:nowrap !important;word-break:keep-all !important;}
+.st-key-eo_table_rows{gap:0 !important;min-width:1000px !important;overflow-x:hidden !important;}
+.st-key-eo_table_rows > div{min-width:1000px !important;}
 .st-key-eo_table_rows [data-testid="stHorizontalBlock"]{padding:10px 18px;border-bottom:1px solid var(--eo-border-soft);
-        align-items:center;}
+        align-items:center;min-width:1000px !important;}
+.st-key-eo_table [data-testid="stHorizontalBlock"]{gap:12px !important;column-gap:12px !important;}
 /* name + student number sit right on top of each other */
 .st-key-eo_table_rows [data-testid="stColumn"],
 .st-key-eo_table_rows [data-testid="stColumn"] > div,
@@ -686,12 +788,12 @@ def card_header(title, subtitle):
     )
 
 
-TREND_HEIGHT = 300   # same height as the bar chart, so both cards line up
+TREND_HEIGHT = 275   # same height as the bar chart, so both cards line up
 
 BASE_LAYOUT = dict(
-    height=300,
+    height=275,
     autosize=True,
-    margin=dict(l=10, r=10, t=30, b=34),     # room under the bars / line for the stage + cohort names
+    margin=dict(l=15, r=15, t=30, b=30),     # room under the bars / line for the stage + cohort names
     xaxis=dict(automargin=True),
     plot_bgcolor="rgba(0,0,0,0)",     # transparent: the card colour shows through (light or dark)
     paper_bgcolor="rgba(0,0,0,0)",
@@ -1736,7 +1838,7 @@ def render_executive_overview():
     # ---- Charts ----
     charts_row = st.container(key="eo_charts")
     c1, c2 = charts_row.columns(2, gap="medium")
-    chart_config = {"displayModeBar": False}
+    chart_config = {"responsive": True, "displayModeBar": False}
 
     with c1:
         with st.container(border=True):
@@ -1771,7 +1873,7 @@ def render_executive_overview():
             if st.session_state.get("eo_trend_view") not in (None, *options):
                 st.session_state.pop("eo_trend_view")   # old option name from an earlier version
             with st.container(key="eo_trend_head"):
-                h_title, h_switch = st.columns([1.15, 1], vertical_alignment="top")
+                h_title, h_switch = st.columns([1.6, 1], vertical_alignment="top")
                 with h_switch:
                     with st.container(key="eo_trend_switch"):
                         if hasattr(st, "segmented_control"):      # pill toggle (Streamlit 1.40+)
