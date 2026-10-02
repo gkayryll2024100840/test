@@ -1146,10 +1146,20 @@ html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
 .stApp:has([data-testid="stSidebar"][aria-expanded="false"]) [data-testid="stMain"]{
     margin-left:58px !important;width:calc(100% - 58px) !important;max-width:calc(100% - 58px) !important;
     flex:1 1 auto;min-width:0;}
+/* ---- open-sidebar button (shown while the sidebar is collapsed) ----
+   Streamlit's own icon is a font ligature that turned invisible here (the white toolbar rule above makes it
+   white-on-white), so it is hidden and a chevron is drawn with CSS instead. The click area stays the same. */
 [data-testid="stExpandSidebarButton"]{position:fixed !important;top:14px !important;left:13px !important;z-index:999991 !important;
-    background:var(--ps-card) !important;border:1px solid var(--ps-btn-border) !important;border-radius:8px !important;
-    width:32px;height:32px;color:var(--ps-nav) !important;}
-[data-testid="stExpandSidebarButton"] *{color:var(--ps-nav) !important;}
+    background:var(--ps-card, #FFFFFF) !important;border:1px solid var(--ps-btn-border, #D1D5DB) !important;border-radius:8px !important;
+    width:32px;height:32px;display:flex !important;align-items:center;justify-content:center;
+    visibility:visible !important;opacity:1 !important;cursor:pointer;pointer-events:auto !important;}
+[data-testid="stExpandSidebarButton"] *{font-size:0 !important;color:transparent !important;fill:transparent !important;}
+[data-testid="stExpandSidebarButton"] button{position:absolute !important;inset:0;width:100% !important;height:100% !important;
+    background:transparent !important;border:0 !important;padding:0 !important;cursor:pointer;}
+[data-testid="stExpandSidebarButton"]::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;
+    border-top:2px solid var(--ps-nav, #1F2937);border-right:2px solid var(--ps-nav, #1F2937);
+    transform:translate(-65%, -50%) rotate(45deg);pointer-events:none;}
+html[data-eo-theme="dark"] [data-testid="stExpandSidebarButton"]::after{border-color:#E5E7EB;}
 </style>
 """
 

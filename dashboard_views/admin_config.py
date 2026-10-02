@@ -8,6 +8,7 @@
 #  - The user list shows USERS_PER_PAGE users at a time instead of building up to 200 rows of widgets.
 
 import html
+import pandas as pd
 import streamlit as st
 from datetime import datetime, time as dtime
 from db_connect import (
@@ -65,6 +66,18 @@ html[data-eo-theme="dark"] .ac-th{color:#94A3B8;}
 [class*="st-key-fmtog_"] [data-testid="stElementContainer"]{width:auto !important;}
 .ac-section-caption{font-size:14px !important;line-height:1.5 !important;color:var(--ac-h-label) !important;
         margin:4px 0 0 0 !important;padding:0 !important;}
+
+/* log tables (Permission Audit Log / System Sync Logs): always the full page width, text left-aligned,
+   long messages wrap instead of being cut off, header stays visible while the table scrolls */
+.ac-table-wrap{width:100%;overflow:auto;border:1px solid var(--ac-h-border);border-radius:10px;}
+.ac-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--ac-h-text);}
+.ac-table th{position:sticky;top:0;z-index:1;text-align:left;padding:10px 14px;font-size:12px;font-weight:600;
+        letter-spacing:.03em;text-transform:uppercase;color:var(--ac-h-label);background:var(--ac-foot-bg,#FAFAFA);
+        border-bottom:1px solid var(--ac-h-border);white-space:nowrap;}
+.ac-table td{text-align:left;vertical-align:top;padding:9px 14px;border-top:1px solid var(--ac-h-border);
+        overflow-wrap:anywhere;}
+.ac-table tbody tr:first-child td{border-top:none;}
+.ac-table tbody tr:hover td{background:rgba(148,163,184,.10);}
 </style>"""
 
 
@@ -80,6 +93,33 @@ def section_header(title, description):
         f'<div class="ac-section-caption">{description}</div></div>',
         unsafe_allow_html=True,
     )
+
+
+def table_html(rows):
+    """HTML for a simple full-width table from a list of dicts / rows (None if the rows can't be read)."""
+    try:
+        df = pd.DataFrame([dict(r) for r in rows])
+    except Exception:
+        return None
+    head = "".join(f"<th>{html.escape(str(c))}</th>" for c in df.columns)
+    body = []
+    for rec in df.itertuples(index=False):
+        cells = "".join(
+            "<td>" + html.escape("" if pd.isna(v) else str(v)).replace("\n", " ").replace("\r", " ") + "</td>"
+            for v in rec
+        )
+        body.append(f"<tr>{cells}</tr>")
+    return (f'<div class="ac-table-wrap" style="max-height:440px;"><table class="ac-table">'
+            f'<thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>')
+
+
+def show_table(rows):
+    """Full-width log table. (st.dataframe stopped short of the page's right edge and right-aligned numbers.)"""
+    markup = table_html(rows)
+    if markup is None:
+        st.dataframe(rows, use_container_width=True, hide_index=True)   # unknown row format: plain fallback
+    else:
+        st.markdown(markup, unsafe_allow_html=True)
 
 
 def current_user_id():
@@ -324,7 +364,7 @@ def card_head(name, title, desc):
 
 
 def program_options():
-    """{"BIA — BS Business Intelligence": ProgramID, ...} for the program dropdowns."""
+    """{"BIA — BS Business Intelligence and Analytics": ProgramID, ...} for the program dropdowns."""
     return {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in cached_programs()}
 
 
@@ -779,7 +819,7 @@ def user_permissions_section():
                     ok, err = set_user_permission(u["UserID"], new_perm)
                     if ok:
                         st.success(f"{u['UserID']} → {new_perm}")
-                        cached_users.clear()
+                        st.cache_data.clear()   # other pages cache each user's permission for a short time
                         st.rerun(scope="fragment")
                     else:
                         st.error(f"Failed: {err}")
@@ -803,7 +843,7 @@ section_header(
 try:
     audit_rows = cached_audit_rows()
     if audit_rows:
-        st.dataframe(audit_rows, use_container_width=True)
+        show_table(audit_rows)
     else:
         st.caption("No blocked attempts recorded yet.")
 except Exception as e:
@@ -830,21 +870,34 @@ def sync_logs_section():
     active_login_id = st.session_state.get("session_id", "default_admin")
     st.info(f"Active Session ID for this browser: **{active_login_id}**")
 
-    if st.button("Run Sync Attempt"):
+    if st.button("Run Sync Attempt", key="sync_run"):
         # Sync is a read-only operation — no permission gate needed
-        success = trigger_data_sync(login_id=active_login_id)
+        with st.spinner("Running sync attempt..."):
+            success = trigger_data_sync(login_id=active_login_id)
         cached_sync_logs.clear()      # show the new attempt in the table
-        if success:
-            st.success("Sync executed successfully!")
-            st.rerun()   # full page rerun so the sidebar's Live Sync Status updates too
+        # Keep the result in session_state: the full-page rerun below used to wipe the message
+        # before it could be read ("too fast", or never visible).
+        now = datetime.now()
+        st.session_state["sync_result"] = {
+            "ok": success,
+            "ts": now.timestamp(),
+            "at": now.strftime("%b %d, %Y · %I:%M:%S %p"),
+        }
+        st.rerun()   # full page rerun so the sidebar's Live Sync Status updates too
+
+    # Show the result of the last attempt right under the button for 2 minutes
+    # (the timestamp stops an old message from looking current when you come back later).
+    result = st.session_state.get("sync_result")
+    if result and (datetime.now().timestamp() - result["ts"]) < 120:
+        if result["ok"]:
+            st.success(f"Sync executed successfully! ({result['at']})")
         else:
-            st.error("Sync failed! Error logged to SQL Local_Logs table.")
-            st.rerun()
+            st.error(f"Sync failed! The error was logged in the table below. ({result['at']})")
 
     logs = cached_sync_logs()
 
     if logs:
-        st.dataframe(logs, use_container_width=True)
+        show_table(logs)
     else:
         st.info("No system logs found in the local_logs.db")
 
