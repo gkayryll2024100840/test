@@ -1,5 +1,5 @@
 # EXEC OVERVIEW MERGE
-# EXEC OVERVIEW 9-30-26 (QA fixes: Excel key metrics, Philippine export time, wider Program filter)
+# EXEC OVERVIEW 9-30-26 (QA fixes: Excel key metrics, Philippine export time, wider Program filter, tablet / phone table)
 import html
 import io
 import json
@@ -319,6 +319,18 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);margin:0 !important;line-height:1.3;}
 .st-key-eo_table_rows button[kind="tertiary"]:hover p,
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
+
+/* ===== TABLET / PHONE =====
+   The student table has 7 columns, which needs about 1100px. On narrower screens it keeps that readable width
+   and scrolls sideways (header and rows scroll together) instead of squeezing the columns together. */
+.st-key-eo_table{overflow-x:auto !important;overflow-y:visible;-webkit-overflow-scrolling:touch;}
+@media (max-width:1100px){
+  .st-key-eo_table [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;min-width:1100px;}
+  .st-key-eo_table [data-testid="stColumn"]{min-width:0 !important;}
+  .st-key-eo_table_head,.st-key-eo_table_rows{min-width:1100px;}
+}
+.st-key-eo_table .eo-pill{white-space:normal;line-height:1.25;}
+.st-key-eo_table .eo-th{white-space:normal;overflow-wrap:anywhere;line-height:1.25;}
 </style>
 """
 

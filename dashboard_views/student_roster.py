@@ -1,5 +1,5 @@
 # STUDENT ROSTER.PY
-# UPDATED: 9/30/2026
+# UPDATED: 9/30/2026 (+ tablet / phone layout)
 
 import html
 from functools import lru_cache
@@ -136,6 +136,32 @@ st.markdown(
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
 html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#FCA5A5;border-color:rgba(239,68,68,.3);}
 .sr-risk-none{color:#9CA3AF;}
+
+/* ===== TABLET / PHONE =====
+   The roster has 9-10 columns, which needs about 1250px. On narrower screens the table keeps that readable
+   width and scrolls sideways (header and rows scroll together) instead of squeezing the columns together. */
+.st-key-roster_table{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
+@media (max-width:1250px){
+  .st-key-roster_table [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;min-width:1250px;}
+  .st-key-roster_table [data-testid="stColumn"]{min-width:0 !important;}
+  .st-key-roster_table .st-key-roster_scroll,
+  .st-key-roster_table .roster-th-divider,
+  .st-key-roster_table .roster-row-divider{min-width:1250px;}
+}
+/* wrap long words in the header, names and pills instead of letting them run into the next column */
+.st-key-roster_table .roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.25 !important;}
+.st-key-roster_table .roster-cell-id,
+.st-key-roster_table .roster-cell-text{white-space:normal !important;overflow-wrap:anywhere;line-height:1.3;}
+.st-key-roster_table div[data-testid="stPageLink"]{height:auto !important;min-height:32px;}
+.st-key-roster_table div[data-testid="stPageLink"] a{white-space:normal !important;line-height:1.25 !important;height:auto !important;}
+/* filters: two per row on a tablet, one per row on a phone (they used to squeeze together) */
+@media (max-width:900px){
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important;}
+  .st-key-sr_filters [data-testid="stColumn"]{flex:1 1 calc(50% - 16px) !important;min-width:calc(50% - 16px) !important;}
+}
+@media (max-width:520px){
+  .st-key-sr_filters [data-testid="stColumn"]{flex:1 1 100% !important;min-width:100% !important;}
+}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -214,7 +240,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
     with st.form("create_program_form"):
         st.write("**Create New Program**")
         code = st.text_input("Program Code (e.g., BIA)")
-        name = st.text_input("Program Name (e.g., BS Business Intelligence and Analytics)")
+        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
         if st.form_submit_button("Create Program"):
             require_edit()
             if not code or not name:
@@ -442,16 +468,17 @@ try:
                 stage_labels["Coursework"].upper(), stage_labels["CompExam"].upper(),
                 stage_labels["Capstone"].upper(), "LAST UPDATE", "RISK"
             ]
-        header_cols = st.columns(col_widths, vertical_alignment="center")
+        table_box = st.container(key="roster_table")   # header + rows live in one box so they scroll sideways together
+        header_cols = table_box.columns(col_widths, vertical_alignment="center")
         for col, label in zip(header_cols, header_labels):
             col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
-        st.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
+        table_box.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
  
         if df_filtered.empty:
             st.info("No students match the current filters.")
         else:
             scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
-            with st.container(border=False, key="roster_scroll", **scroll_kwargs):
+            with table_box.container(border=False, key="roster_scroll", **scroll_kwargs):
                 for row in page_df.to_dict("records"):
                     s_id = str(row.get("StudentNumber", ""))
                     s_name = str(row.get("Student", "Unknown"))
