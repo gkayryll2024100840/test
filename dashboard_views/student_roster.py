@@ -214,7 +214,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
     with st.form("create_program_form"):
         st.write("**Create New Program**")
         code = st.text_input("Program Code (e.g., BIA)")
-        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
+        name = st.text_input("Program Name (e.g., BS Business Intelligence and Analytics)")
         if st.form_submit_button("Create Program"):
             require_edit()
             if not code or not name:

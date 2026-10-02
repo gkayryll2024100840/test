@@ -1,10 +1,11 @@
 # EXEC OVERVIEW MERGE
-# EXEC OVERVIEW 9-30-26
+# EXEC OVERVIEW 9-30-26 (QA fixes: Excel key metrics, Philippine export time, wider Program filter)
 import html
 import io
 import json
 import re
-from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -65,6 +66,15 @@ ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
 LAST_UPDATED_CANDIDATES = ["LastUpdated", "UpdatedAt", "DateUpdated", "LastModified", "ModifiedAt"]
 ENROLLMENT_OPTIONS = ["All", "Enrolled", "Conditionally Enrolled"]
 TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
+# Times shown in exports use Philippine time (UTC+8, same as the nightly refresh). The server itself
+# runs in UTC, so the plain server clock printed a time 8 hours behind.
+APP_TZ = timezone(timedelta(hours=8))
+
+
+def now_local():
+    return datetime.now(APP_TZ)
+
+
 # US-30: stage names come from Admin Config (Program_Stage.StageLabel), per program.
 # Inside this file stages keep their fixed keys ("Coursework", "Comprehensive Exam", "Capstone");
 # stage_name() turns a key into the label the user should see.
@@ -138,6 +148,19 @@ html[data-eo-theme="dark"] .stApp{
 .st-key-eo_charts [data-testid="stHorizontalBlock"]{align-items:stretch !important;}
 .st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{justify-content:flex-start !important;}
 .st-key-eo_charts [data-testid="stVerticalBlockBorderWrapper"]{height:100%;}
+/* CHARTS FILL THEIR CARDS: an app-wide rule in components.py turns every element inside a column into a
+   flex row, which shrink-wrapped each chart to Plotly's default 700px width (empty space on the right).
+   The long selector is on purpose: it has to out-rank that rule. */
+.st-key-eo_charts div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stElementContainer"]:has(.js-plotly-plot),
+.st-key-eo_charts div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stElementContainer"]:has([data-testid="stPlotlyChart"]){
+    display:block !important;width:100% !important;min-height:0 !important;}
+.st-key-eo_charts [data-testid="stPlotlyChart"]{width:100% !important;}
+/* CENTRE each chart inside its card. Plotly draws inside a box with a fixed pixel width (.svg-container);
+   when that box is narrower than the card it hugs the left, so the box itself gets auto side margins. */
+.st-key-eo_charts .js-plotly-plot{display:block !important;width:100% !important;}
+.st-key-eo_charts .js-plotly-plot .plot-container{width:100% !important;display:flex !important;justify-content:center !important;}
+.st-key-eo_charts .js-plotly-plot .svg-container{margin-left:auto !important;margin-right:auto !important;
+    flex:0 0 auto;max-width:100%;}
 /* trend card title row: title + subtitle on the left, Completion % / Students at Risk switch on the right */
 .st-key-eo_trend_head [data-testid="stHorizontalBlock"]{align-items:flex-start !important;}
 .st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:4px;}
@@ -156,11 +179,13 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .stApp .js-plotly-plot .xlines-above{stroke:var(--eo-line) !important;}
 /* page padding + Streamlit header are handled by render_app_shell() in components.py (shared across pages) */
 
+/* FILTER BOX WIDTH: Program, Cohort and Enrollment Status all use this same width.
+   Change the three 300px values together (300px fits "Master of Business Administration"). */
 .st-key-eo_filters [data-testid="stColumn"],
 .st-key-eo_filters [data-testid="column"] {
-    flex: 0 0 220px !important;
-    width: 220px !important;
-    min-width: 220px !important;
+    flex: 0 0 300px !important;
+    width: 300px !important;
+    min-width: 300px !important;
 }
 /* export buttons (Excel + PDF): the last two columns in the filter row, pushed to the far right */
 .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
@@ -172,6 +197,14 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(2),
 .st-key-eo_filters [data-testid="column"]:nth-last-child(2) {
     margin-left: auto !important;
+}
+/* every filter dropdown fills its own box (same approach the Student Roster filters use) */
+.st-key-eo_filters [data-testid="stElementContainer"]:has([data-testid="stSelectbox"]),
+.st-key-eo_filters [data-testid="stSelectbox"],
+.st-key-eo_filters [data-baseweb="select"] {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
 }
 
 /* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
@@ -494,15 +527,24 @@ def cohort_sort_key(cohort):
     return (int(year.group()) if year else 0, term, low)
 
 
+def pct_1dp(part, whole) -> float:
+    """part / whole as a percentage with 1 decimal, rounded HALF UP - the same as SQL ROUND() and Excel.
+    (Python's own round() sends an exact half to the EVEN digit, so 31.25 came out as 31.2 on the dashboard
+    while SQL and Excel showed 31.3.)"""
+    if not whole:
+        return 0.0
+    return float((Decimal(int(part)) * 100 / Decimal(int(whole))).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
 def completion_rate(df: pd.DataFrame) -> float:
-    return round(df["IsComplete"].mean() * 100, 1) if not df.empty else 0.0
+    return pct_1dp(df["IsComplete"].sum(), len(df)) if not df.empty else 0.0
 
 
 def on_time_rate(df: pd.DataFrame) -> float:
     if df.empty:
         return 0.0
     flags = df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE)
-    return round(flags.mean() * 100, 1)
+    return pct_1dp(flags.sum(), len(df))
 
 
 def lifecycle_counts(df: pd.DataFrame) -> pd.DataFrame:
@@ -517,7 +559,7 @@ def cohort_history(df: pd.DataFrame) -> pd.DataFrame:
          "Remaining": int((~g["IsComplete"] & ~g["IsInactive"]).sum()),
          # students flagged At Risk in this cohort (count + % of the cohort)
          "AtRisk": int(g["IsFlagged"].sum()) if has_flags else 0,
-         "AtRiskPct": round(g["IsFlagged"].mean() * 100, 1) if has_flags and len(g) else 0.0}
+         "AtRiskPct": pct_1dp(g["IsFlagged"].sum(), len(g)) if has_flags and len(g) else 0.0}
         for c, g in df.groupby("Cohort")
     ]
     hist = pd.DataFrame(rows, columns=["Cohort", "Completion", "OnTime", "Remaining", "AtRisk", "AtRiskPct"])
@@ -648,7 +690,9 @@ TREND_HEIGHT = 300   # same height as the bar chart, so both cards line up
 
 BASE_LAYOUT = dict(
     height=300,
-    margin=dict(l=10, r=10, t=30, b=10),
+    autosize=True,
+    margin=dict(l=10, r=10, t=30, b=34),     # room under the bars / line for the stage + cohort names
+    xaxis=dict(automargin=True),
     plot_bgcolor="rgba(0,0,0,0)",     # transparent: the card colour shows through (light or dark)
     paper_bgcolor="rgba(0,0,0,0)",
     showlegend=False,
@@ -973,7 +1017,7 @@ def _value_labels(DataLabelList):
     return lbl
 
 
-def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
+def build_export_xlsx(df, hist, filters: dict, exported_by: str, exported_at: str) -> bytes:
     """Excel export with two tabs: 'Overview' (filters, KPIs, both charts) and
     'At-Risk Students' (the same students as the "Students At Risk" table on the page)."""
     from openpyxl import Workbook
@@ -998,7 +1042,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
 
     ov["A1"] = "Executive Overview"
     ov["A1"].font = Font(bold=True, size=18, color=navy)
-    ov["A2"] = f"Exported {datetime.now():%b %d, %Y %H:%M} by {exported_by}"
+    ov["A2"] = f"Exported {exported_at} by {exported_by}"
     ov["A2"].font = Font(italic=True, size=9, color=grey)
 
     # --- Filters ---
@@ -1007,7 +1051,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
         ov.cell(i, 1, k).font = Font(color=grey)
         ov.cell(i, 2, v).font = Font(bold=True)
 
-    # --- Lifecycle stage data (the KPIs below are formulas on this table) ---
+    # --- Lifecycle stage data (the key metrics below are worked out from this table) ---
     counts = lifecycle_counts(df)
     ov["A16"] = "COHORT BY LIFECYCLE STAGE"; ov["A16"].font = section
     ov["A17"], ov["B17"] = "Stage", "Students"
@@ -1025,18 +1069,23 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
     # --- KPIs ---
     cohort = filters.get("Cohort", "All Cohorts")
     ov["A10"] = "KEY METRICS"; ov["A10"].font = section
+    # Real numbers, not Excel formulas: formulas show up EMPTY when the file opens in Protected View
+    # (files downloaded from the web), in Excel preview panes, and on phones, until editing is enabled.
+    total_n = int(counts["Count"].sum())
+    completed_n = int(counts.loc[counts["Stage"] == "Completed", "Count"].sum())
+    inactive_n = int(counts.loc[counts["Stage"] == INACTIVE_STAGE, "Count"].sum())
     kpis = [
-        ("Total Enrolled", "=SUM(B18:B22)", "#,##0", ""),
-        ("On-Time Graduation Rate", "=IF(B11=0,0,B23/B11)", "0.0%",
+        ("Total Enrolled", total_n, "#,##0", ""),
+        ("On-Time Graduation Rate", (yes / total_n) if total_n else 0, "0.0%",
          compare_text(hist, "OnTime", cohort)),
-        ("Overall Completion", "=IF(B11=0,0,B21/B11)", "0.0%",
+        ("Overall Completion", (completed_n / total_n) if total_n else 0, "0.0%",
          compare_text(hist, "Completion", cohort)),
-        ("Remaining Students", "=B11-B21-B22", "#,##0",
+        ("Remaining Students", total_n - completed_n - inactive_n, "#,##0",
          compare_text(hist, "Remaining", cohort, kind="count", higher_is_better=False)),
     ]
-    for i, (label, formula, fmt, cmp_txt) in enumerate(kpis, start=11):
+    for i, (label, value, fmt, cmp_txt) in enumerate(kpis, start=11):
         ov.cell(i, 1, label).font = Font(color=grey)
-        cell = ov.cell(i, 2, formula)
+        cell = ov.cell(i, 2, value)
         cell.number_format, cell.font = fmt, Font(bold=True, size=12, color=navy)
         cmp_cell = ov.cell(i, 3, cmp_txt)
         color = "2E9E3E" if "better" in cmp_txt else "C62828" if "worse" in cmp_txt else "9CA3AF"
@@ -1160,10 +1209,10 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str) -> bytes:
 
 
 @st.cache_data(ttl=300, show_spinner=False, max_entries=20)
-def cached_export_xlsx(df, hist, filters_json, exported_by, labels_key):
-    """The Excel file is rebuilt only when the filters / data / stage labels change,
-    not on every click on the page (building it with charts is the slowest part of a rerun)."""
-    return build_export_xlsx(df, hist, json.loads(filters_json), exported_by)
+def cached_export_xlsx(df, hist, filters_json, exported_by, labels_key, exported_at):
+    """The Excel file is rebuilt only when the filters / data / stage labels change (or the minute
+    changes, because the export time is printed in the file), not on every click on the page."""
+    return build_export_xlsx(df, hist, json.loads(filters_json), exported_by, exported_at)
 
 
 # ---------------------------------------------------------------------------
@@ -1192,7 +1241,7 @@ def kpi_pdf_items(cards_data):
     return tuple(items)
 
 
-def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items) -> bytes:
+def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, exported_at: str) -> bytes:
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.linecharts import HorizontalLineChart
     from reportlab.graphics.shapes import Drawing, String
@@ -1234,7 +1283,7 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items) -> by
 
     story = [
         Paragraph("Executive Overview", s_title),
-        Paragraph(f"Exported {datetime.now():%b %d, %Y %H:%M} by {html.escape(str(exported_by))}", s_meta),
+        Paragraph(f"Exported {html.escape(exported_at)} by {html.escape(str(exported_by))}", s_meta),
         Spacer(1, 6),
         Paragraph("  ·  ".join(f'<font color="#6B7280">{html.escape(k)}:</font> <b>{html.escape(str(v))}</b>'
                                for k, v in filters.items()), style("f", fontSize=9)),
@@ -1414,17 +1463,18 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items) -> by
 # Bump this whenever build_export_pdf() changes: it's part of the cache key, so an already-built
 # PDF from the old layout is never handed out again (Streamlit doesn't notice changes inside
 # build_export_pdf on its own and would keep serving the cached old file for up to 5 minutes).
-PDF_EXPORT_VERSION = 2
+PDF_EXPORT_VERSION = 3
 
 
 @st.cache_data(ttl=300, show_spinner=False, max_entries=20)
-def cached_export_pdf(df, hist, filters_json, exported_by, labels_key, kpi_items, version=PDF_EXPORT_VERSION):
-    """PDF is rebuilt only when the filters / data / labels / KPI tiles / PDF layout version change."""
-    return build_export_pdf(df, hist, json.loads(filters_json), exported_by, kpi_items)
+def cached_export_pdf(df, hist, filters_json, exported_by, labels_key, kpi_items, exported_at,
+                      version=PDF_EXPORT_VERSION):
+    """PDF is rebuilt only when the filters / data / labels / KPI tiles / export minute / PDF layout version change."""
+    return build_export_pdf(df, hist, json.loads(filters_json), exported_by, kpi_items, exported_at)
 
 
 def export_file_name(program_label, cohort, status, ext="xlsx") -> str:
-    parts = ["at_risk_students", program_label, cohort, status, datetime.now().strftime("%Y-%m-%d")]
+    parts = ["at_risk_students", program_label, cohort, status, now_local().strftime("%Y-%m-%d")]
     return "_".join(re.sub(r"[^A-Za-z0-9]+", "-", str(p)).strip("-") for p in parts) + f".{ext}"
 
 
@@ -1638,6 +1688,8 @@ def render_executive_overview():
         "All-Programs" if selected_program["ProgramID"] is None else selected_program["ProgramCode"]
     )
     file_name = export_file_name(program_label_for_file, selected_cohort, selected_status)
+    # one export time (Philippine time, to the minute) shared by the Excel and the PDF
+    exported_at = now_local().strftime("%b %d, %Y %H:%M")
     export_filters = {
         "Enrollment Status": selected_status,
         "Cohort": selected_cohort,
@@ -1647,7 +1699,7 @@ def render_executive_overview():
         st.download_button(
             "⬇ Export Excel",
             data=cached_export_xlsx(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
-                                    tuple(sorted(_stage_labels.items()))) if not df.empty else b"",
+                                    tuple(sorted(_stage_labels.items())), exported_at) if not df.empty else b"",
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
@@ -1663,7 +1715,7 @@ def render_executive_overview():
             data=cached_export_pdf(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
                                    tuple(sorted(_stage_labels.items())),
                                    kpi_pdf_items([c[:4] for c in cards_data]),
-                                   PDF_EXPORT_VERSION) if not df.empty else b"",
+                                   exported_at, PDF_EXPORT_VERSION) if not df.empty else b"",
             file_name=pdf_name,
             mime="application/pdf",
             disabled=df.empty,
