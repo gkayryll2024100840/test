@@ -421,6 +421,38 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);margin:0 !important;line-height:1.3;}
 .st-key-eo_table_rows button[kind="tertiary"]:hover p,
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
+/* ---- MOBILE (<= 640px): stack filters, tighten header ---- */
+@media (max-width: 640px) {
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"],
+  .st-key-eo_filters [data-testid="column"] {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  /* Export buttons side by side, full width, below the filters */
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
+  .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) {
+    flex: 1 1 calc(50% - 5px) !important;
+    margin-left: 0 !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) button,
+  .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) button {
+    width: 100% !important;
+  }
+  .eo-title { font-size: 1.85rem !important; }
+  .eo-caption { font-size: 13px !important; }
+  /* The charts already stack via the 1150px rule; tighten their height a bit */
+  .st-key-eo_charts .js-plotly-plot { min-height: 240px; }
+  /* KPI cards: 2 per row (matches existing rule) */
+  .eo-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+}
 </style>
 """
 

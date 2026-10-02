@@ -1193,6 +1193,61 @@ html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
     border-top:2px solid var(--ps-nav, #1F2937);border-right:2px solid var(--ps-nav, #1F2937);
     transform:translate(-65%, -50%) rotate(45deg);pointer-events:none;}
 html[data-eo-theme="dark"] [data-testid="stExpandSidebarButton"]::after{border-color:#E5E7EB;}
+/* ============================================================
+   MOBILE (<= 640px): stack the header bars, shrink the logo/text
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Header red bar: smaller title, tighter padding */
+  .ps-red {
+    padding: 12px 16px !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+  .ps-logo { width: 38px !important; height: 38px !important; }
+  .ps-kicker { font-size: 10px !important; }
+  .ps-title  { font-size: 18px !important; line-height: 1.2 !important; }
+
+  /* Yellow bar: stack the two meta blocks vertically */
+  .ps-yellow {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+    padding: 8px 16px !important;
+  }
+  .ps-meta { flex-wrap: wrap !important; gap: 6px !important; }
+  .ps-meta-label { font-size: 9px !important; }
+  .ps-meta-value { font-size: 11px !important; }
+
+  /* No sticky header on mobile — it eats too much vertical space */
+  [data-testid="stElementContainer"]:has(.ps-header),
+  .element-container:has(.ps-header) {
+    position: static !important;
+  }
+
+  /* Page content padding tighter */
+  [data-testid="stMainBlockContainer"],
+  .block-container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  .ps-header { margin: 0 -1rem 16px -1rem !important; }
+
+  /* Sidebar default-collapsed on mobile so the roster fills the screen */
+  [data-testid="stSidebar"] {
+    min-width: 280px !important;
+    max-width: 82vw !important;
+  }
+}
+
+/* ============================================================
+   TABLET (<= 1024px): tighten the header so it doesn't wrap awkwardly
+   ============================================================ */
+@media (max-width: 1024px) and (min-width: 641px) {
+  .ps-red { padding: 14px 22px !important; gap: 12px !important; }
+  .ps-title { font-size: 22px !important; }
+  .ps-yellow { padding: 8px 22px !important; gap: 12px !important; flex-wrap: wrap !important; }
+  .ps-meta-value { font-size: 11px !important; }
+}
 </style>
 """
 

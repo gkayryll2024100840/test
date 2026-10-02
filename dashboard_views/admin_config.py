@@ -352,6 +352,46 @@ html[data-eo-theme="dark"] .ac-th2{color:#94A3B8;}
 [class*="st-key-kpiadd_"]{border:1px dashed var(--ac-h-border);border-radius:12px;padding:16px 20px;
         background:var(--ac-foot-bg);margin-top:10px;}
 .ac-add-title{font-size:16px;font-weight:700;color:var(--ac-h-text);margin:0;}
+/* Tablet: keep the pair side by side but tighter */
+@media (max-width: 1150px) and (min-width: 641px) {
+  .st-key-ac_pair [data-testid="stHorizontalBlock"] { gap: 12px !important; }
+  [class*="st-key-achead_"] { padding: 20px 22px 16px 22px !important; }
+  [class*="st-key-acbody_"] { padding: 20px 22px 20px 22px !important; }
+}
+
+/* Mobile: stack the pair; every card full-width */
+@media (max-width: 640px) {
+  .st-key-ac_pair [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .st-key-ac_pair [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  /* KPI tiles editor: switch to stacked rows */
+  [class*="st-key-kpirow_"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  [class*="st-key-kpirow_"] [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-width: 140px !important;
+  }
+  /* The Add-a-Tile row: stack the fields */
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  [class*="st-key-kpiadd_"] [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  /* User Permissions: hide the wide 4-column layout; show name+role stacked */
+  .ac-table-wrap { font-size: 12px; }
+}
 </style>"""
 st.markdown(CARD_CSS, unsafe_allow_html=True)
 

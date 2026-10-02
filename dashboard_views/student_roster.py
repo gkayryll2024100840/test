@@ -139,6 +139,66 @@ st.markdown(
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
 html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#FCA5A5;border-color:rgba(239,68,68,.3);}
 .sr-risk-none{color:#9CA3AF;}
+/* ---- MOBILE card list (shown only at <= 640px) ---- */
+.st-key-sr_mobile_cards { display: none; }   /* hidden by default; the mobile @media block turns it on */
+
+.sr-mc {
+  background: var(--roster-cell-bg, transparent);
+  border: 1px solid var(--roster-th-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sr-mc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--roster-th-border);
+}
+.sr-mc-name { font-size: 16px; font-weight: 700; color: var(--roster-cell-text); line-height: 1.3; word-break: keep-all; }
+.sr-mc-id   { font-family: monospace; font-size: 12px; color: var(--roster-cell-id); white-space: nowrap; }
+.sr-mc-row  { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.4; }
+.sr-mc-label { color: var(--roster-th-color); font-weight: 600; text-transform: uppercase;
+               letter-spacing: .05em; font-size: 11px; }
+.sr-mc-value { color: var(--roster-cell-text); text-align: right; word-break: keep-all; }
+.sr-mc-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 4px 0;
+  border-top: 1px solid var(--roster-th-border);
+}
+.sr-mc-pill-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sr-mc-pill-label {
+  font-size: 12px;
+  color: var(--roster-th-color);
+  font-weight: 600;
+  word-break: keep-all;
+}
+.sr-mc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--roster-th-border);
+}
+
+/* turn the card list ON and the desktop grid OFF at 640px */
+@media (max-width: 640px) {
+  .st-key-sr_mobile_cards { display: block !important; }
+  .st-key-sr_mobile_cards .st-key-sr_mobile_cards { display: block !important; }
+}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -211,6 +271,83 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   white-space: nowrap !important;
   word-break: keep-all !important;
   overflow-wrap: normal !important;
+}
+/* ============================================================
+   TABLET (<= 1150px): header labels wrap, table scrolls sideways
+   ============================================================ */
+@media (max-width: 1150px) {
+  /* Allow header labels to wrap onto a second line instead of overlapping.
+     Without this the "nowrap" rule above pushes them into the neighbouring column. */
+  .roster-th {
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.15 !important;
+    display: block !important;
+    min-height: 28px;
+  }
+  /* Align the header cells at the top so a wrapped 2-line label doesn't drag the row down */
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
+    align-items: flex-start !important;
+  }
+  /* Slightly tighter gap so more of the table fits before the scroll starts */
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
+    gap: 8px !important;
+    column-gap: 8px !important;
+  }
+  /* Horizontal scroll container for the whole grid.
+     The inner width stays wide enough for the columns; the user scrolls to see the rest. */
+  .st-key-sr_table_wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    padding-bottom: 6px !important;
+  }
+  /* Keep a sensible minimum width so column ratios still make sense */
+  .st-key-sr_table_wrap > [data-testid="stVerticalBlock"],
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
+    min-width: 1050px !important;
+  }
+  /* Cells still never break a word mid-way, but wrap their content */
+  .st-key-roster_scroll .roster-cell-text,
+  .st-key-roster_scroll .roster-cell-id {
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.3 !important;
+  }
+}
+
+/* ============================================================
+   MOBILE (<= 640px): one card per student, no wide grid at all
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Title / caption shrink so they fit one screen width */
+  .sr-title { font-size: 1.55rem !important; line-height: 1.2 !important; }
+  .sr-caption { font-size: 13px !important; }
+
+  /* Filters stack vertically instead of sitting side by side */
+  .st-key-sr_filters [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+  .st-key-sr_filters [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  /* Cohort From / To always side by side, even on a phone */
+  .st-key-sr_filters [data-testid="stColumn"] [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
+  }
+
+  /* Hide the wide desktop grid (headers + row dividers) - we render cards instead */
+  .st-key-sr_table_wrap { display: none !important; }
+
+  /* Refresh Now button full width on mobile */
+  .st-key-sr_refresh { justify-content: stretch !important; }
+  .st-key-sr_refresh button { width: 100% !important; }
 }
 </style>"""
  
@@ -560,7 +697,56 @@ try:
                             '<div class="roster-row-divider"></div>',
                             unsafe_allow_html=True
                         )
+        # ---- MOBILE VIEW (<= 640px): one card per student ----
+        # Rendered always; the CSS above hides it on wider screens and hides the desktop grid on phones.
+        with st.container(key="sr_mobile_cards"):
+            for row in page_df.to_dict("records"):
+                s_id = str(row.get("StudentNumber", ""))
+                s_name = str(row.get("Student", "Unknown"))
+                p_code = str(row.get("ProgramCode") or "—")
+                cohort = str(row.get("Cohort", "N/A"))
+                adviser_raw = row.get("Adviser")
+                adviser = (", ".join(str(a) for a in str(adviser_raw).split(", ") if a)
+                           if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
 
+                cw_pill = render_status_pill(row.get("CourseworkStatus"))
+                ce_pill = render_status_pill(row.get("CompExamStatus"))
+                cp_pill = render_status_pill(row.get("CapstoneStatus"))
+
+                last_upd = row.get("LastUpdate")
+                last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
+                reason = risk_flags.get(s_id)
+                risk_html = (f'<span class="sr-risk-pill">AT RISK</span>'
+                             if reason is not None else
+                             '<span class="sr-risk-none">—</span>')
+                program_html = (f'<div class="sr-mc-row"><span class="sr-mc-label">Program</span>'
+                                f'<span class="sr-mc-value">{html.escape(p_code)}</span></div>'
+                                if show_program_col else "")
+
+                st.markdown(
+                    f"""
+<div class="sr-mc">
+  <div class="sr-mc-head">
+    <div class="sr-mc-name">{html.escape(s_name)}</div>
+    <div class="sr-mc-id">{html.escape(s_id)}</div>
+  </div>
+  {program_html}
+  <div class="sr-mc-row"><span class="sr-mc-label">Cohort</span><span class="sr-mc-value">{html.escape(cohort)}</span></div>
+  <div class="sr-mc-row"><span class="sr-mc-label">Adviser</span><span class="sr-mc-value">{html.escape(adviser)}</span></div>
+  <div class="sr-mc-pills">
+    <div class="sr-mc-pill-block"><span class="sr-mc-pill-label">{html.escape(stage_labels['Coursework'])}</span>{cw_pill}</div>
+    <div class="sr-mc-pill-block"><span class="sr-mc-pill-label">{html.escape(stage_labels['CompExam'])}</span>{ce_pill}</div>
+    <div class="sr-mc-pill-block"><span class="sr-mc-pill-label">{html.escape(stage_labels['Capstone'])}</span>{cp_pill}</div>
+  </div>
+  <div class="sr-mc-foot">
+    <span class="sr-mc-label">Last Update</span>
+    <span class="sr-mc-value">{html.escape(last_txt)}</span>
+    {risk_html}
+  </div>
+</div>
+""",
+                    unsafe_allow_html=True,
+                )
         st.caption(
             f"Showing {len(df_filtered)} of {len(df)} students. "
             f"Click any student name to view their profile."
