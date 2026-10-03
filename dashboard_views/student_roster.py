@@ -1,5 +1,7 @@
 # STUDENT ROSTER.PY
-# UPDATED: 9/30/2026
+# UPDATED: 9/30/2026 (+ tablet / phone layout)
+# 10/03/2026: SPEED - draws the first ROSTER_MAX_ROWS students, "Show all" draws the rest
+#             (search / filters / sort still run on ALL students). No extra database queries.
 
 import html
 from functools import lru_cache
@@ -30,41 +32,49 @@ from dashboard_views.components import (
     set_header_context,
 )
  
+# SPEED: cached database reads are kept for 1 hour (was 1-5 minutes). On the free Aiven server every query
+# takes ~1-2 s, so an expired cache = a slow page. Anything saved in the app (and "Refresh Now") still clears
+# the cache right away; only changes made directly in MySQL (outside the app) take up to 1 hour to show.
+CACHE_TTL = 3600
+
 st.set_page_config(page_title="Student Roster", layout="wide")
 
 # Roster list size: how many students show before you have to scroll,
 # and the height of one row in px.
 ROWS_VISIBLE = 10
 ROW_HEIGHT_PX = 58
+# SPEED: rows drawn at first. Every row is ~11 Streamlit elements, so drawing hundreds of students
+# on every click (or every letter typed in Search) was the slowest part of the page.
+ROSTER_MAX_ROWS = 50
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_stage_labels(program_id):
     """US-30: this program's stage names (set in Admin Config)."""
     return get_stage_labels(program_id)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_roster(program_id):
     return get_student_roster_data(program_id=program_id)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_programs():
     return get_all_programs()
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_cohorts(program_id):
     return get_available_cohorts(program_id=program_id)
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_adviser_name(user_id):
     return get_my_adviser_name(user_id)
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)   # sync-failure warning: kept short on purpose
 def cached_retry_count(session_id):
     return get_max_retry_count(session_id)
 
@@ -85,7 +95,7 @@ def cohort_sort_key(cohort):
     return (int(year.group()) if year else 0, term, low)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def get_risk_flags(program_id):
     """{StudentNumber: flag reason} for students past their program's At-Risk threshold."""
     flags = get_flagged_students(program_id)
@@ -139,6 +149,32 @@ st.markdown(
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
 html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#FCA5A5;border-color:rgba(239,68,68,.3);}
 .sr-risk-none{color:#9CA3AF;}
+
+/* ===== TABLET / PHONE =====
+   The roster has 9-10 columns, which needs about 1250px. On narrower screens the table keeps that readable
+   width and scrolls sideways (header and rows scroll together) instead of squeezing the columns together. */
+.st-key-roster_table{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
+@media (max-width:1250px){
+  .st-key-roster_table [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;min-width:1250px;}
+  .st-key-roster_table [data-testid="stColumn"]{min-width:0 !important;}
+  .st-key-roster_table .st-key-roster_scroll,
+  .st-key-roster_table .roster-th-divider,
+  .st-key-roster_table .roster-row-divider{min-width:1250px;}
+}
+/* wrap long words in the header, names and pills instead of letting them run into the next column */
+.st-key-roster_table .roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.25 !important;}
+.st-key-roster_table .roster-cell-id,
+.st-key-roster_table .roster-cell-text{white-space:normal !important;overflow-wrap:anywhere;line-height:1.3;}
+.st-key-roster_table div[data-testid="stPageLink"]{height:auto !important;min-height:32px;}
+.st-key-roster_table div[data-testid="stPageLink"] a{white-space:normal !important;line-height:1.25 !important;height:auto !important;}
+/* filters: two per row on a tablet, one per row on a phone (they used to squeeze together) */
+@media (max-width:900px){
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important;}
+  .st-key-sr_filters [data-testid="stColumn"]{flex:1 1 calc(50% - 16px) !important;min-width:calc(50% - 16px) !important;}
+}
+@media (max-width:520px){
+  .st-key-sr_filters [data-testid="stColumn"]{flex:1 1 100% !important;min-width:100% !important;}
+}
 </style>""",
     unsafe_allow_html=True,
 )
@@ -265,7 +301,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
     with st.form("create_program_form"):
         st.write("**Create New Program**")
         code = st.text_input("Program Code (e.g., BIA)")
-        name = st.text_input("Program Name (e.g., BS Business Intelligence and Analytics)")
+        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
         if st.form_submit_button("Create Program"):
             require_edit()
             if not code or not name:
@@ -477,8 +513,10 @@ try:
         except Exception:
             risk_flags = {}
 
-        # The table scrolls, so all matching rows are drawn (no paging)
-        page_df = df_filtered
+        # SPEED: draw the first ROSTER_MAX_ROWS rows; "Show all" draws the rest
+        # (search / filters / sort above still work on ALL students)
+        show_all = st.session_state.get("sr_show_all", False)
+        page_df = df_filtered if show_all else df_filtered.head(ROSTER_MAX_ROWS)
 
         stage_labels = cached_stage_labels(active_program_id)
         if show_program_col:
@@ -493,46 +531,42 @@ try:
                 stage_labels["Coursework"].upper(), stage_labels["CompExam"].upper(),
                 stage_labels["Capstone"].upper(), "LAST UPDATE", "RISK"
             ]
-        with st.container(key="sr_table_wrap"):
-            header_cols = st.columns(col_widths, vertical_alignment="center")
-            for col, label in zip(header_cols, header_labels):
-                col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
+        table_box = st.container(key="roster_table")   # header + rows live in one box so they scroll sideways together
+        header_cols = table_box.columns(col_widths, vertical_alignment="center")
+        for col, label in zip(header_cols, header_labels):
+            col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
+        table_box.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
+ 
+        if df_filtered.empty:
+            st.info("No students match the current filters.")
+        else:
+            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
+            with table_box.container(border=False, key="roster_scroll", **scroll_kwargs):
+                for row in page_df.to_dict("records"):
+                    s_id = str(row.get("StudentNumber", ""))
+                    s_name = str(row.get("Student", "Unknown"))
+                    p_code = str(row.get("ProgramCode") or "—")
+                    cohort = str(row.get("Cohort", "N/A"))
+                    adviser_raw = row.get("Adviser")
+                    adviser = ("<br>".join(html.escape(a) for a in str(adviser_raw).split(", ") if a)
+                               if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
+ 
+                    cw_pill = render_status_pill(row.get("CourseworkStatus"))
+                    ce_pill = render_status_pill(row.get("CompExamStatus"))
+                    cp_pill = render_status_pill(row.get("CapstoneStatus"))
 
-            if df_filtered.empty:
-                st.info("No students match the current filters.")
-            else:
-                scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
-                with st.container(border=False, key="roster_scroll", **scroll_kwargs):
-                    for row in page_df.to_dict("records"):
-                        s_id = str(row.get("StudentNumber", ""))
-                        s_name = str(row.get("Student", "Unknown"))
-                        p_code = str(row.get("ProgramCode") or "—")
-                        cohort = str(row.get("Cohort", "N/A"))
-                        adviser_raw = row.get("Adviser")
-                        adviser = ("<br>".join(html.escape(a) for a in str(adviser_raw).split(", ") if a)
-                                   if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
-
-                        cw_pill = render_status_pill(row.get("CourseworkStatus"))
-                        ce_pill = render_status_pill(row.get("CompExamStatus"))
-                        cp_pill = render_status_pill(row.get("CapstoneStatus"))
-
-                        r_cols = st.columns(col_widths, vertical_alignment="center")
-                        idx = 0
-                        r_cols[idx].markdown(
-                            f'<span class="roster-cell-id">{s_id}</span>',
-                            unsafe_allow_html=True
-                        ); idx += 1
-                        r_cols[idx].page_link(
-                            "dashboard_views/student_profile.py",
-                            label=s_name,
-                            query_params={"student_id": s_id}
-                        ); idx += 1
-                        if show_program_col:
-                            r_cols[idx].markdown(
-                                f'<span class="roster-cell-text">{html.escape(p_code)}</span>',
-                                unsafe_allow_html=True
-                            ); idx += 1
+                    r_cols = st.columns(col_widths, vertical_alignment="center")
+                    idx = 0
+                    r_cols[idx].markdown(
+                        f'<span class="roster-cell-id">{s_id}</span>',
+                        unsafe_allow_html=True
+                    ); idx += 1
+                    r_cols[idx].page_link(
+                        "dashboard_views/student_profile.py",
+                        label=s_name,
+                        query_params={"student_id": s_id}
+                    ); idx += 1
+                    if show_program_col:
                         r_cols[idx].markdown(
                             f'<span class="roster-cell-text">{cohort}</span>',
                             unsafe_allow_html=True
@@ -562,9 +596,13 @@ try:
                         )
 
         st.caption(
-            f"Showing {len(df_filtered)} of {len(df)} students. "
+            f"Showing {len(page_df)} of {len(df_filtered)} matching students ({len(df)} total). "
             f"Click any student name to view their profile."
         )
+        if len(page_df) < len(df_filtered):
+            if st.button(f"Show all {len(df_filtered)}", key="sr_show_all_btn"):
+                st.session_state["sr_show_all"] = True
+                st.rerun()
     else:
         if is_advisor_view and my_adviser_name is not None:
             st.info(

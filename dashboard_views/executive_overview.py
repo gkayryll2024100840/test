@@ -1,5 +1,7 @@
 # EXEC OVERVIEW MERGE
-# EXEC OVERVIEW 9-30-26 (QA fixes: Excel key metrics, Philippine export time, wider Program filter)
+# EXEC OVERVIEW 9-30-26 (QA fixes: Excel key metrics, Philippine export time, wider Program filter, tablet / phone table)
+# 10-03-26: SPEED - the Completion % / Students at Risk switch only reruns its own card (st.fragment),
+#           not the whole page. No extra database queries.
 import html
 import io
 import json
@@ -26,6 +28,13 @@ from db_connect import (
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
 from field_mapping import load_mappings
+from perf import timed   # TEMP: timing ([TIMING] lines in the terminal)
+from prefetch import start_prefetch, finish_prefetch
+
+# SPEED: cached database reads are kept for 1 hour (was 1-5 minutes). On the free Aiven server every query
+# takes ~1-2 s, so an expired cache = a slow page. Anything saved in the app (and "Refresh Now") still clears
+# the cache right away; only changes made directly in MySQL (outside the app) take up to 1 hour to show.
+CACHE_TTL = 3600
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -88,12 +97,12 @@ def stage_name(stage):
     return _stage_labels.get(pillar, stage) if pillar else stage
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_stage_labels(program_id):
     return get_stage_labels(program_id)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def cached_kpi_tiles(program_id):
     """KPI tile config (Admin Config clears this cache when tiles are saved)."""
     return get_kpi_tiles(program_id=program_id, visible_only=True)
@@ -421,6 +430,18 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);margin:0 !important;line-height:1.3;}
 .st-key-eo_table_rows button[kind="tertiary"]:hover p,
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
+
+/* ===== TABLET / PHONE =====
+   The student table has 7 columns, which needs about 1100px. On narrower screens it keeps that readable width
+   and scrolls sideways (header and rows scroll together) instead of squeezing the columns together. */
+.st-key-eo_table{overflow-x:auto !important;overflow-y:visible;-webkit-overflow-scrolling:touch;}
+@media (max-width:1100px){
+  .st-key-eo_table [data-testid="stHorizontalBlock"]{flex-wrap:nowrap !important;min-width:1100px;}
+  .st-key-eo_table [data-testid="stColumn"]{min-width:0 !important;}
+  .st-key-eo_table_head,.st-key-eo_table_rows{min-width:1100px;}
+}
+.st-key-eo_table .eo-pill{white-space:normal;line-height:1.25;}
+.st-key-eo_table .eo-th{white-space:normal;overflow-wrap:anywhere;line-height:1.25;}
 </style>
 """
 
@@ -457,18 +478,20 @@ def _find_last_updated_column(cur):
     return next((c for c in LAST_UPDATED_CANDIDATES if c in found), None)
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _load_programs():
     conn = get_db_connection()
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT DATABASE() AS db")
-        db_name = cur.fetchone()["db"]
         cur.execute(
             "SELECT ProgramID, ProgramCode, ProgramName "
             "FROM Program WHERE IsActive = 1 ORDER BY ProgramName"
         )
         rows = cur.fetchall()
+        db_name = None
+        if not rows:   # SPEED: the database name is only looked up for the error message (one less query)
+            cur.execute("SELECT DATABASE() AS db")
+            db_name = cur.fetchone()["db"]
         cur.close()
     finally:
         conn.close()
@@ -489,7 +512,7 @@ def get_program_options():
     return [all_option]
 
 
-@st.cache_data(ttl=300, show_spinner="Loading executive data…")
+@st.cache_data(ttl=CACHE_TTL, show_spinner="Loading executive data…")
 def get_executive_data() -> pd.DataFrame:
     """One row per student with lifecycle statuses, adviser, and LastUpdated."""
     conn = get_db_connection()          # ONE connection for everything below
@@ -874,6 +897,51 @@ def completion_trend(hist: pd.DataFrame) -> go.Figure:
     return fig
 
 
+@st.fragment
+def render_trend_card(hist):
+    """Trend card (Completion % / Students at Risk).
+    SPEED: switching between the two views only reruns THIS card, not the whole page
+    (data prep, KPI tiles, exports and the student table are left alone)."""
+    chart_config = {"displayModeBar": False}
+    with st.container(border=True):
+        recent = hist.tail(4)
+        # title + subtitle on the left, Completion % / Students at Risk switch on the same line (right)
+        options = ["Completion %", "Students at Risk"]
+        if st.session_state.get("eo_trend_view") not in (None, *options):
+            st.session_state.pop("eo_trend_view")   # old option name from an earlier version
+        with st.container(key="eo_trend_head"):
+            h_title, h_switch = st.columns([1.15, 1], vertical_alignment="top")
+            with h_switch:
+                with st.container(key="eo_trend_switch"):
+                    if hasattr(st, "segmented_control"):      # pill toggle (Streamlit 1.40+)
+                        trend_view = st.segmented_control("Trend", options, default="Completion %",
+                                                          label_visibility="collapsed", key="eo_trend_view")
+                    else:                                    # older Streamlit: plain radio buttons
+                        trend_view = st.radio("Trend", options, horizontal=True,
+                                              label_visibility="collapsed", key="eo_trend_view")
+            trend_view = trend_view or "Completion %"      # clicking the selected pill again un-selects it
+            with h_title:
+                if trend_view == "Students at Risk":
+                    card_header("Students At Risk — Trend",
+                                f"Last {len(recent)} cohorts · past the At-Risk threshold")
+                else:
+                    card_header("Overall Completion % — Trend", f"Last {len(recent)} cohorts, program-wide")
+        if trend_view == "Students at Risk":
+            if len(recent) >= 2:
+                with st.container(key="eo_trend_risk"):
+                    st.plotly_chart(at_risk_trend(recent).update_layout(height=TREND_HEIGHT),
+                                    use_container_width=True, config=chart_config)
+            else:
+                st.info("At least two cohorts are needed to show a trend.")
+        else:
+            if len(recent) >= 2:
+                with st.container(key="eo_trend_completion"):
+                    st.plotly_chart(completion_trend(recent).update_layout(height=TREND_HEIGHT),
+                                    use_container_width=True, config=chart_config)
+            else:
+                st.info("At least two cohorts are needed to show a trend.")
+
+
 def status_pill(value):
     if value is None or pd.isna(value) or str(value).strip().lower() in ("", "none", "nan"):
         return '<span class="eo-muted">—</span>'
@@ -892,7 +960,7 @@ EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def get_stage_flags() -> pd.DataFrame:
     """Time in stage + At-Risk flag for every student, from the v_student_stage_flags view.
 
@@ -1310,7 +1378,7 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str, exported_at: st
     return buf.getvalue()
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=20)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False, max_entries=20)
 def cached_export_xlsx(df, hist, filters_json, exported_by, labels_key, exported_at):
     """The Excel file is rebuilt only when the filters / data / stage labels change (or the minute
     changes, because the export time is printed in the file), not on every click on the page."""
@@ -1568,7 +1636,7 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, expor
 PDF_EXPORT_VERSION = 3
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=20)
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False, max_entries=20)
 def cached_export_pdf(df, hist, filters_json, exported_by, labels_key, kpi_items, exported_at,
                       version=PDF_EXPORT_VERSION):
     """PDF is rebuilt only when the filters / data / labels / KPI tiles / export minute / PDF layout version change."""
@@ -1701,7 +1769,8 @@ def render_executive_overview():
     )
 
     # ---- Field mapping gate: no data is shown while a mapping is broken ----
-    mapping_error = check_field_mappings()
+    with timed("EO: check_field_mappings (schema)"):
+        mapping_error = check_field_mappings()
     if mapping_error:
         st.error(
             "Executive Overview is unavailable because a field mapping is invalid. "
@@ -1710,15 +1779,22 @@ def render_executive_overview():
         st.caption(mapping_error)
         return
 
+    # SPEED: the at-risk flags and the program list load AT THE SAME TIME as the student data below
+    # (they used to wait for each other: ~2.2 + 1.3 + 1.2 s). The calls further down then hit the cache.
+    _warm = start_prefetch(get_stage_flags, _load_programs)
+
     # ---- Data ----
     try:
-        all_df = get_executive_data()
+        with timed("EO: get_executive_data"):
+            all_df = get_executive_data()
     except mysql.connector.Error as err:
         st.error(format_mysql_error(err))
         return
     except Exception as e:
         st.error(f"Failed to fetch executive overview data: {e}")
         return
+    with timed("EO: waiting for flags + programs (parallel)"):
+        finish_prefetch(_warm)
 
     # ---- Filters: Program | Cohort | Enrollment ----
     with st.container(key="eo_filters"):
@@ -1729,7 +1805,8 @@ def render_executive_overview():
 
         # Program is chosen before Cohort in code (the cohort list depends on it)
         with f1:
-            programs_by_id = {p["ProgramID"]: p for p in get_program_options()}
+            with timed("EO: program list"):
+                programs_by_id = {p["ProgramID"]: p for p in get_program_options()}
             selected_program_id = st.selectbox(
                 "Program", list(programs_by_id),
                 format_func=lambda pid: programs_by_id[pid]["ProgramName"],
@@ -1737,7 +1814,8 @@ def render_executive_overview():
             selected_program = programs_by_id[selected_program_id]
             # US-30: this program's stage names ("All Programs" -> the default names)
             _stage_labels.clear()
-            _stage_labels.update(cached_stage_labels(selected_program["ProgramID"]))
+            with timed("EO: stage labels"):
+                _stage_labels.update(cached_stage_labels(selected_program["ProgramID"]))
 
         program_df = all_df
         if selected_program["ProgramID"] is not None:
@@ -1748,7 +1826,8 @@ def render_executive_overview():
             selected_cohort = st.selectbox("Cohort", ["All Cohorts"] + list(cohorts))
 
     # yellow header bar follows these filters
-    set_header_context(program=selected_program["ProgramID"], cohort=selected_cohort)
+    with timed("EO: header repaint"):
+        set_header_context(program=selected_program["ProgramID"], cohort=selected_cohort)
 
     # Program + status filters apply everywhere; cohort applies to everything except the trend
     status_df = program_df
@@ -1762,19 +1841,22 @@ def render_executive_overview():
 
     # Time in Stage + At-Risk flag (threshold from Admin Configuration); added before the cohort
     # filter so the at-risk trend can compare cohorts
-    status_df = add_stage_flags(status_df)
+    with timed("EO: add_stage_flags (v_student_stage_flags view)"):
+        status_df = add_stage_flags(status_df)
     df = status_df
     if selected_cohort != "All Cohorts":
         df = status_df[status_df["Cohort"] == selected_cohort]
 
-    hist = cohort_history(status_df)
+    with timed("EO: cohort history"):
+        hist = cohort_history(status_df)
 
     # ---- KPI tiles (US-29), worked out first because the PDF export includes them ----
     program_label = (
         "All Programs" if selected_program["ProgramID"] is None
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
-    tiles = cached_kpi_tiles(selected_program["ProgramID"])
+    with timed("EO: KPI tile config"):
+        tiles = cached_kpi_tiles(selected_program["ProgramID"])
     cards_data = []   # (label, value, sub_html, accent) for each tile, in order
     for t in tiles or []:
         src = (t.get("source") or "").strip().lower()
@@ -1797,11 +1879,18 @@ def render_executive_overview():
         "Cohort": selected_cohort,
         "Program": selected_program["ProgramName"],
     }
+    with timed("EO: Excel export build"):
+        xlsx_bytes = cached_export_xlsx(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
+                                        tuple(sorted(_stage_labels.items())), exported_at) if not df.empty else b""
+    with timed("EO: PDF export build"):
+        pdf_bytes = cached_export_pdf(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
+                                      tuple(sorted(_stage_labels.items())),
+                                      kpi_pdf_items([c[:4] for c in cards_data]),
+                                      exported_at, PDF_EXPORT_VERSION) if not df.empty else b""
     with f4:
         st.download_button(
             "⬇ Export Excel",
-            data=cached_export_xlsx(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
-                                    tuple(sorted(_stage_labels.items())), exported_at) if not df.empty else b"",
+            data=xlsx_bytes,
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
@@ -1814,10 +1903,7 @@ def render_executive_overview():
     with f5:
         st.download_button(
             "⬇ Export PDF",
-            data=cached_export_pdf(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
-                                   tuple(sorted(_stage_labels.items())),
-                                   kpi_pdf_items([c[:4] for c in cards_data]),
-                                   exported_at, PDF_EXPORT_VERSION) if not df.empty else b"",
+            data=pdf_bytes,
             file_name=pdf_name,
             mime="application/pdf",
             disabled=df.empty,
@@ -1846,6 +1932,7 @@ def render_executive_overview():
                         "Students per stage, including inactive (dropped out). "
                         "Click a bar to see the students in that stage.")
             stage_counts = lifecycle_counts(df)
+            _t_bar = __import__("time").perf_counter()
             chart_event = st.plotly_chart(
                 lifecycle_bar(stage_counts),
                 use_container_width=True,
@@ -1854,6 +1941,7 @@ def render_executive_overview():
                 on_select="rerun",
                 selection_mode="points",
             )
+            print(f"[TIMING] EO: bar chart: {(__import__('time').perf_counter() - _t_bar) * 1000:.0f} ms", flush=True)
             # Read the click: the selected bar's stage comes back in customdata
             try:
                 pts = chart_event.selection.points
@@ -1866,6 +1954,9 @@ def render_executive_overview():
                     st.rerun()
 
     with c2:
+        # SPEED: the Completion % / Students at Risk switch only reruns this card
+        with timed("EO: trend card"):
+            render_trend_card(hist)
         with st.container(border=True):
             recent = hist.tail(4)
             # title + subtitle on the left, Completion % / Students at Risk switch on the same line (right)
@@ -1909,9 +2000,11 @@ def render_executive_overview():
     if drill_stage:
         drilled_df = df[df["ActiveStage"] == drill_stage]
         render_drill_breadcrumb(drill_stage, len(drilled_df))
-        render_student_table(drilled_df, drill_stage=drill_stage)
+        with timed("EO: student table"):
+            render_student_table(drilled_df, drill_stage=drill_stage)
     else:
-        render_student_table(df)
+        with timed("EO: student table"):
+            render_student_table(df)
 
 if __name__ == "__main__":
     render_executive_overview()
