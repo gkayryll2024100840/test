@@ -129,18 +129,21 @@ st.markdown(
 .st-key-sr_refresh{display:flex !important;flex-direction:row !important;justify-content:flex-end !important;
     align-items:center;width:100% !important;}
 .st-key-sr_refresh [data-testid="stElementContainer"]{width:auto !important;}
-/* long text (e.g. 2 advisers) wraps onto more lines inside its column instead of running past it */
-.st-key-roster_scroll .roster-cell-text{display:block;white-space:normal !important;overflow-wrap:anywhere;
-    word-break:break-word;line-height:1.35;}
-/* every cell in the roster row is allowed to wrap; nothing overflows horizontally */
-.st-key-roster_scroll [data-testid="stColumn"]{min-width:0 !important;overflow-wrap:anywhere;word-break:break-word;}
-/* status pills inside the roster stay inside their cell */
+/* Table cells maintain clean single-line structure without broken letters */
+.st-key-roster_scroll .roster-cell-text,
+.st-key-sr_table_wrap .roster-cell-text{display:inline-flex;align-items:center;white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;line-height:1.35;}
+.st-key-roster_scroll .roster-cell-id,
+.st-key-sr_table_wrap .roster-cell-id{white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;min-width:85px !important;display:inline-block !important;}
+/* status pills inside the roster: single line, no broken words or letters */
 .st-key-roster_scroll .status-pill,
-.st-key-roster_scroll [class*="status-pill"]{
-    white-space:normal !important;line-height:1.2 !important;
-    height:auto !important;min-height:26px !important;
-    padding:4px 10px !important;max-width:100% !important;
-    text-align:center;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
+.st-key-roster_scroll [class*="status-pill"],
+.st-key-sr_table_wrap .status-pill,
+.st-key-sr_table_wrap [class*="status-pill"]{
+    white-space:nowrap !important;line-height:1 !important;
+    word-break:keep-all !important;
+    height:26px !important;min-height:26px !important;
+    padding:0 11px !important;width:auto !important;max-width:none !important;
+    text-align:center;display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;justify-content:center !important;box-sizing:border-box;}
 /* RISK column pill */
 .sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
@@ -188,15 +191,63 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 /* caption under the title */
 .sr-caption{font-size:14px !important;line-height:1.5 !important;color:var(--sr-h-label) !important;
         margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
-/* Roster column headers must be able to wrap ("Coursework Completion" is longer than
-   its column). Without this they overlap the neighbouring header. */
-.roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.2 !important;
-    display:block !important;}
+/* Roster column headers: single clean line, never wrap or split letters */
+.roster-th{white-space:nowrap !important;word-break:keep-all !important;line-height:1.2 !important;
+    display:inline-flex !important;align-items:center !important;}
 /* line under the whole header row */
 .st-key-sr_top{border-bottom:1px solid var(--sr-h-border);padding-bottom:10px;}
 .st-key-sr_top [data-testid="stElementContainer"]:has(.sr-title),
 .st-key-sr_top [data-testid="stMarkdown"]:has(.sr-title),
 .st-key-sr_top [data-testid="stMarkdownContainer"]:has(.sr-title){margin:0 !important;padding:0 !important;}
+
+/* Tablet & Mobile responsive adjustments */
+@media (max-width: 1150px) {
+  .sr-title { font-size: 2.0rem !important; }
+  .st-key-sr_filters [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+  }
+  .st-key-sr_filters [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 12px) !important;
+    min-width: 180px !important;
+  }
+}
+@media (max-width: 768px) {
+  .sr-title { font-size: 1.6rem !important; }
+}
+@media (max-width: 600px) {
+  .st-key-sr_filters [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+}
+
+/* Tablet & Mobile responsive table scroll wrapper - never force columns to break letters */
+.st-key-sr_table_wrap {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  width: 100% !important;
+}
+.st-key-sr_table_wrap [data-testid="stHorizontalBlock"],
+.st-key-sr_table_wrap .roster-th-divider,
+.st-key-sr_table_wrap .roster-row-divider,
+.st-key-sr_table_wrap .st-key-roster_scroll,
+.st-key-sr_table_wrap .st-key-roster_scroll > div,
+.st-key-sr_table_wrap [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) {
+  min-width: 1100px !important;
+}
+.st-key-sr_table_wrap .st-key-roster_scroll {
+  overflow-x: hidden !important;
+}
+.st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
+  gap: 12px !important;
+  column-gap: 12px !important;
+}
+.st-key-sr_table_wrap .roster-th {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
 </style>"""
  
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -452,10 +503,10 @@ try:
         show_program_col = active_program_id is None   # "All Programs" -> show the PROGRAM column
         if show_program_col:
             # 10 columns: ID | Student | Program | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [0.9, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            col_widths = [1.1, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
         else:
             # 9 columns: ID | Student | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [0.9, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            col_widths = [1.1, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
 
         try:
             risk_flags = get_risk_flags(active_program_id)
@@ -517,36 +568,32 @@ try:
                     ); idx += 1
                     if show_program_col:
                         r_cols[idx].markdown(
-                            f'<span class="roster-cell-text">{html.escape(p_code)}</span>',
+                            f'<span class="roster-cell-text">{cohort}</span>',
                             unsafe_allow_html=True
                         ); idx += 1
-                    r_cols[idx].markdown(
-                        f'<span class="roster-cell-text">{cohort}</span>',
-                        unsafe_allow_html=True
-                    ); idx += 1
-                    r_cols[idx].markdown(
-                        f'<span class="roster-cell-text">{adviser}</span>',
-                        unsafe_allow_html=True
-                    ); idx += 1
-                    r_cols[idx].markdown(cw_pill, unsafe_allow_html=True); idx += 1
-                    r_cols[idx].markdown(ce_pill, unsafe_allow_html=True); idx += 1
-                    r_cols[idx].markdown(cp_pill, unsafe_allow_html=True); idx += 1
-                    last_upd = row.get("LastUpdate")
-                    last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
-                    r_cols[idx].markdown(
-                        f'<span class="roster-cell-text">{last_txt}</span>',
-                        unsafe_allow_html=True
-                    ); idx += 1
-                    reason = risk_flags.get(s_id)
-                    r_cols[idx].markdown(
-                        f'<span class="sr-risk-pill" title="{html.escape(reason)}">AT RISK</span>'
-                        if reason is not None else '<span class="sr-risk-none">—</span>',
-                        unsafe_allow_html=True
-                    )
-                    st.markdown(
-                        '<div class="roster-row-divider"></div>',
-                        unsafe_allow_html=True
-                    )
+                        r_cols[idx].markdown(
+                            f'<span class="roster-cell-text">{adviser}</span>',
+                            unsafe_allow_html=True
+                        ); idx += 1
+                        r_cols[idx].markdown(cw_pill, unsafe_allow_html=True); idx += 1
+                        r_cols[idx].markdown(ce_pill, unsafe_allow_html=True); idx += 1
+                        r_cols[idx].markdown(cp_pill, unsafe_allow_html=True); idx += 1
+                        last_upd = row.get("LastUpdate")
+                        last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
+                        r_cols[idx].markdown(
+                            f'<span class="roster-cell-text">{last_txt}</span>',
+                            unsafe_allow_html=True
+                        ); idx += 1
+                        reason = risk_flags.get(s_id)
+                        r_cols[idx].markdown(
+                            f'<span class="sr-risk-pill" title="{html.escape(reason)}">AT RISK</span>'
+                            if reason is not None else '<span class="sr-risk-none">—</span>',
+                            unsafe_allow_html=True
+                        )
+                        st.markdown(
+                            '<div class="roster-row-divider"></div>',
+                            unsafe_allow_html=True
+                        )
 
         st.caption(
             f"Showing {len(page_df)} of {len(df_filtered)} matching students ({len(df)} total). "

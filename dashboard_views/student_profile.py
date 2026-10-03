@@ -216,28 +216,113 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
 .sp-changed{font-size:11px;font-weight:600;color:#A16207;margin-bottom:2px;}
 
 /* ---- status pills (popover buttons), coloured by tone ---- */
-[class*="st-key-sp_pill_"] button{min-height:32px !important;height:32px;padding:0 12px !important;border-radius:8px !important;
-    font-size:13px !important;font-weight:700 !important;box-shadow:none !important;width:auto !important;}
-[class*="st-key-sp_pill_"] button p{font-size:13px !important;font-weight:700 !important;}
+[class*="st-key-sp_pill_"] button{min-height:32px !important;height:auto !important;padding:6px 14px !important;border-radius:8px !important;
+    font-size:13px !important;font-weight:700 !important;box-shadow:none !important;width:auto !important;white-space:nowrap !important;
+    display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;}
+[class*="st-key-sp_pill_"] button,
+[class*="st-key-sp_pill_"] button *,
+[class*="st-key-sp_pill_"] button p,
+[class*="st-key-sp_pill_"] button span,
+[class*="st-key-sp_pill_"] button div{font-size:13px !important;font-weight:700 !important;white-space:nowrap !important;
+    overflow:visible !important;text-overflow:clip !important;word-break:keep-all !important;line-height:1.2 !important;}
 [class*="st-key-sp_pill_green_"] button{background:var(--g-bg) !important;color:var(--g-fg) !important;border:1px solid var(--g-bd) !important;}
 [class*="st-key-sp_pill_yellow_"] button{background:var(--y-bg) !important;color:var(--y-fg) !important;border:1px solid var(--y-bd) !important;}
 [class*="st-key-sp_pill_red_"] button{background:var(--r-bg) !important;color:var(--r-fg) !important;border:1px solid var(--r-bd) !important;}
 [class*="st-key-sp_pill_green_"] button *{color:var(--g-fg) !important;}
 [class*="st-key-sp_pill_yellow_"] button *{color:var(--y-fg) !important;}
 [class*="st-key-sp_pill_red_"] button *{color:var(--r-fg) !important;}
-.sp-static-pill{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:700;}
+.sp-static-pill{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:700;white-space:nowrap !important;word-break:keep-all !important;}
 .sp-static-pill.green{background:var(--g-bg);color:var(--g-fg);border:1px solid var(--g-bd);}
 .sp-static-pill.yellow{background:var(--y-bg);color:var(--y-fg);border:1px solid var(--y-bd);}
 .sp-static-pill.red{background:var(--r-bg);color:var(--r-fg);border:1px solid var(--r-bd);}
+
+/* Pillar card inner rhythm: ensure pill never shrinks below its content */
+[class*="st-key-sp_pillar_"] [data-testid="stHorizontalBlock"]{display:flex !important;flex-wrap:wrap !important;
+    justify-content:space-between !important;align-items:flex-end !important;gap:8px !important;}
+[class*="st-key-sp_pillar_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child{
+    flex:0 0 auto !important;min-width:max-content !important;}
+[class*="st-key-sp_pillar_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child{
+    flex:1 1 auto !important;min-width:110px !important;text-align:right !important;}
 
 /* ---- save bar ---- */
 .st-key-sp_actions{background:var(--sp-soft);border:1px solid var(--sp-border);border-radius:var(--sp-card-radius);
     padding:12px var(--sp-card-pad) !important;margin-top:var(--sp-block-gap);}
 .sp-hint{font-size:13px;color:var(--sp-muted);}
-.st-key-sp_save button{background:#B31B21 !important;border-color:#B31B21 !important;color:#FFFFFF !important;font-weight:700 !important;}
+.st-key-sp_save button{background:#B31B21 !important;border-color:#B31B21 !important;color:#FFFFFF !important;font-weight:700 !important;white-space:nowrap !important;}
 .st-key-sp_save button *{color:#FFFFFF !important;}
-.st-key-sp_discard button{background:var(--sp-surface) !important;}
+.st-key-sp_discard button{background:var(--sp-surface) !important;white-space:nowrap !important;}
 .st-key-sp_save button:disabled,.st-key-sp_discard button:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ---- Responsive adaptations for tablet portrait and mobile screens ---- */
+@media (max-width: 1150px) {
+  .sp-page-title { font-size: 2.0rem !important; }
+  .st-key-sp_top [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .st-key-sp_top [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  .st-key-sp_head [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 1px) !important;
+    min-width: calc(50% - 1px) !important;
+    border-left: none !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:nth-child(odd) {
+    border-right: 1px solid var(--sp-border) !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:nth-last-child(-n+2) {
+    border-bottom: none !important;
+  }
+
+  /* Pillar cards stack to full width on portrait tablets so pills have generous space */
+  .st-key-sp_pillars [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .st-key-sp_pillars [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* Save bar stacks hint above buttons so buttons don't truncate text */
+  .st-key-sp_actions [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  .st-key-sp_actions [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    margin-bottom: 4px !important;
+  }
+  .st-key-sp_actions [data-testid="stColumn"]:nth-child(2),
+  .st-key-sp_actions [data-testid="stColumn"]:nth-child(3) {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-width: 160px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .sp-page-title { font-size: 1.6rem !important; }
+}
+
+@media (max-width: 600px) {
+  .st-key-sp_head [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:last-child {
+    border-bottom: none !important;
+  }
+}
 </style>
 """
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
