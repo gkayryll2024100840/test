@@ -120,21 +120,18 @@ st.markdown(
 .st-key-sr_refresh{display:flex !important;flex-direction:row !important;justify-content:flex-end !important;
     align-items:center;width:100% !important;}
 .st-key-sr_refresh [data-testid="stElementContainer"]{width:auto !important;}
-/* Table cells maintain clean single-line structure without broken letters */
-.st-key-roster_scroll .roster-cell-text,
-.st-key-sr_table_wrap .roster-cell-text{display:inline-flex;align-items:center;white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;line-height:1.35;}
-.st-key-roster_scroll .roster-cell-id,
-.st-key-sr_table_wrap .roster-cell-id{white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;min-width:85px !important;display:inline-block !important;}
-/* status pills inside the roster: single line, no broken words or letters */
+/* long text (e.g. 2 advisers) wraps onto more lines inside its column instead of running past it */
+.st-key-roster_scroll .roster-cell-text{display:block;white-space:normal !important;overflow-wrap:anywhere;
+    word-break:break-word;line-height:1.35;}
+/* every cell in the roster row is allowed to wrap; nothing overflows horizontally */
+.st-key-roster_scroll [data-testid="stColumn"]{min-width:0 !important;overflow-wrap:anywhere;word-break:break-word;}
+/* status pills inside the roster stay inside their cell */
 .st-key-roster_scroll .status-pill,
-.st-key-roster_scroll [class*="status-pill"],
-.st-key-sr_table_wrap .status-pill,
-.st-key-sr_table_wrap [class*="status-pill"]{
-    white-space:nowrap !important;line-height:1 !important;
-    word-break:keep-all !important;
-    height:26px !important;min-height:26px !important;
-    padding:0 11px !important;width:auto !important;max-width:none !important;
-    text-align:center;display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;justify-content:center !important;box-sizing:border-box;}
+.st-key-roster_scroll [class*="status-pill"]{
+    white-space:normal !important;line-height:1.2 !important;
+    height:auto !important;min-height:26px !important;
+    padding:4px 10px !important;max-width:100% !important;
+    text-align:center;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
 /* RISK column pill */
 .sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
@@ -216,9 +213,10 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 /* caption under the title */
 .sr-caption{font-size:14px !important;line-height:1.5 !important;color:var(--sr-h-label) !important;
         margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
-/* Roster column headers: single clean line, never wrap or split letters */
-.roster-th{white-space:nowrap !important;word-break:keep-all !important;line-height:1.2 !important;
-    display:inline-flex !important;align-items:center !important;}
+/* Roster column headers must be able to wrap ("Coursework Completion" is longer than
+   its column). Without this they overlap the neighbouring header. */
+.roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.2 !important;
+    display:block !important;}
 /* line under the whole header row */
 .st-key-sr_top{border-bottom:1px solid var(--sr-h-border);padding-bottom:10px;}
 .st-key-sr_top [data-testid="stElementContainer"]:has(.sr-title),
@@ -403,7 +401,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
     with st.form("create_program_form"):
         st.write("**Create New Program**")
         code = st.text_input("Program Code (e.g., BIA)")
-        name = st.text_input("Program Name (e.g., BS Business Intelligence and Analytics)")
+        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
         if st.form_submit_button("Create Program"):
             require_edit()
             if not code or not name:
@@ -605,10 +603,10 @@ try:
         show_program_col = active_program_id is None   # "All Programs" -> show the PROGRAM column
         if show_program_col:
             # 10 columns: ID | Student | Program | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [1.1, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            col_widths = [0.9, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
         else:
             # 9 columns: ID | Student | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [1.1, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            col_widths = [0.9, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
 
         try:
             risk_flags = get_risk_flags(active_program_id)
@@ -631,73 +629,73 @@ try:
                 stage_labels["Coursework"].upper(), stage_labels["CompExam"].upper(),
                 stage_labels["Capstone"].upper(), "LAST UPDATE", "RISK"
             ]
-        with st.container(key="sr_table_wrap"):
-            header_cols = st.columns(col_widths, vertical_alignment="center")
-            for col, label in zip(header_cols, header_labels):
-                col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
-            st.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
+        table_box = st.container(key="roster_table")   # header + rows live in one box so they scroll sideways together
+        header_cols = table_box.columns(col_widths, vertical_alignment="center")
+        for col, label in zip(header_cols, header_labels):
+            col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
+        table_box.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
+ 
+        if df_filtered.empty:
+            st.info("No students match the current filters.")
+        else:
+            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
+            with table_box.container(border=False, key="roster_scroll", **scroll_kwargs):
+                for row in page_df.to_dict("records"):
+                    s_id = str(row.get("StudentNumber", ""))
+                    s_name = str(row.get("Student", "Unknown"))
+                    p_code = str(row.get("ProgramCode") or "—")
+                    cohort = str(row.get("Cohort", "N/A"))
+                    adviser_raw = row.get("Adviser")
+                    adviser = ("<br>".join(html.escape(a) for a in str(adviser_raw).split(", ") if a)
+                               if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
+ 
+                    cw_pill = render_status_pill(row.get("CourseworkStatus"))
+                    ce_pill = render_status_pill(row.get("CompExamStatus"))
+                    cp_pill = render_status_pill(row.get("CapstoneStatus"))
 
-            if df_filtered.empty:
-                st.info("No students match the current filters.")
-            else:
-                scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
-                with st.container(border=False, key="roster_scroll", **scroll_kwargs):
-                    for row in page_df.to_dict("records"):
-                        s_id = str(row.get("StudentNumber", ""))
-                        s_name = str(row.get("Student", "Unknown"))
-                        p_code = str(row.get("ProgramCode") or "—")
-                        cohort = str(row.get("Cohort", "N/A"))
-                        adviser_raw = row.get("Adviser")
-                        adviser = ("<br>".join(html.escape(a) for a in str(adviser_raw).split(", ") if a)
-                                   if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
-
-                        cw_pill = render_status_pill(row.get("CourseworkStatus"))
-                        ce_pill = render_status_pill(row.get("CompExamStatus"))
-                        cp_pill = render_status_pill(row.get("CapstoneStatus"))
-
-                        r_cols = st.columns(col_widths, vertical_alignment="center")
-                        idx = 0
+                    r_cols = st.columns(col_widths, vertical_alignment="center")
+                    idx = 0
+                    r_cols[idx].markdown(
+                        f'<span class="roster-cell-id">{s_id}</span>',
+                        unsafe_allow_html=True
+                    ); idx += 1
+                    r_cols[idx].page_link(
+                        "dashboard_views/student_profile.py",
+                        label=s_name,
+                        query_params={"student_id": s_id}
+                    ); idx += 1
+                    if show_program_col:
                         r_cols[idx].markdown(
-                            f'<span class="roster-cell-id">{s_id}</span>',
+                            f'<span class="roster-cell-text">{html.escape(p_code)}</span>',
                             unsafe_allow_html=True
                         ); idx += 1
-                        r_cols[idx].page_link(
-                            "dashboard_views/student_profile.py",
-                            label=s_name,
-                            query_params={"student_id": s_id}
-                        ); idx += 1
-                        if show_program_col:
-                            r_cols[idx].markdown(
-                                f'<span class="roster-cell-text">{html.escape(p_code)}</span>',
-                                unsafe_allow_html=True
-                            ); idx += 1
-                        r_cols[idx].markdown(
-                            f'<span class="roster-cell-text">{cohort}</span>',
-                            unsafe_allow_html=True
-                        ); idx += 1
-                        r_cols[idx].markdown(
-                            f'<span class="roster-cell-text">{adviser}</span>',
-                            unsafe_allow_html=True
-                        ); idx += 1
-                        r_cols[idx].markdown(cw_pill, unsafe_allow_html=True); idx += 1
-                        r_cols[idx].markdown(ce_pill, unsafe_allow_html=True); idx += 1
-                        r_cols[idx].markdown(cp_pill, unsafe_allow_html=True); idx += 1
-                        last_upd = row.get("LastUpdate")
-                        last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
-                        r_cols[idx].markdown(
-                            f'<span class="roster-cell-text">{last_txt}</span>',
-                            unsafe_allow_html=True
-                        ); idx += 1
-                        reason = risk_flags.get(s_id)
-                        r_cols[idx].markdown(
-                            f'<span class="sr-risk-pill" title="{html.escape(reason)}">AT RISK</span>'
-                            if reason is not None else '<span class="sr-risk-none">—</span>',
-                            unsafe_allow_html=True
-                        )
-                        st.markdown(
-                            '<div class="roster-row-divider"></div>',
-                            unsafe_allow_html=True
-                        )
+                    r_cols[idx].markdown(
+                        f'<span class="roster-cell-text">{cohort}</span>',
+                        unsafe_allow_html=True
+                    ); idx += 1
+                    r_cols[idx].markdown(
+                        f'<span class="roster-cell-text">{adviser}</span>',
+                        unsafe_allow_html=True
+                    ); idx += 1
+                    r_cols[idx].markdown(cw_pill, unsafe_allow_html=True); idx += 1
+                    r_cols[idx].markdown(ce_pill, unsafe_allow_html=True); idx += 1
+                    r_cols[idx].markdown(cp_pill, unsafe_allow_html=True); idx += 1
+                    last_upd = row.get("LastUpdate")
+                    last_txt = pd.to_datetime(last_upd).strftime("%b %d, %Y") if pd.notna(last_upd) else "—"
+                    r_cols[idx].markdown(
+                        f'<span class="roster-cell-text">{last_txt}</span>',
+                        unsafe_allow_html=True
+                    ); idx += 1
+                    reason = risk_flags.get(s_id)
+                    r_cols[idx].markdown(
+                        f'<span class="sr-risk-pill" title="{html.escape(reason)}">AT RISK</span>'
+                        if reason is not None else '<span class="sr-risk-none">—</span>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        '<div class="roster-row-divider"></div>',
+                        unsafe_allow_html=True
+                    )
         # ---- MOBILE VIEW (<= 640px): one card per student ----
         # Rendered always; the CSS above hides it on wider screens and hides the desktop grid on phones.
         with st.container(key="sr_mobile_cards"):

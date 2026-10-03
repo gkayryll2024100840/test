@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from db_connect import get_db_connection, format_mysql_error
 from system_log import log_sync_attempt_local
 from dashboard_views.components import render_app_shell
+from perf import timed   # TEMP: timing ([TIMING] lines in the terminal)
+from prefetch import prefetch
 
 load_dotenv()
 
@@ -38,6 +40,7 @@ if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
 
 
+@st.cache_resource(show_spinner=False)   # SPEED: read + encode each image once, not on every rerun
 def get_base64_of_file(path):
     """Reads a local image file and returns it as a base64 string for embedding in CSS/HTML."""
     with open(path, "rb") as f:
@@ -123,6 +126,7 @@ def verify_login(user_id, password):
 # -------------------------------------Streamlit UI-----------------------------------------------------
 
 if not st.session_state.get('user'):
+    _login_t0 = __import__("time").perf_counter()   # TEMP timing
     # ----- Resolve logo + background from the assets folder -----
     logo_path = find_asset(
         "assets/mapua-university-logo.png",
@@ -349,7 +353,8 @@ if not st.session_state.get('user'):
         if not input_id or not input_pass:
             msg_slot.warning("Please enter both User ID and Password.")
         else:
-            success, result = verify_login(input_id, input_pass)
+            with timed("login: verify_login (password check query)"):
+                success, result = verify_login(input_id, input_pass)
             if success:
                 st.session_state["logged_in"] = True
                 st.session_state["user"] = result
@@ -360,6 +365,8 @@ if not st.session_state.get('user'):
                 st.rerun()
             else:
                 msg_slot.error(result)
+    print(f"[TIMING] login page: {(__import__('time').perf_counter() - _login_t0) * 1000:.0f} ms"
+          f" (background image {len(background_base64) * 3 // 4 // 1024} KB)", flush=True)
 
 else:
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
@@ -397,5 +404,15 @@ else:
         st.stop()
 
     pg = st.navigation(allowed, position="sidebar")
-    render_app_shell(user, page_key=pg.title)
-    pg.run()
+
+    # SPEED: the header/sidebar needs 2 slow reads (permission + refresh time). Run them at the same time
+    # so their answers are already cached when render_app_shell() asks (same functions, same arguments).
+    from dashboard_views.components import _permission_for_user, _refresh_time
+    with timed("app shell prefetch (parallel)"):
+        prefetch(lambda: _permission_for_user(user.get("userid")) if user.get("userid") is not None else None,
+                 _refresh_time)
+
+    with timed("app shell (header + sidebar)"):
+        render_app_shell(user, page_key=pg.title)
+    with timed(f"page: {pg.title}"):
+        pg.run()
