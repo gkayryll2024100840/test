@@ -1,7 +1,4 @@
 # DB_CONNECT.PY (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
-# 10-03-26: no ping for recently used pooled connections (one less round trip per query),
-#           and forgotten connections now return themselves to the pool (no more 10 s "busy" waits).
-#           The pool cap (DB_POOL_SIZE, default 3) is UNCHANGED, so this never opens more connections than before.
 import os
 import time
 import threading
@@ -49,13 +46,8 @@ LIFECYCLE_STATUS_MAP = {
 # If every connection is busy, callers wait (up to 10 s) instead of opening more -> no "Too many connections".
 # conn.close() still works as before: on a pooled connection it just hands it back.
 _MAX_OPEN = max(1, int(os.getenv("DB_POOL_SIZE", 3)))
-# 10-03-26: 60 -> 300 s. Opening a new connection to the Aiven server costs ~1 s+, so connections are now kept
-# for 5 minutes between page visits instead of 1. Still never more than DB_POOL_SIZE (3) open at once.
-_IDLE_SECONDS = int(os.getenv("DB_POOL_IDLE_SECONDS", 300))
+_IDLE_SECONDS = int(os.getenv("DB_POOL_IDLE_SECONDS", 60))
 _WAIT_SECONDS = 10
-# SPEED: a connection that was used only a few seconds ago is still alive, so it isn't pinged again
-# (the ping was an extra network round trip before EVERY query). Older idle connections are still pinged.
-_PING_AFTER_SECONDS = int(os.getenv("DB_POOL_PING_AFTER_SECONDS", 15))
 _idle = queue.LifoQueue()        # items: (raw_connection, time_it_was_returned)
 _open_count = 0                  # raw connections currently alive (idle + in use)
 _pool_lock = threading.Lock()
@@ -86,17 +78,6 @@ class _PooledConn:
     def __exit__(self, *exc):
         self.close()
         return False
-
-    def __del__(self):
-        # SAFETY NET: some functions only call conn.close() on the happy path. If an error happened
-        # before that, the connection used to stay "in use" forever; after 3 of those every page waited
-        # 10 s for a free slot ("Database is busy"). Now a forgotten connection goes back to the pool
-        # (rolled back first, so nothing half-done is ever committed). It never opens a new connection.
-        try:
-            if "_conn" in self.__dict__ and not self.__dict__.get("_released", True):
-                self.close()
-        except Exception:
-            pass
 
 
 def _discard(raw):
@@ -174,9 +155,7 @@ def get_db_connection():
             except queue.Empty:
                 continue
         # got an idle connection - make sure it's still good
-        # SPEED: only ping it if it has been idle for a while (recently used = still alive)
-        idle_for = time.monotonic() - ts
-        if idle_for > _IDLE_SECONDS or (idle_for > _PING_AFTER_SECONDS and not _alive(raw)):
+        if time.monotonic() - ts > _IDLE_SECONDS or not _alive(raw):
             _discard(raw)
             continue
         return _PooledConn(raw)
@@ -770,9 +749,8 @@ def _to_str(value):
     return value.decode() if isinstance(value, (bytes, bytearray)) else str(value)
 
 def _load_schema_columns():
-    """Reads every (table, column) pair of the current database in a single query.
-    SPEED: uses a pooled connection (a brand-new one to the Aiven server took seconds to open)."""
-    conn = get_db_connection()
+    """Reads every (table, column) pair of the current database in a single query."""
+    conn = mysql.connector.connect(**db_config, connection_timeout=_SCHEMA_CONNECT_TIMEOUT)
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -786,70 +764,24 @@ def _load_schema_columns():
     finally:
         conn.close()
 
+def _get_schema_columns(force=False):
+    """Returns the cached set of (table, column) pairs, reloading it when stale or forced."""
+    with _schema_lock:
+        loaded_at = _schema_cache["loaded_at"]
+        fresh = loaded_at is not None and (time.monotonic() - loaded_at) < _schema_cache["ttl"]
 
-_schema_load_lock = threading.Lock()   # only one schema load at a time
-_schema_bg_running = False
-
-
-def _schema_is_fresh():
-    loaded_at = _schema_cache["loaded_at"]
-    return loaded_at is not None and (time.monotonic() - loaded_at) < _schema_cache["ttl"]
-
-
-def _load_and_store_schema(force=False, keep_old_on_error=False):
-    """Loads the schema snapshot and stores it. Skips the load if another caller just did it."""
-    with _schema_load_lock:
-        with _schema_lock:
-            if not force and _schema_is_fresh():
-                return
-        try:
-            columns, err = _load_schema_columns(), None
-        except mysql.connector.Error as e:
-            columns, err = None, format_mysql_error(e)
-        except Exception as e:
-            columns, err = None, str(e)
-        with _schema_lock:
-            if err is None:
+        if force or not fresh:
+            try:
+                columns = _load_schema_columns()
                 _schema_cache.update(columns=columns, ttl=_SCHEMA_TTL_SECONDS, error=None)
-            elif keep_old_on_error and _schema_cache["error"] is None and _schema_cache["columns"]:
-                # background refresh failed: keep the last good snapshot, try again shortly
-                _schema_cache["ttl"] = _SCHEMA_RETRY_SECONDS
-            else:
-                _schema_cache.update(columns=frozenset(), ttl=_SCHEMA_RETRY_SECONDS, error=err)
+            except mysql.connector.Error as err:
+                _schema_cache.update(columns=frozenset(), ttl=_SCHEMA_RETRY_SECONDS,
+                                     error=format_mysql_error(err))
+            except Exception as e:
+                _schema_cache.update(columns=frozenset(), ttl=_SCHEMA_RETRY_SECONDS, error=str(e))
             _schema_cache["loaded_at"] = time.monotonic()
 
-
-def _background_schema_refresh():
-    global _schema_bg_running
-    try:
-        _load_and_store_schema(force=True, keep_old_on_error=True)
-    finally:
-        _schema_bg_running = False
-
-
-def _get_schema_columns(force=False):
-    """Returns the cached set of (table, column) pairs.
-
-    SPEED: when a good snapshot is just old, the old one is used right away and a fresh one is loaded
-    in the background (before, the page waited ~4 s for it every 5 minutes). The page only waits when
-    there is no good snapshot yet, or when "Re-check schema" forces a reload.
-    """
-    global _schema_bg_running
-    if force:
-        _load_and_store_schema(force=True)
         return _schema_cache["columns"]
-    with _schema_lock:
-        fresh = _schema_is_fresh()
-        usable = _schema_cache["loaded_at"] is not None and _schema_cache["error"] is None
-        start_bg = not fresh and usable and not _schema_bg_running
-        if start_bg:
-            _schema_bg_running = True
-        must_wait = not fresh and not usable
-    if start_bg:
-        threading.Thread(target=_background_schema_refresh, name="schema-refresh", daemon=True).start()
-    if must_wait:
-        _load_and_store_schema()
-    return _schema_cache["columns"]
 
 def refresh_schema_cache():
     """Forces a fresh read of the database schema (e.g. after adding a column in MySQL)."""
@@ -1601,23 +1533,6 @@ def start_refresh_scheduler():
 
 # every page imports db_connect, so the nightly refresh starts as soon as the app is running
 start_refresh_scheduler()
-
-
-# SPEED: load the schema snapshot in the background as soon as the app starts (the login screen already
-# imports db_connect), so the first dashboard page doesn't wait ~4 s for it. Uses one pooled connection.
-_warmup_started = False
-
-
-def _warm_up():
-    try:
-        _get_schema_columns()
-    except Exception as e:
-        print(f"Schema warm-up failed (the page will load it instead): {e}")
-
-
-if not _warmup_started:
-    _warmup_started = True
-    threading.Thread(target=_warm_up, name="schema-warmup", daemon=True).start()
 # ------------------------------------------------------------------
 # US-29: Config-driven KPI tiles (stored as JSON on Program.KpiTiles)
 # ------------------------------------------------------------------
