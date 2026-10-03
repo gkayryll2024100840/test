@@ -1047,26 +1047,9 @@ html[data-eo-theme="dark"] .stApp{
 [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child),
 .element-container:has([data-testid="stMarkdownContainer"] > style:only-child){display:none !important;}
 
-html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"]{
-  overflow-x:clip !important;
-  width:100% !important;
-  max-width:100% !important;
-}
-
-/* ---- page area: header runs edge to edge, takes all space on the right ---- */
-[data-testid="stMainBlockContainer"],
-[data-testid="stAppViewBlockContainer"],
-section.main > div.block-container,
-.main .block-container,
-.block-container{
-    padding-top:0 !important;
-    padding-left:2.25rem !important;
-    padding-right:2.25rem !important;
-    margin-left:0 !important;
-    margin-right:0 !important;
-    width:100% !important;
-    max-width:100% !important;
-}
+/* ---- page area: header runs edge to edge ---- */
+[data-testid="stMainBlockContainer"], .block-container{
+    padding-top:0 !important;padding-left:2.25rem !important;padding-right:2.25rem !important;max-width:100% !important;}
 .ps-header{margin:0 -2.25rem 26px -2.25rem;}
 /* keep the red + yellow bars pinned at the top while scrolling, so Deploy / ⋮ always sit on the red bar */
 [data-testid="stElementContainer"]:has(.ps-header),
@@ -1086,22 +1069,6 @@ section.main > div.block-container,
 .ps-meta-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.8;}
 .ps-meta-sep{width:1px;height:16px;background:rgba(31,41,55,.35);}
 .ps-meta-value{font-weight:700;}
-
-@media (max-width: 1024px) {
-  [data-testid="stMainBlockContainer"], .block-container{
-    padding-left:1.25rem !important;padding-right:1.25rem !important;}
-  .ps-header{margin:0 -1.25rem 20px -1.25rem !important;}
-  .ps-red{padding:12px 18px !important;gap:12px !important;}
-  .ps-title{font-size:22px !important;}
-  .ps-yellow{padding:8px 18px !important;flex-wrap:wrap !important;gap:8px 16px !important;}
-}
-
-@media (max-width: 768px) {
-  [data-testid="stMainBlockContainer"], .block-container{
-    padding-left:1.0rem !important;padding-right:1.0rem !important;}
-  .ps-header{margin:0 -1.0rem 16px -1.0rem !important;}
-  .ps-title{font-size:19px !important;}
-}
 
 /* ---- sidebar ---- */
 [data-testid="stSidebar"]{background:var(--ps-side-bg) !important;border-right:1px solid var(--ps-side-border);}
