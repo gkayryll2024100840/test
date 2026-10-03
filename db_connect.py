@@ -1,4 +1,5 @@
-# DB_CONNECT.PY (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
+# DB_CONNECT.PY 
+# (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
 import os
 import time
 import threading

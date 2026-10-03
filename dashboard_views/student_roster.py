@@ -1,5 +1,6 @@
 # STUDENT ROSTER.PY
 # UPDATED: 9/30/2026
+#needs optimization
 
 import html
 from functools import lru_cache

@@ -1,4 +1,5 @@
 # COMPONENTS.PY (speed-optimized: header repaints in place instead of rerunning the page)
+# Added mobile view
 """
 Unified reusable UI components and styles for Student Roster and Student Profile.
 Responsive dual-theme (Light & Dark mode) enterprise styling with accessible contrast steps
