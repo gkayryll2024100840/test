@@ -515,6 +515,29 @@ def get_user_program(user_id):
     except Exception as e:
         print(f"Failed to fetch user program: {e}")
         return None
+def get_users_assigned_to_program(program_id):
+    """UserIDs of every user whose CurrentProgramID = program_id.
+
+    Used by the Program Instances console to show which Program Chair is assigned.
+    """
+    if program_id is None:
+        return []
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT UserID FROM Users WHERE CurrentProgramID = %s",
+                (program_id,),
+            )
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
+        return [r[0] for r in rows]
+    except Exception as e:
+        print(f"Failed to fetch users for program {program_id}: {e}")
+        return []
 def create_program(program_code, program_name, is_active=1):
     """Inserts a new program into the Program table.
 
@@ -1807,7 +1830,11 @@ def get_program_instances():
                 u.Email                              AS OwnerEmail,
                 p.IsActive,
                 p.CreatedAt,
-                (SELECT COUNT(*) FROM Students s WHERE s.ProgramID = p.ProgramID) AS StudentCount
+                (SELECT COUNT(*) FROM Students s WHERE s.ProgramID = p.ProgramID) AS StudentCount,
+                -- the Program Chair (Users.CurrentProgramID = p.ProgramID)
+                (SELECT cu.UserID FROM Users cu
+                  WHERE cu.CurrentProgramID = p.ProgramID AND cu.Role = 'Program_Chair'
+                  LIMIT 1) AS ChairUserID
             FROM Program p
             LEFT JOIN Users u ON u.UserID = p.OwnerUserID
             ORDER BY p.IsActive DESC, p.ProgramName ASC

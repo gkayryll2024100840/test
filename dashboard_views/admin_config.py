@@ -22,7 +22,8 @@ from db_connect import (
     get_db_connection,
     get_all_programs, get_program_threshold, set_program_threshold,
     get_refresh_schedule, set_refresh_time,
-    get_stage_labels, set_stage_label, DEFAULT_STAGE_LABELS,   # US-30
+    get_stage_labels, set_stage_label, DEFAULT_STAGE_LABELS,
+    set_user_program,   # US-30
 )
 from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
@@ -324,11 +325,17 @@ def program_instances_section():
     st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
 
     # ---- Column headers (same style as the User Permissions table) ----
-    widths = [1.0, 2.6, 2.4, 1.2, 1.0, 2.4]
+    # Added "Chair" (Users.CurrentProgramID) next to "Owner" (Program.OwnerUserID).
+    widths = [0.8, 2.0, 1.8, 1.8, 0.9, 0.8, 2.3]
     for col, label in zip(st.columns(widths, vertical_alignment="bottom"),
-                          ["Code", "Program", "Owner", "Status", "Students", "Actions"]):
+                          ["Code", "Program", "Owner", "Chair", "Status", "Students", "Actions"]):
         col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
     st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+
+    # cached user list (shared by every row's picker -> one DB read per page, not per program)
+    all_users = cached_users("") or []
+    user_labels = {f"{u['FirstName']} {u['LastName']} ({u['UserID']})": u["UserID"] for u in all_users}
+    user_options = ["— Unassigned —"] + list(user_labels)
 
     # ---- One row per program ----
     for inst in instances:
@@ -349,7 +356,7 @@ def program_instances_section():
                 unsafe_allow_html=True,
             )
 
-        # Owner
+        # Owner (Program.OwnerUserID)
         with cols[2]:
             if inst.get("OwnerName"):
                 st.markdown(f"{html.escape(str(inst['OwnerName']))}")
@@ -359,8 +366,38 @@ def program_instances_section():
             else:
                 st.markdown('<span class="ac-note-sm">Unassigned</span>', unsafe_allow_html=True)
 
-        # Status pill
+        # Chair (Users.CurrentProgramID) — picker + Save
         with cols[3]:
+            chair_uid = inst.get("ChairUserID")
+            current_chair = next(
+                (lbl for lbl, uid in user_labels.items() if uid == chair_uid),
+                "— Unassigned —",
+            )
+            chair_pick = st.selectbox(
+                f"Chair for {pid}",
+                user_options,
+                index=user_options.index(current_chair) if current_chair in user_options else 0,
+                key=f"chair_pick_{pid}",
+                label_visibility="collapsed",
+            )
+            if chair_pick != current_chair and st.button("Assign", key=f"chair_save_{pid}",
+                                                          use_container_width=True):
+                require_edit()
+                new_uid = None if chair_pick.startswith("—") else user_labels.get(chair_pick)
+                # Clear the previous chair's CurrentProgramID (so they don't stay locked to this program)
+                if chair_uid and chair_uid != new_uid:
+                    set_user_program(chair_uid, None)
+                ok, err = set_user_program(new_uid, pid) if new_uid else (True, None)
+                if ok:
+                    st.cache_data.clear()
+                    st.session_state["pi_flash"] = (True, f"Chair updated for {inst['ProgramCode']}.")
+                    st.rerun(scope="fragment")
+                else:
+                    st.session_state["pi_flash"] = (False, err)
+                    st.rerun(scope="fragment")
+
+        # Status pill
+        with cols[4]:
             if inst.get("IsActive"):
                 st.markdown('<span class="ac-chip" style="color:#15803D;background:#ECFDF3;'
                             'border-color:#BBF7D0;">ACTIVE</span>', unsafe_allow_html=True)
@@ -369,29 +406,23 @@ def program_instances_section():
                             'border-color:#FDE68A;">INACTIVE</span>', unsafe_allow_html=True)
 
         # Student count
-        with cols[4]:
+        with cols[5]:
             st.markdown(f"{int(inst.get('StudentCount') or 0):,}")
 
         # Actions: Configure link + owner picker
-        with cols[5]:
+        with cols[6]:
             act_left, act_right = st.columns([1.2, 1])
             with act_left:
-                # Deep link into this program's configuration on the same page
-                # (the Stage Labels + KPI Tiles sections read ?program=<ProgramID> below)
                 st.page_link(
                     "dashboard_views/admin_config.py",
                     label="⚙ Configure",
                     query_params={"program": str(pid)},
                 )
             with act_right:
-                users = cached_users("") or []   # cached list, no extra DB hit per row
-                owner_options = ["— Unassigned —"] + [
-                    f"{u['FirstName']} {u['LastName']} ({u['UserID']})" for u in users
-                ]
+                owner_options = ["— Unassigned —"] + list(user_labels)
                 current_owner = next(
-                    (f"{u['FirstName']} {u['LastName']} ({u['UserID']})"
-                     for u in users if u["UserID"] == inst.get("OwnerUserID")),
-                    "— Unassigned —"
+                    (lbl for lbl, uid in user_labels.items() if uid == inst.get("OwnerUserID")),
+                    "— Unassigned —",
                 )
                 picked = st.selectbox(
                     f"Owner for {pid}",
@@ -402,7 +433,7 @@ def program_instances_section():
                 )
                 if picked != current_owner and st.button("Save", key=f"owner_save_{pid}"):
                     require_edit()
-                    new_uid = None if picked.startswith("—") else picked.rsplit("(", 1)[1].rstrip(")")
+                    new_uid = None if picked.startswith("—") else user_labels.get(picked)
                     ok, err = set_program_owner(pid, new_uid)
                     if ok:
                         cached_program_instances.clear()
