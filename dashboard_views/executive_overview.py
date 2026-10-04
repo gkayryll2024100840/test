@@ -66,6 +66,16 @@ STAGE_STATUS_COL = {
 }
 
 AT_RISK_STATUSES = {"Incomplete", "Cancelled"}
+
+# KPI value colours: green = on track, normal text colour = in between, red = needs attention.
+# (green_at, red_below) in %. Same green / red as the Cohort by Lifecycle Stage chart.
+KPI_THRESHOLDS = {
+    "overall_completion": (50.0, 40.0),
+    "completion_rate": (50.0, 40.0),
+    "on_time_rate": (40.0, 30.0),
+}
+KPI_GOOD_COLOR = STAGE_COLORS["Capstone"]     # #55AB22
+KPI_BAD_COLOR = STAGE_COLORS["Coursework"]    # #B91B21
 ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
 LAST_UPDATED_CANDIDATES = ["LastUpdated", "UpdatedAt", "DateUpdated", "LastModified", "ModifiedAt"]
 ENROLLMENT_OPTIONS = ["All", "Enrolled", "Conditionally Enrolled"]
@@ -681,7 +691,7 @@ def delta_html(hist, metric, cohort, kind="pct", higher_is_better=True):
 _HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
-def kpi_card(label, value, sub_html="&nbsp;", info_html=None, accent=None):
+def kpi_card(label, value, sub_html="&nbsp;", info_html=None, accent=None, value_color=None):
     """One KPI tile. accent = the tile's colour from Admin Config → KPI Tiles (US-29),
     drawn as a thin bar along the top edge of the card."""
     info = (f'<div class="eo-info" tabindex="0">i<div class="eo-tip">{info_html}</div></div>'
@@ -690,7 +700,7 @@ def kpi_card(label, value, sub_html="&nbsp;", info_html=None, accent=None):
              if accent and _HEX_COLOR.match(str(accent)) else "")
     return (
         f'<div class="eo-kpi"{style}>{info}<div class="eo-kpi-label">{label}</div>'
-        f'<div class="eo-kpi-value">{value}</div>'
+        f'<div class="eo-kpi-value"{f' style="color:{value_color};"' if value_color else ""}>{value}</div>'
         f'<div class="eo-kpi-sub">{sub_html}</div></div>'
     )
 
@@ -718,6 +728,40 @@ def remaining_info_html(df: pd.DataFrame) -> str:
         f'&minus; Inactive ({inactive:,}) = Total ({total - completed - inactive:,})</div>{rows}'
         '<div class="eo-tip-caption">Remaining students are computed as Total Enrolled minus Completed '
         'and Inactive (dropped out), then split by the lifecycle stage each student is currently in.</div>'
+    )
+
+
+def kpi_value_color(src, pct):
+    """Green / red for a percentage KPI past its threshold, None (normal text colour) in between."""
+    limits = KPI_THRESHOLDS.get(src)
+    if limits is None or pct is None:
+        return None
+    green_at, red_below = limits
+    if pct >= green_at:
+        return KPI_GOOD_COLOR
+    if pct < red_below:
+        return KPI_BAD_COLOR
+    return None
+
+
+def rate_info_html(src, part_label, part, total, pct):
+    """Tooltip for On-Time Graduation Rate / Overall Completion: the formula, then the colour thresholds."""
+    green_at, red_below = KPI_THRESHOLDS[src]
+    rows = [
+        (KPI_GOOD_COLOR, "On track", f"{green_at:g}% or higher"),
+        ("var(--eo-text)", "Normal", f"{red_below:g}% – {green_at - 0.1:g}%"),
+        (KPI_BAD_COLOR, "Needs attention", f"below {red_below:g}%"),
+    ]
+    rows_html = "".join(
+        f'<div class="eo-tip-row"><span style="color:{color};font-weight:600;">{name}</span>'
+        f'<span class="eo-tip-dots"></span><span>{rng}</span></div>'
+        for color, name, rng in rows
+    )
+    return (
+        f'<div class="eo-tip-formula">{part_label} ({part:,}) &divide; Total Enrolled ({total:,}) '
+        f'&times; 100 = {pct:.1f}%</div>{rows_html}'
+        '<div class="eo-tip-caption">The number turns green when the rate is on track, stays in the normal '
+        'text colour in between, and turns red when it falls below the attention line.</div>'
     )
 
 
@@ -1611,11 +1655,14 @@ def resolve_kpi_value(source, df, program_label, selected_cohort, hist):
     if src == "at_risk":
         return f"{int(df['IsFlagged'].sum()):,}", None
     if src == "on_time_rate":
-        return f"{on_time_rate(df):.1f}%", None
-    if src == "overall_completion":
-        return f"{completion_rate(df):.1f}%", None
-    if src == "completion_rate":
-        return f"{completion_rate(df):.1f}%", None
+        rate = on_time_rate(df)
+        on_time_n = int(df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE).sum()) \
+            if not df.empty else 0
+        return f"{rate:.1f}%", rate_info_html(src, "Graduated on time", on_time_n, len(df), rate)
+    if src in ("overall_completion", "completion_rate"):
+        rate = completion_rate(df)
+        done_n = int(df["IsComplete"].sum()) if not df.empty else 0
+        return f"{rate:.1f}%", rate_info_html(src, "Completed", done_n, len(df), rate)
     if src == "cohort_count":
         try:
             return f"{df['Cohort'].nunique():,}", None
@@ -1770,7 +1817,7 @@ def render_executive_overview():
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
     tiles = cached_kpi_tiles(selected_program["ProgramID"])
-    cards_data = []   # (label, value, sub_html, accent) for each tile, in order
+    cards_data = []   # (label, value, sub_html, accent, info, value_color) for each tile, in order
     for t in tiles or []:
         src = (t.get("source") or "").strip().lower()
         label = html.escape(str(t.get("label", "")))
@@ -1778,7 +1825,9 @@ def render_executive_overview():
             label = f"Total {html.escape(selected_status)}"
         value, info = resolve_kpi_value(src, df, program_label, selected_cohort, hist)
         sub = resolve_kpi_subtext(src, df, program_label, selected_cohort, hist)
-        cards_data.append((label, value, sub, t.get("color"), info))
+        value_color = (kpi_value_color(src, on_time_rate(df) if src == "on_time_rate" else completion_rate(df))
+                       if src in KPI_THRESHOLDS and not df.empty else None)
+        cards_data.append((label, value, sub, t.get("color"), info, value_color))
 
     # ---- Export (far right of the filter row) ----
     program_label_for_file = (
@@ -1833,8 +1882,8 @@ def render_executive_overview():
     if not cards_data:
         st.info("No KPI tiles are configured for this program. Add them in Admin Config.")
     else:
-        render_kpi_row([kpi_card(label, value, sub, info_html=info, accent=accent)
-                        for label, value, sub, accent, info in cards_data])
+        render_kpi_row([kpi_card(label, value, sub, info_html=info, accent=accent, value_color=value_color)
+                        for label, value, sub, accent, info, value_color in cards_data])
 
     # ---- Charts ----
     charts_row = st.container(key="eo_charts")
