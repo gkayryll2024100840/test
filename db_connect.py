@@ -22,8 +22,6 @@ db_config = {
     "database": os.getenv("DB_NAME"),
     "port": int(os.getenv("DB_PORT", 3306))
 }
-print("DB_HOST =", repr(os.getenv("DB_HOST")))
-print("DB_USER =", repr(os.getenv("DB_USER")))
 
 # Standardized status mapping for US-07, US-08, and US-09
 LIFECYCLE_STATUS_MAP = {
@@ -49,6 +47,7 @@ LIFECYCLE_STATUS_MAP = {
 _MAX_OPEN = max(1, int(os.getenv("DB_POOL_SIZE", 3)))
 _IDLE_SECONDS = int(os.getenv("DB_POOL_IDLE_SECONDS", 60))
 _WAIT_SECONDS = 10
+_PING_AFTER_SECONDS = 10         # only connections idle longer than this are pinged before reuse
 _idle = queue.LifoQueue()        # items: (raw_connection, time_it_was_returned)
 _open_count = 0                  # raw connections currently alive (idle + in use)
 _pool_lock = threading.Lock()
@@ -155,8 +154,11 @@ def get_db_connection():
                 raw, ts = _idle.get(timeout=min(remaining, 1.0))
             except queue.Empty:
                 continue
-        # got an idle connection - make sure it's still good
-        if time.monotonic() - ts > _IDLE_SECONDS or not _alive(raw):
+        # got an idle connection - make sure it's still good. The check pings the server (one full round
+        # trip, ~150 ms on the hosted database), so it's skipped for connections handed back moments ago:
+        # those are still open, and a page makes many quick queries in a row (US-49 speed).
+        idle_for = time.monotonic() - ts
+        if idle_for > _IDLE_SECONDS or (idle_for > _PING_AFTER_SECONDS and not _alive(raw)):
             _discard(raw)
             continue
         return _PooledConn(raw)
