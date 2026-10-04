@@ -1780,3 +1780,60 @@ def get_student_email(student_number):
     except Exception as e:
         print(f"Failed to fetch student email: {e}")
         return None
+# ------------------------------------------------------------------
+# US-42: Program Instances console
+# ------------------------------------------------------------------
+
+def get_program_instances():
+    """Every program with its owner and status, for the admin console.
+
+    Returns a list of dicts:
+      {ProgramID, ProgramCode, ProgramName, OwnerUserID, OwnerName,
+       IsActive, CreatedAt, StudentCount}
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT
+                p.ProgramID,
+                p.ProgramCode,
+                p.ProgramName,
+                p.OwnerUserID,
+                CONCAT(u.FirstName, ' ', u.LastName) AS OwnerName,
+                u.Email                              AS OwnerEmail,
+                p.IsActive,
+                p.CreatedAt,
+                (SELECT COUNT(*) FROM Students s WHERE s.ProgramID = p.ProgramID) AS StudentCount
+            FROM Program p
+            LEFT JOIN Users u ON u.UserID = p.OwnerUserID
+            ORDER BY p.IsActive DESC, p.ProgramName ASC
+            """
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return rows
+    except mysql.connector.Error as e:
+        print(f"Failed to fetch program instances: {e}")
+        return []
+
+
+def set_program_owner(program_id, user_id):
+    """Assign (or clear) the owner of a program. Pass user_id=None to clear."""
+    if program_id is None:
+        return False, "A program is required."
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE Program SET OwnerUserID = %s WHERE ProgramID = %s",
+            (None if user_id in (None, "") else str(user_id).strip(), program_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, None
+    except mysql.connector.Error as e:
+        return False, str(e)
