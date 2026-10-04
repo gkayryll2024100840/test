@@ -359,65 +359,86 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
  
 # ---------------------------------------------------------------
 # Program selection — includes "All Programs"
+# Program Chairs are LOCKED to their assigned program (Users.CurrentProgramID)
+# and cannot switch, cannot pick "All Programs", and cannot create programs.
 # ---------------------------------------------------------------
 user = st.session_state.get("user", {})
 role = user.get("role")
- 
-with st.expander("Active Program", expanded=not st.session_state.get("active_program_set")):
-    programs = cached_programs()
-    ALL_LABEL = "All Programs"
-    options = {ALL_LABEL: None}
-    for p in programs:
-        options[f"{p['ProgramCode']} — {p['ProgramName']}"] = p["ProgramID"]
+IS_PROGRAM_CHAIR = (role == "Program_Chair")
 
-    # default index = the currently-active program (or All Programs)
-    current_id = st.session_state.get("active_program_id")
-    current_code = st.session_state.get("active_program_code")
-    default_idx = 0
-    if current_code == ALL_LABEL:
-        default_idx = 0
-    elif current_id is not None:
-        for i, label in enumerate(options.keys()):
-            if options[label] == current_id:
-                default_idx = i
-                break
-
-    selected_label = st.selectbox(
-        "Select program",
-        list(options.keys()),
-        index=default_idx,
-        key="program_select",
+if IS_PROGRAM_CHAIR:
+    # Locked view: force the chair's assigned program into session state every run
+    assigned = get_user_program(user.get("UserID"))
+    if not assigned:
+        st.warning(
+            "⏳ You don't have a program assigned yet. Contact IT/Admin to set your "
+            "CurrentProgramID before using the Student Roster."
+        )
+        st.stop()
+    # Always overwrite — this also defeats a stale session value from before the assignment
+    st.session_state["active_program_id"] = assigned["ProgramID"]
+    st.session_state["active_program_code"] = assigned["ProgramCode"]
+    st.session_state["active_program_set"] = True
+    st.info(
+        f"🔒 You are assigned to **{assigned['ProgramCode']} — {assigned['ProgramName']}**. "
+        "As a Program Chair, the Student Roster is scoped to this program."
     )
-    if st.button("Set Active Program"):
-        pid = options[selected_label]
-        st.session_state["active_program_id"] = pid
-        st.session_state["active_program_code"] = ALL_LABEL if pid is None else selected_label.split(" — ")[0]
-        st.session_state["active_program_set"] = True
-        if pid is not None:
-            set_user_program(user.get("UserID"), pid)
-        st.success(f"Active program set to {selected_label}.")
-        st.rerun()
- 
-    with st.form("create_program_form"):
-        st.write("**Create New Program**")
-        code = st.text_input("Program Code (e.g., BIA)")
-        name = st.text_input("Program Name (e.g., BS Business Intelligence)")
-        if st.form_submit_button("Create Program"):
-            require_edit()
-            if not code or not name:
-                st.warning("Please enter both Program Code and Name.")
-            else:
-                ok, result = create_program(code.strip().upper(), name.strip())
-                if ok:
-                    st.cache_data.clear()
-                    st.session_state["active_program_id"] = result
-                    st.session_state["active_program_code"] = code.strip().upper()
-                    st.session_state["active_program_set"] = True
-                    set_user_program(user.get("UserID"), result)
-                    st.success(f"Created **{code}** and set as active.")
-                    st.rerun()
+else:
+    with st.expander("Active Program", expanded=not st.session_state.get("active_program_set")):
+        programs = cached_programs()
+        ALL_LABEL = "All Programs"
+        options = {ALL_LABEL: None}
+        for p in programs:
+            options[f"{p['ProgramCode']} — {p['ProgramName']}"] = p["ProgramID"]
+
+        # default index = the currently-active program (or All Programs)
+        current_id = st.session_state.get("active_program_id")
+        current_code = st.session_state.get("active_program_code")
+        default_idx = 0
+        if current_code == ALL_LABEL:
+            default_idx = 0
+        elif current_id is not None:
+            for i, label in enumerate(options.keys()):
+                if options[label] == current_id:
+                    default_idx = i
+                    break
+
+        selected_label = st.selectbox(
+            "Select program",
+            list(options.keys()),
+            index=default_idx,
+            key="program_select",
+        )
+        if st.button("Set Active Program"):
+            pid = options[selected_label]
+            st.session_state["active_program_id"] = pid
+            st.session_state["active_program_code"] = ALL_LABEL if pid is None else selected_label.split(" — ")[0]
+            st.session_state["active_program_set"] = True
+            if pid is not None:
+                set_user_program(user.get("UserID"), pid)
+            st.success(f"Active program set to {selected_label}.")
+            st.rerun()
+
+        with st.form("create_program_form"):
+            st.write("**Create New Program**")
+            code = st.text_input("Program Code (e.g., BIA)")
+            name = st.text_input("Program Name (e.g., BS Business Intelligence)")
+            if st.form_submit_button("Create Program"):
+                require_edit()
+                if not code or not name:
+                    st.warning("Please enter both Program Code and Name.")
                 else:
-                    st.error(f"Could not create program: {result}")
+                    ok, result = create_program(code.strip().upper(), name.strip())
+                    if ok:
+                        st.cache_data.clear()
+                        st.session_state["active_program_id"] = result
+                        st.session_state["active_program_code"] = code.strip().upper()
+                        st.session_state["active_program_set"] = True
+                        set_user_program(user.get("UserID"), result)
+                        st.success(f"Created **{code}** and set as active.")
+                        st.rerun()
+                    else:
+                        st.error(f"Could not create program: {result}")
  
  
 # Only block the page when the user has never picked a program (None means "All Programs" is valid)
