@@ -211,6 +211,12 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
     max-width: none !important;
     min-width: 0 !important;
 }
+/* Program Chair: read-only Program filter */
+.eo-locked-filter{display:flex;flex-direction:column;gap:4px;}
+.eo-locked-label{font-size:14px;font-weight:600;color:var(--eo-label);}
+.eo-locked-value{font-size:14px;color:var(--eo-text);background:var(--eo-surface-2);
+    border:1px solid var(--eo-border);border-radius:6px;padding:8px 12px;
+}
 
 /* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
 .eo-header{padding-bottom:10px;border-bottom:1px solid var(--eo-border);margin:0;}
@@ -1682,6 +1688,19 @@ def render_executive_overview():
         return
 
     # ---- Filters: Program | Cohort | Enrollment ----
+    # Program Chairs are LOCKED to their assigned program (Users.CurrentProgramID).
+    # The Program selector is hidden and replaced with a read-only label.
+    _user = st.session_state.get("user", {}) or {}
+    _is_program_chair = _user.get("role") == "Program_Chair"
+    _chair_program = get_user_program(_user.get("userid") or _user.get("UserID")) if _is_program_chair else None
+
+    if _is_program_chair and not _chair_program:
+        st.warning(
+            "⏳ You don't have a program assigned yet. Contact IT/Admin to set your "
+            "CurrentProgramID before using the Executive Overview."
+        )
+        return
+
     with st.container(key="eo_filters"):
         f1, f2, f3, f4, f5 = st.columns(5, gap="small", vertical_alignment="bottom")   # f4 = Excel, f5 = PDF
 
@@ -1690,12 +1709,27 @@ def render_executive_overview():
 
         # Program is chosen before Cohort in code (the cohort list depends on it)
         with f1:
-            programs_by_id = {p["ProgramID"]: p for p in get_program_options()}
-            selected_program_id = st.selectbox(
-                "Program", list(programs_by_id),
-                format_func=lambda pid: programs_by_id[pid]["ProgramName"],
-            )
-            selected_program = programs_by_id[selected_program_id]
+            if _is_program_chair:
+                # Locked: show the assigned program as a read-only caption (no dropdown)
+                st.markdown(
+                    f'<div class="eo-locked-filter"><span class="eo-locked-label">Program</span>'
+                    f'<span class="eo-locked-value">{html.escape(_chair_program["ProgramCode"])} — '
+                    f'{html.escape(_chair_program["ProgramName"])} 🔒</span></div>',
+                    unsafe_allow_html=True,
+                )
+                selected_program = {
+                    "ProgramID": _chair_program["ProgramID"],
+                    "ProgramCode": _chair_program["ProgramCode"],
+                    "ProgramName": _chair_program["ProgramName"],
+                }
+            else:
+                programs_by_id = {p["ProgramID"]: p for p in get_program_options()}
+                selected_program_id = st.selectbox(
+                    "Program", list(programs_by_id),
+                    format_func=lambda pid: programs_by_id[pid]["ProgramName"],
+                )
+                selected_program = programs_by_id[selected_program_id]
+
             # US-30: this program's stage names ("All Programs" -> the default names)
             _stage_labels.clear()
             _stage_labels.update(cached_stage_labels(selected_program["ProgramID"]))
