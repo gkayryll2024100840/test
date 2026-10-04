@@ -212,8 +212,7 @@ if not st.session_state.get('user'):
             }}
 
             /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
-               position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is.
-               To make the card wider/narrower, change the 540px. */
+               position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is. */
             .st-key-login_card {{
                 position: fixed !important;
                 top: 50% !important;
@@ -225,6 +224,36 @@ if not st.session_state.get('user'):
                 overflow-y: auto;
                 margin: 0 !important;
                 z-index: 10;
+            }}
+
+            @media (max-width: 640px) {{
+                .st-key-login_card {{
+                    width: min(420px, 92vw) !important;
+                    padding: 22px 20px 20px 20px !important;
+                    border-radius: 14px !important;
+                }}
+            }}
+
+            @media (max-height: 520px) and (orientation: landscape) {{
+                .st-key-login_card {{
+                    width: min(480px, 90vw) !important;
+                    padding: 12px 24px 14px 24px !important;
+                    max-height: 92vh !important;
+                    border-radius: 12px !important;
+                }}
+                .login-logo {{
+                    width: 44px !important;
+                    height: 44px !important;
+                    margin-bottom: 6px !important;
+                }}
+                .login-logo img {{
+                    width: 28px !important;
+                    height: 28px !important;
+                }}
+                .login-title {{
+                    font-size: 17px !important;
+                    margin-bottom: 10px !important;
+                }}
             }}
 
             .login-logo {{
