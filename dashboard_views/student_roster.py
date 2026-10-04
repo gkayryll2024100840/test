@@ -624,10 +624,11 @@ try:
         show_program_col = active_program_id is None   # "All Programs" -> show the PROGRAM column
         if show_program_col:
             # 10 columns: ID | Student | Program | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [0.9, 1.6, 0.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            # CP is wider so "Defended for Completion" fits on one line like the other pills (same total width)
+            col_widths = [0.9, 1.4, 0.7, 0.8, 1.6, 1.2, 1.2, 1.8, 1.0, 0.7]
         else:
             # 9 columns: ID | Student | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [0.9, 1.7, 0.8, 1.7, 1.2, 1.2, 1.5, 1.0, 0.7]
+            col_widths = [0.9, 1.5, 0.8, 1.6, 1.2, 1.2, 1.8, 1.0, 0.7]
 
         try:
             risk_flags = get_risk_flags(active_program_id)

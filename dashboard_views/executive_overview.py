@@ -24,9 +24,12 @@ from db_connect import (
     get_flagged_students,
     get_kpi_tiles,
     get_stage_labels,   # US-30
+    get_last_updated_time,   # US-12 timestamp, shown in the PDF export (US-38)
 )
 from dashboard_views.components import DARK_MODE_CSS, set_header_context
 from field_mapping import load_mappings
+from prefetch import prefetch
+from perf import timed   # US-49: [TIMING] lines
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -141,7 +144,8 @@ html[data-eo-theme="dark"] .stApp{
 }
 /* Plotly draws with inline colours; these rules make chart text/lines/grid follow the theme */
 .stApp .js-plotly-plot .xtick text,
-.stApp .js-plotly-plot .bars .textpoint text{fill:var(--eo-chart-text) !important;}
+.stApp .js-plotly-plot .bars .textpoint text,
+.stApp .js-plotly-plot .bars text.bartext{fill:var(--eo-chart-text) !important;}   /* bar numbers use .bartext */
 .stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .textpoint text{fill:var(--eo-chart-line) !important;}
 .stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .js-line{stroke:var(--eo-chart-line) !important;}
 .stApp .st-key-eo_trend_completion .js-plotly-plot .scatterlayer .point{fill:var(--eo-chart-line) !important;}
@@ -1274,7 +1278,8 @@ def kpi_pdf_items(cards_data):
     return tuple(items)
 
 
-def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, exported_at: str) -> bytes:
+def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, exported_at: str,
+                     data_updated: str = "") -> bytes:
     from reportlab.graphics.charts.barcharts import VerticalBarChart
     from reportlab.graphics.charts.linecharts import HorizontalLineChart
     from reportlab.graphics.shapes import Drawing, String
@@ -1316,7 +1321,8 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, expor
 
     story = [
         Paragraph("Executive Overview", s_title),
-        Paragraph(f"Exported {html.escape(exported_at)} by {html.escape(str(exported_by))}", s_meta),
+        Paragraph((f"Data last updated {html.escape(data_updated)}  ·  " if data_updated else "")
+                  + f"Exported {html.escape(exported_at)} by {html.escape(str(exported_by))}", s_meta),
         Spacer(1, 6),
         Paragraph("  ·  ".join(f'<font color="#6B7280">{html.escape(k)}:</font> <b>{html.escape(str(v))}</b>'
                                for k, v in filters.items()), style("f", fontSize=9)),
@@ -1496,14 +1502,33 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, expor
 # Bump this whenever build_export_pdf() changes: it's part of the cache key, so an already-built
 # PDF from the old layout is never handed out again (Streamlit doesn't notice changes inside
 # build_export_pdf on its own and would keep serving the cached old file for up to 5 minutes).
-PDF_EXPORT_VERSION = 3
+PDF_EXPORT_VERSION = 4
 
 
 @st.cache_data(ttl=300, show_spinner=False, max_entries=20)
 def cached_export_pdf(df, hist, filters_json, exported_by, labels_key, kpi_items, exported_at,
-                      version=PDF_EXPORT_VERSION):
+                      version=PDF_EXPORT_VERSION, data_updated=""):
     """PDF is rebuilt only when the filters / data / labels / KPI tiles / export minute / PDF layout version change."""
-    return build_export_pdf(df, hist, json.loads(filters_json), exported_by, kpi_items, exported_at)
+    return build_export_pdf(df, hist, json.loads(filters_json), exported_by, kpi_items, exported_at,
+                            data_updated)
+
+
+def timed_export(label, build, df) -> bytes:
+    """Builds an export file when its button is clicked and prints how long that took (US-49)."""
+    if df.empty:
+        return b""
+    with timed(f"{label} (file built after the click)", warn_over_ms=5000):
+        return build()
+
+
+def data_last_updated_label() -> str:
+    """Last successful data sync (US-12), same value as the sidebar's Live Sync Status: 'Oct 04, 2026 · 1:00 AM'."""
+    raw = get_last_updated_time()
+    try:
+        dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+        return f"{dt:%b %d, %Y} · {dt.hour % 12 or 12}:{dt:%M %p}"
+    except (TypeError, ValueError):
+        return raw or ""
 
 
 def export_file_name(program_label, cohort, status, ext="xlsx") -> str:
@@ -1631,6 +1656,11 @@ def render_executive_overview():
         unsafe_allow_html=True,
     )
 
+    # US-49 SPEED: these database reads don't depend on each other, so they run AT THE SAME TIME
+    # (each one is a few hundred ms on the hosted database). The normal calls below then find
+    # their answers in the cache; if one fails here, the normal call shows the real error.
+    prefetch(get_schema_load_error, get_executive_data, _load_programs, get_stage_flags)
+
     # ---- Field mapping gate: no data is shown while a mapping is broken ----
     mapping_error = check_field_mappings()
     if mapping_error:
@@ -1728,11 +1758,18 @@ def render_executive_overview():
         "Cohort": selected_cohort,
         "Program": selected_program["ProgramName"],
     }
+    # US-49 SPEED: the files are only built when a button is clicked (data=<function>), instead of
+    # building both on every page load. Everything they need is worked out now, in this run.
+    filters_json = json.dumps(export_filters, sort_keys=True)
+    user_label = _current_user_label()
+    labels_key = tuple(sorted(_stage_labels.items()))
+    pdf_kpi_items = kpi_pdf_items([c[:4] for c in cards_data])
+    export_df, export_hist = df, hist
     with f4:
         st.download_button(
             "⬇ Export Excel",
-            data=cached_export_xlsx(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
-                                    tuple(sorted(_stage_labels.items())), exported_at) if not df.empty else b"",
+            data=lambda: timed_export("Export Excel", lambda: cached_export_xlsx(
+                export_df, export_hist, filters_json, user_label, labels_key, exported_at), export_df),
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             disabled=df.empty,
@@ -1745,10 +1782,9 @@ def render_executive_overview():
     with f5:
         st.download_button(
             "⬇ Export PDF",
-            data=cached_export_pdf(df, hist, json.dumps(export_filters, sort_keys=True), _current_user_label(),
-                                   tuple(sorted(_stage_labels.items())),
-                                   kpi_pdf_items([c[:4] for c in cards_data]),
-                                   exported_at, PDF_EXPORT_VERSION) if not df.empty else b"",
+            data=lambda: timed_export("Export PDF", lambda: cached_export_pdf(
+                export_df, export_hist, filters_json, user_label, labels_key, pdf_kpi_items, exported_at,
+                PDF_EXPORT_VERSION, data_updated=data_last_updated_label()), export_df),
             file_name=pdf_name,
             mime="application/pdf",
             disabled=df.empty,
