@@ -126,7 +126,15 @@ def show_table(rows):
 def current_user_id():
     user = st.session_state.get("user", {}) or {}
     return user.get("userid") or user.get("UserID")
-
+# ------------------------------------------------------------
+# US-42: honor ?program=<ProgramID> from the Program Instances console
+# ------------------------------------------------------------
+_incoming_program = st.query_params.get("program")
+if _incoming_program:
+    try:
+        st.session_state["pi_target_program"] = int(_incoming_program)
+    except (TypeError, ValueError):
+        st.session_state.pop("pi_target_program", None)
 
 # ---------------------------------------------------------------------------
 # Cached reads (cleared right after the matching save, so longer TTLs are safe)
@@ -277,7 +285,137 @@ def field_mapping_section():
 
 field_mapping_section()
 
+# ============================================================
+# PROGRAM INSTANCES CONSOLE (US-42)
+# ============================================================
+from db_connect import get_program_instances, set_program_owner
 
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_program_instances():
+    return get_program_instances() or []
+
+
+section_divider()
+section_header(
+    "Program Instances",
+    "Every program instance running on the platform. Each row links directly to that program's "
+    "configuration (stage labels, KPI tiles, at-risk threshold). New instances appear here automatically.",
+)
+
+
+@st.fragment
+def program_instances_section():
+    instances = cached_program_instances()
+
+    if not instances:
+        st.info("No program instances exist yet. Create one from the Student Roster's Active Program panel.")
+        return
+
+    # ---- Summary chips ----
+    total = len(instances)
+    active_n = sum(1 for r in instances if r.get("IsActive"))
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"**Total programs:** {total}")
+    c2.markdown(f"**Active:** {active_n}")
+    c3.markdown(f"**Inactive:** {total - active_n}")
+
+    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
+
+    # ---- Column headers (same style as the User Permissions table) ----
+    widths = [1.0, 2.6, 2.4, 1.2, 1.0, 2.4]
+    for col, label in zip(st.columns(widths, vertical_alignment="bottom"),
+                          ["Code", "Program", "Owner", "Status", "Students", "Actions"]):
+        col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+
+    # ---- One row per program ----
+    for inst in instances:
+        pid = inst["ProgramID"]
+        cols = st.columns(widths, vertical_alignment="center")
+
+        # Code
+        with cols[0]:
+            st.markdown(f"**{html.escape(str(inst['ProgramCode']))}**")
+
+        # Program name + created date
+        with cols[1]:
+            st.markdown(
+                f"{html.escape(str(inst['ProgramName']))}"
+                + (f'<div class="ac-note-sm">Created '
+                   f'{inst["CreatedAt"].strftime("%b %d, %Y") if inst.get("CreatedAt") else "—"}</div>'
+                   if inst.get("CreatedAt") else "")
+            )
+
+        # Owner
+        with cols[2]:
+            if inst.get("OwnerName"):
+                st.markdown(f"{html.escape(str(inst['OwnerName']))}")
+                if inst.get("OwnerEmail"):
+                    st.markdown(f'<div class="ac-note-sm">{html.escape(str(inst["OwnerEmail"]))}</div>',
+                                unsafe_allow_html=True)
+            else:
+                st.markdown('<span class="ac-note-sm">Unassigned</span>', unsafe_allow_html=True)
+
+        # Status pill
+        with cols[3]:
+            if inst.get("IsActive"):
+                st.markdown('<span class="ac-chip" style="color:#15803D;background:#ECFDF3;'
+                            'border-color:#BBF7D0;">ACTIVE</span>', unsafe_allow_html=True)
+            else:
+                st.markdown('<span class="ac-chip" style="color:#B45309;background:#FFFBEB;'
+                            'border-color:#FDE68A;">INACTIVE</span>', unsafe_allow_html=True)
+
+        # Student count
+        with cols[4]:
+            st.markdown(f"{int(inst.get('StudentCount') or 0):,}")
+
+        # Actions: Configure link + owner picker
+        with cols[5]:
+            act_left, act_right = st.columns([1.2, 1])
+            with act_left:
+                # Deep link into this program's configuration on the same page
+                # (the Stage Labels + KPI Tiles sections read ?program=<ProgramID> below)
+                st.page_link(
+                    "dashboard_views/admin_config.py",
+                    label="⚙ Configure",
+                    query_params={"program": str(pid)},
+                )
+            with act_right:
+                users = cached_users("") or []   # cached list, no extra DB hit per row
+                owner_options = ["— Unassigned —"] + [
+                    f"{u['FirstName']} {u['LastName']} ({u['UserID']})" for u in users
+                ]
+                current_owner = next(
+                    (f"{u['FirstName']} {u['LastName']} ({u['UserID']})"
+                     for u in users if u["UserID"] == inst.get("OwnerUserID")),
+                    "— Unassigned —"
+                )
+                picked = st.selectbox(
+                    f"Owner for {pid}",
+                    owner_options,
+                    index=owner_options.index(current_owner) if current_owner in owner_options else 0,
+                    key=f"owner_pick_{pid}",
+                    label_visibility="collapsed",
+                )
+                if picked != current_owner and st.button("Save", key=f"owner_save_{pid}"):
+                    require_edit()
+                    new_uid = None if picked.startswith("—") else picked.rsplit("(", 1)[1].rstrip(")")
+                    ok, err = set_program_owner(pid, new_uid)
+                    if ok:
+                        cached_program_instances.clear()
+                        st.session_state["pi_flash"] = (True, f"Owner updated for {inst['ProgramCode']}.")
+                        st.rerun(scope="fragment")
+                    else:
+                        st.session_state["pi_flash"] = (False, err)
+                        st.rerun(scope="fragment")
+
+    flash = st.session_state.pop("pi_flash", None)
+    if flash:
+        (st.success if flash[0] else st.error)(flash[1])
+
+
+program_instances_section()
 # ============================================================
 # PROGRAM-SPECIFIC THRESHOLDS AND TERMINOLOGIES (card layout)
 #   1) At-Risk Threshold (US-27): one number per program, used for every stage
@@ -541,7 +679,16 @@ def stage_labels_section():
                 )
             with c_prog:
                 if prog_by_label:
-                    lbl_program = st.selectbox("Program", list(prog_by_label), key="lbl_program")
+                    # US-42: pre-select the program the console linked to (if any)
+                    target_pid = st.session_state.get("pi_target_program")
+                    labels_list = list(prog_by_label)
+                    default_idx = 0
+                    if target_pid is not None:
+                        for i, lbl in enumerate(labels_list):
+                            if prog_by_label[lbl] == target_pid:
+                                default_idx = i
+                                break
+                    lbl_program = st.selectbox("Program", labels_list, index=default_idx, key="lbl_program")
 
         with st.container(key="acbody_labels"):
             if not prog_by_label:
@@ -675,8 +822,17 @@ def kpi_tiles_section():
                 )
             with c_prog:
                 if programs:
+                    # US-42: pre-select the program the console linked to (if any)
+                    target_pid = st.session_state.get("pi_target_program")
+                    default_idx = 0
+                    if target_pid is not None:
+                        for i, p in enumerate(programs):
+                            if p["ProgramID"] == target_pid:
+                                default_idx = i
+                                break
                     prog_choice = st.selectbox(
                         "Program", programs,
+                        index=default_idx,
                         format_func=lambda p: f"{p['ProgramCode']} — {p['ProgramName']}",
                         key="kpi_program",
                     )
