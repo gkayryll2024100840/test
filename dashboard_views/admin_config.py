@@ -345,6 +345,7 @@ def program_instances_section():
                 + (f'<div class="ac-note-sm">Created '
                    f'{inst["CreatedAt"].strftime("%b %d, %Y") if inst.get("CreatedAt") else "—"}</div>'
                    if inst.get("CreatedAt") else "")
+                unsafe_allow_html=True,
             )
 
         # Owner
