@@ -189,9 +189,17 @@ def trigger_data_sync(login_id=None):
         cursor.close()
         conn.close()
 
-        with open("last_sync.txt", "w") as f:
-            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        return True  
+        # The sync time is saved in the database (App_Settings) so every app process / server restart
+        # sees the same value. last_sync.txt is only a local fallback: on a hosted app the disk is reset
+        # to the git version on every reboot, which is why the sidebar used to be stuck on an old date.
+        synced_at = _now_local().strftime("%Y-%m-%d %H:%M:%S")
+        set_setting("last_sync", synced_at, "SCHEDULER" if login_id == "SCHEDULED" else login_id)
+        try:
+            with open("last_sync.txt", "w") as f:
+                f.write(synced_at)
+        except Exception:
+            pass
+        return True
 
     except mysql.connector.Error as err:
         msg = format_mysql_error(err)
@@ -298,7 +306,18 @@ def get_student_roster_data(program_id=None):
         raise e
 
 def get_last_updated_time():
-    """Checks last_sync.txt for the last successful sync timestamp."""
+    """Last successful sync timestamp: App_Settings first (shared by every process), last_sync.txt as fallback.
+
+    Uses the newest of the last manual/any sync (last_sync) and the last SUCCESSFUL nightly run
+    (last_scheduled_run, the same value Admin Config > Data Refresh Schedule shows).
+    """
+    vals = get_settings(["last_sync", "last_scheduled_run", "last_scheduled_status"])
+    candidates = [vals.get("last_sync")]
+    if vals.get("last_scheduled_status") == "Success":
+        candidates.append(vals.get("last_scheduled_run"))
+    candidates = [c for c in candidates if c]
+    if candidates:
+        return max(candidates)   # same "YYYY-MM-DD HH:MM:SS" format, so text order = time order
     try:
         if os.path.exists("last_sync.txt"):
             with open("last_sync.txt", "r") as f:
