@@ -26,6 +26,7 @@ from db_connect import (
 from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
 from permissions import require_edit
+from dashboard_views.components import _last_sync_time
 
 USERS_PER_PAGE = 20
 
@@ -875,6 +876,7 @@ def sync_logs_section():
         with st.spinner("Running sync attempt..."):
             success = trigger_data_sync(login_id=active_login_id)
         cached_sync_logs.clear()      # show the new attempt in the table
+        _last_sync_time.clear()       # sidebar's Live Sync Status shows the new time right away
         # Keep the result in session_state: the full-page rerun below used to wipe the message
         # before it could be read ("too fast", or never visible).
         now = datetime.now()
