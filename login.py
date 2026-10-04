@@ -8,8 +8,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from db_connect import get_db_connection, format_mysql_error
 from system_log import log_sync_attempt_local
-from dashboard_views.components import render_app_shell
-from perf import timed   # TEMP: timing ([TIMING] lines in the terminal)
+from dashboard_views.components import render_app_shell, inject_light_default
+from perf import timed   # US-49: load-time measurement ([TIMING] lines in the terminal)
 from prefetch import prefetch
 
 load_dotenv()
@@ -34,6 +34,7 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = f"SESSION-{uuid.uuid4().hex[:6].upper()}"
 
 MAX_FAILED_ATTEMPTS = 3
+PAGE_LOAD_TARGET_MS = 5000   # US-49: every page should load in under 5 seconds
 
 if 'failed_attempts' not in st.session_state:
     st.session_state.failed_attempts = 0
@@ -125,7 +126,7 @@ def verify_login(user_id, password):
 # -------------------------------------Streamlit UI-----------------------------------------------------
 
 if not st.session_state.get('user'):
-    _login_t0 = __import__("time").perf_counter()   # TEMP timing
+    _login_t0 = __import__("time").perf_counter()   # US-49 timing
     # ----- Resolve logo + background from the assets folder -----
     logo_path = find_asset(
         "assets/mapua-university-logo.png",
@@ -151,201 +152,213 @@ if not st.session_state.get('user'):
         '<span style="font-size:22px;font-weight:700;color:#B91C2C;">PULSE</span>'
     )
 
-    st.markdown(
-        f"""
-        <style>
-        [data-testid="stSidebar"],
-        [data-testid="stSidebarCollapseButton"],
-        [data-testid="stExpandSidebarButton"] {{
-            display: none !important;
-        }}
+    # The whole login page lives in ONE slot that is cleared the moment login succeeds. Without this, Streamlit
+    # kept showing the old login elements while the dashboard loaded - and since their styling is removed first,
+    # the logo flashed at full size with a bare "Welcome Back!" under the dashboard header.
+    _login_slot = st.empty()
+    with _login_slot.container():
+        # light mode on a first visit (Dark stays in the ⋮ menu). Dashboard pages get this through the
+        # hidden theme-detector iframe instead, so nothing extra is added above their header.
+        inject_light_default()
 
-        [data-testid="stAppViewContainer"] {{
-            background:
-                linear-gradient(160deg, rgba(185,28,44,0.75) 0%, rgba(217,98,43,0.75) 45%, rgba(240,169,58,0.75) 100%),
-                {bg_layer};
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-        }}
-        [data-testid="stHeader"] {{
-            background: rgba(0,0,0,0);
-        }}
-
-        /* ===== PAGE CONTAINER ===== */
-        [data-testid="stMainBlockContainer"],
-        [data-testid="stAppViewBlockContainer"],
-        section.main > div.block-container {{
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-        }}
-
-        /* The card itself: also widened so it fills its wrapper */
-        .st-key-login_card,
-        .st-key-login_card > div,
-        .st-key-login_card [data-testid="stVerticalBlock"] {{
-            max-width: 640px !important;      /* was 360px — matches the outer container */
-            width: 100% !important;
-            margin-left: auto !important;
-            margin-right: auto !important;
-        }}
-
-        .st-key-login_card {{
-            background: rgba(255, 255, 255, 0.16);
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 16px;
-            padding: 28px 36px 26px 36px;     /* slightly more padding for the wider card */
-            backdrop-filter: blur(8px);
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-        }}
-
-        /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
-           position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is.
-           To make the card wider/narrower, change the 540px. */
-        .st-key-login_card {{
-            position: fixed !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            width: min(540px, 92vw) !important;
-            max-width: none !important;
-            max-height: 96vh;
-            overflow-y: auto;
-            margin: 0 !important;
-            z-index: 10;
-        }}
-
-        .login-logo {{
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: #FFFFFF;
-            margin: 0 auto 12px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }}
-        .login-logo img {{
-            width: 42px;
-            height: 42px;
-            object-fit: contain;
-        }}
-
-        .login-title {{
-            font-size: 20px;
-            font-weight: 700;
-            color: #1A1F36;
-            margin-bottom: 16px;
-            text-align: center;
-            width: 100%;
-        }}
-
-        /* ---- Inputs: target every Streamlit wrapper layer ---- */
-        .st-key-login_card [data-testid="stTextInput"] label,
-        .st-key-login_card [data-testid="stTextInput"] label p {{
-            font-size: 12px !important;
-            color: #1A1F36 !important;
-            font-weight: 500 !important;
-            margin-bottom: 2px !important;
-            line-height: 1.2 !important;
-            text-align: left !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] {{
-            margin-bottom: 4px !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] input,
-        .st-key-login_card [data-testid="stTextInput"] input:focus,
-        .st-key-login_card [data-baseweb="input"],
-        .st-key-login_card [data-baseweb="base-input"],
-        .st-key-login_card [data-baseweb="input"] > div,
-        .st-key-login_card div[data-testid="stTextInputRootElement"] {{
-            background: #FFFFFF !important;
-            border: none !important;
-            border-radius: 6px !important;
-            box-shadow: none !important;
-            min-height: 36px !important;      /* slightly taller inputs now that they're wider */
-            height: 36px !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] input {{
-            font-size: 14px !important;
-            padding: 0 12px !important;
-            color: #1A1F36 !important;
-            line-height: 36px !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] > div {{
-            border: none !important;
-            box-shadow: none !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{
-            border: none !important;
-            box-shadow: none !important;
-        }}
-        .st-key-login_card [data-testid="stVerticalBlock"],
-        .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
-            gap: 6px !important;
-        }}
-        .st-key-login_card [data-testid="stElementContainer"] {{
-            margin: 0 !important;
-            padding: 0 !important;
-        }}
-        .st-key-login_card [data-testid="stTextInputField"]::-ms-reveal,
-        .st-key-login_card [data-testid="stTextInputField"]::-ms-clear {{
-            display: none;
-        }}
-
-        /* ---- password show/hide (eye) button: white, inside the input, grey icon ---- */
-        .st-key-login_card [data-testid="stTextInput"] button {{
-            background: #FFFFFF !important;
-            color: #6B7280 !important;
-            border: none !important;
-            box-shadow: none !important;
-            width: auto !important;
-            min-width: 36px !important;
-            height: 36px !important;
-            margin: 0 !important;
-            padding: 0 10px !important;
-            border-radius: 0 6px 6px 0 !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] button:hover {{
-            color: #12172B !important;
-        }}
-        .st-key-login_card [data-testid="stTextInput"] button svg {{
-            fill: currentColor !important;
-            color: inherit !important;
-        }}
-
-        /* ---- Login button (only this one: the old rule also hit the password's eye button) ---- */
-        .st-key-login_button button {{
-            background: #12172B !important;
-            color: #FFFFFF !important;
-            border: none !important;
-            border-radius: 6px !important;
-            font-weight: 600 !important;
-            font-size: 14px !important;
-            width: 100% !important;
-            height: 40px !important;
-            padding: 0 !important;
-            margin-top: 10px !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ----- Card content -----
-    with st.container(key="login_card"):
         st.markdown(
-            f'<div class="login-logo">{logo_html}</div>'
-            '<div class="login-title">Welcome Back!</div>',
+            f"""
+            <style>
+            [data-testid="stSidebar"],
+            [data-testid="stSidebarCollapseButton"],
+            [data-testid="stExpandSidebarButton"] {{
+                display: none !important;
+            }}
+
+            [data-testid="stAppViewContainer"] {{
+                background:
+                    linear-gradient(160deg, rgba(185,28,44,0.75) 0%, rgba(217,98,43,0.75) 45%, rgba(240,169,58,0.75) 100%),
+                    {bg_layer};
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+            }}
+            [data-testid="stHeader"] {{
+                background: rgba(0,0,0,0);
+            }}
+
+            /* ===== PAGE CONTAINER ===== */
+            [data-testid="stMainBlockContainer"],
+            [data-testid="stAppViewBlockContainer"],
+            section.main > div.block-container {{
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }}
+
+            /* The card itself: also widened so it fills its wrapper */
+            .st-key-login_card,
+            .st-key-login_card > div,
+            .st-key-login_card [data-testid="stVerticalBlock"] {{
+                max-width: 640px !important;      /* was 360px — matches the outer container */
+                width: 100% !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }}
+
+            .st-key-login_card {{
+                background: rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(255, 255, 255, 0.22);
+                border-radius: 16px;
+                padding: 28px 36px 26px 36px;     /* slightly more padding for the wider card */
+                backdrop-filter: blur(8px);
+                text-align: center;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            }}
+
+            /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
+               position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is.
+               To make the card wider/narrower, change the 540px. */
+            .st-key-login_card {{
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) !important;
+                width: min(540px, 92vw) !important;
+                max-width: none !important;
+                max-height: 96vh;
+                overflow-y: auto;
+                margin: 0 !important;
+                z-index: 10;
+            }}
+
+            .login-logo {{
+                width: 64px;
+                height: 64px;
+                border-radius: 50%;
+                background: #FFFFFF;
+                margin: 0 auto 12px auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }}
+            .login-logo img {{
+                width: 42px;
+                height: 42px;
+                object-fit: contain;
+            }}
+
+            .login-title {{
+                font-size: 20px;
+                font-weight: 700;
+                color: #1A1F36;
+                margin-bottom: 16px;
+                text-align: center;
+                width: 100%;
+            }}
+
+            /* ---- Inputs: target every Streamlit wrapper layer ---- */
+            .st-key-login_card [data-testid="stTextInput"] label,
+            .st-key-login_card [data-testid="stTextInput"] label p {{
+                font-size: 12px !important;
+                color: #1A1F36 !important;
+                font-weight: 500 !important;
+                margin-bottom: 2px !important;
+                line-height: 1.2 !important;
+                text-align: left !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] {{
+                margin-bottom: 4px !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] input,
+            .st-key-login_card [data-testid="stTextInput"] input:focus,
+            .st-key-login_card [data-baseweb="input"],
+            .st-key-login_card [data-baseweb="base-input"],
+            .st-key-login_card [data-baseweb="input"] > div,
+            .st-key-login_card div[data-testid="stTextInputRootElement"] {{
+                background: #FFFFFF !important;
+                border: none !important;
+                border-radius: 6px !important;
+                box-shadow: none !important;
+                min-height: 36px !important;      /* slightly taller inputs now that they're wider */
+                height: 36px !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] input {{
+                font-size: 14px !important;
+                padding: 0 12px !important;
+                color: #1A1F36 !important;
+                line-height: 36px !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] > div {{
+                border: none !important;
+                box-shadow: none !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{
+                border: none !important;
+                box-shadow: none !important;
+            }}
+            .st-key-login_card [data-testid="stVerticalBlock"],
+            .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
+                gap: 6px !important;
+            }}
+            .st-key-login_card [data-testid="stElementContainer"] {{
+                margin: 0 !important;
+                padding: 0 !important;
+            }}
+            .st-key-login_card [data-testid="stTextInputField"]::-ms-reveal,
+            .st-key-login_card [data-testid="stTextInputField"]::-ms-clear {{
+                display: none;
+            }}
+
+            /* ---- password show/hide (eye) button: white, inside the input, grey icon ---- */
+            .st-key-login_card [data-testid="stTextInput"] button {{
+                background: #FFFFFF !important;
+                color: #6B7280 !important;
+                border: none !important;
+                box-shadow: none !important;
+                width: auto !important;
+                min-width: 36px !important;
+                height: 36px !important;
+                margin: 0 !important;
+                padding: 0 10px !important;
+                border-radius: 0 6px 6px 0 !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] button:hover {{
+                color: #12172B !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] button svg {{
+                fill: currentColor !important;
+                color: inherit !important;
+            }}
+
+            /* ---- Login button (only this one: the old rule also hit the password's eye button) ---- */
+            .st-key-login_button button {{
+                background: #12172B !important;
+                color: #FFFFFF !important;
+                border: none !important;
+                border-radius: 6px !important;
+                font-weight: 600 !important;
+                font-size: 14px !important;
+                width: 100% !important;
+                height: 40px !important;
+                padding: 0 !important;
+                margin-top: 10px !important;
+            }}
+            </style>
+            """,
             unsafe_allow_html=True,
         )
 
-        input_id = st.text_input("UserID", key="login_userid")
-        input_pass = st.text_input("Password", type="password", key="login_password")
-        button_login = st.button("Login", key="login_button", use_container_width=True)
-        msg_slot = st.container()   # login messages show inside the card (the card is pinned to the centre)
+        # ----- Card content -----
+        with st.container(key="login_card"):
+            st.markdown(
+                f'<div class="login-logo">{logo_html}</div>'
+                '<div class="login-title">Welcome Back!</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Inside a form, the boxes save their value on every change. Outside one, Streamlit only saved
+            # on Enter / click-away, so browser autofill (Google saved passwords) looked empty when Login was clicked.
+            with st.form("login_form", border=False):
+                input_id = st.text_input("UserID", key="login_userid")
+                input_pass = st.text_input("Password", type="password", key="login_password")
+                button_login = st.form_submit_button("Login", key="login_button", use_container_width=True)
+            msg_slot = st.container()   # login messages show inside the card (the card is pinned to the centre)
 
     # ↓↓↓ Handlers MUST be indented inside the same `if` block that defines the widgets
     if button_login:
@@ -361,6 +374,7 @@ if not st.session_state.get('user'):
                     st.session_state["selected_student_override"] = str(
                         st.query_params.get("student_id")
                     ).strip()
+                _login_slot.empty()   # remove the login page now, so it can't flash during the dashboard load
                 st.rerun()
             else:
                 msg_slot.error(result)
@@ -404,14 +418,17 @@ else:
 
     pg = st.navigation(allowed, position="sidebar")
 
-    # SPEED: the header/sidebar needs 2 slow reads (permission + refresh time). Run them at the same time
-    # so their answers are already cached when render_app_shell() asks (same functions, same arguments).
-    from dashboard_views.components import _permission_for_user, _refresh_time
-    with timed("app shell prefetch (parallel)"):
-        prefetch(lambda: _permission_for_user(user.get("userid")) if user.get("userid") is not None else None,
-                 _refresh_time)
+    # SPEED: the header/sidebar needs 3 slow reads (permission + refresh time + last sync time). Run them at the
+    # same time so their answers are already cached when render_app_shell() asks (same functions, same arguments).
+    from dashboard_views.components import _permission_for_user, _refresh_time, _last_sync_time
+    # US-49: the three parts are timed separately, and the TOTAL line is the whole page load on the server
+    # (the number to compare with the 5-second target; it gets an "OVER 5 s" warning when it's slower)
+    with timed(f"TOTAL page load: {pg.title}", warn_over_ms=PAGE_LOAD_TARGET_MS):
+        with timed("app shell prefetch (parallel)"):
+            prefetch(lambda: _permission_for_user(user.get("userid")) if user.get("userid") is not None else None,
+                     _refresh_time, _last_sync_time)
 
-    with timed("app shell (header + sidebar)"):
-        render_app_shell(user, page_key=pg.title)
-    with timed(f"page: {pg.title}"):
-        pg.run()
+        with timed("app shell (header + sidebar)"):
+            render_app_shell(user, page_key=pg.title)
+        with timed(f"page: {pg.title}"):
+            pg.run()
