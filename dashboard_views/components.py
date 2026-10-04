@@ -806,11 +806,67 @@ THEME_DETECTOR_JS = """
 """
 
 
+# Light mode by default, while keeping Light/Dark in the ⋮ menu > Settings.
+# (Setting [theme] base="light" in config.toml would remove that menu choice.)
+# Streamlit saves the menu choice in the browser as stActiveTheme-<page path>-v2 = "Light"/"Dark"/"System";
+# with nothing saved it follows the computer's setting (and it remembers a menu choice forever).
+#   - Every NEW TAB starts in "Light" (marker kept in sessionStorage, which is per tab), even if Dark
+#     was picked in an earlier visit.
+#   - Inside that tab, a choice the user makes in the menu is kept, also across reloads.
+#   - Streamlit only reads the saved theme when the page first loads, so applying it needs a reload.
+#     A reload starts a NEW Streamlit session (= logged out), so it is only allowed on the login page;
+#     on dashboard pages the script just saves the value and never reloads.
+LIGHT_DEFAULT_JS_TEMPLATE = """
+<script>
+(function () {
+  try {
+    var ALLOW_RELOAD = __ALLOW_RELOAD__;
+    var w = window.parent, ls = w.localStorage, ss = w.sessionStorage;
+    var key = "stActiveTheme-" + w.location.pathname + "-v2";
+    var MARKER = "pp-light-default-applied";
+    var LIGHT = '"Light"';
+    var saved = [];
+    for (var i = 0; i < ls.length; i++) {
+      var k = ls.key(i);
+      if (/^stActiveTheme-.*-v2$/.test(k)) saved.push(k);
+    }
+    var current = ls.getItem(key);
+    ls.removeItem(MARKER);                                       // left over from the previous version
+
+    if (ss.getItem(MARKER) === null) {                           // new tab: start in Light everywhere
+      ss.setItem(MARKER, "1");
+      saved.forEach(function (k) { ls.setItem(k, LIGHT); });
+      ls.setItem(key, LIGHT);
+      if (ALLOW_RELOAD && current !== LIGHT) w.location.reload();
+      return;
+    }
+    if (current !== null) return;                                // the user's own choice for this page
+    // a page address not seen yet in this tab: store the tab's current choice for it (no reload needed -
+    // Streamlit keeps using the theme it loaded with while you move between pages)
+    ls.setItem(key, saved.length ? ls.getItem(saved[0]) : LIGHT);
+  } catch (e) {}                                                 // storage blocked: keep Streamlit's default
+})();
+</script>
+"""
+LIGHT_DEFAULT_JS = LIGHT_DEFAULT_JS_TEMPLATE.replace("__ALLOW_RELOAD__", "false")         # dashboard pages
+LIGHT_DEFAULT_LOGIN_JS = LIGHT_DEFAULT_JS_TEMPLATE.replace("__ALLOW_RELOAD__", "true")    # login page only
+
+
+def inject_light_default():
+    """Login page: makes Light the starting theme of each new tab (Dark stays available in the ⋮ menu)."""
+    try:
+        import streamlit.components.v1 as components
+        components.html(LIGHT_DEFAULT_LOGIN_JS, height=0)
+    except Exception:
+        pass
+
+
 def inject_theme_detector():
     """Adds the (invisible) script that tags <html data-eo-theme="light|dark"> from Streamlit's theme."""
     try:
         import streamlit.components.v1 as components
-        components.html(THEME_DETECTOR_JS, height=0)
+        # the light-mode default rides in the same hidden iframe (a separate one added a gap above the header)
+        components.html(THEME_DETECTOR_JS + LIGHT_DEFAULT_JS, height=0)
     except Exception:
         pass
 
@@ -954,8 +1010,14 @@ def _permission_for_user(user_id):
     return get_user_permission(user_id)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _last_sync_time():
+    """Last successful sync (cached 30 s; Refresh Now / Run Sync Attempt clear it right away)."""
+    return get_last_updated_time()
+
+
 def _sync_label():
-    raw = get_last_updated_time()
+    raw = _last_sync_time()
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
         try:
             dt = datetime.strptime(raw, fmt)
