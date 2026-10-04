@@ -1,5 +1,5 @@
 # STUDENT ROSTER.PY
-# UPDATED: 9/30/2026
+# UPDATED: 10/4/2026
 #needs optimization
 
 import html
@@ -364,11 +364,13 @@ if not st.session_state.get("logged_in") and not st.session_state.get("user"):
 # ---------------------------------------------------------------
 user = st.session_state.get("user", {})
 role = user.get("role")
+# login.py stores the user dict with lowercase keys, so try both spellings
+user_id = user.get("userid") or user.get("UserID")
 IS_PROGRAM_CHAIR = (role == "Program_Chair")
 
 if IS_PROGRAM_CHAIR:
     # Locked view: force the chair's assigned program into session state every run
-    assigned = get_user_program(user.get("UserID"))
+    assigned = get_user_program(user_id)
     if not assigned:
         st.warning(
             "⏳ You don't have a program assigned yet. Contact IT/Admin to set your "
@@ -415,7 +417,7 @@ else:
             st.session_state["active_program_code"] = ALL_LABEL if pid is None else selected_label.split(" — ")[0]
             st.session_state["active_program_set"] = True
             if pid is not None:
-                set_user_program(user.get("UserID"), pid)
+                set_user_program(user_id, pid)          # ← was user.get("UserID")
             st.success(f"Active program set to {selected_label}.")
             st.rerun()
 
@@ -434,7 +436,7 @@ else:
                         st.session_state["active_program_id"] = result
                         st.session_state["active_program_code"] = code.strip().upper()
                         st.session_state["active_program_set"] = True
-                        set_user_program(user.get("UserID"), result)
+                        set_user_program(user_id, result)
                         st.success(f"Created **{code}** and set as active.")
                         st.rerun()
                     else:
