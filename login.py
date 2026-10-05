@@ -57,7 +57,7 @@ def find_asset(*candidates):
 
 
 def log_failed_attempt(user_id, ip_address=None):
-    """Insert a wrong-password attempt into login_logs."""
+    """Insert a wrong-password attempt into Login_Logs."""
     try:
         connection = get_db_connection()
     except mysql.connector.Error:
@@ -66,7 +66,7 @@ def log_failed_attempt(user_id, ip_address=None):
     try:
         with connection.cursor(dictionary=True) as cursor:
             sql = """
-                INSERT INTO login_logs (UserID, ip_address, attempted_at)
+                INSERT INTO Login_Logs (UserID, IPAddress, AttemptedAt)
                 VALUES (%s, %s, NOW())
             """
             cursor.execute(sql, (user_id, ip_address))

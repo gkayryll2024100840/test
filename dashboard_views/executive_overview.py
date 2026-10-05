@@ -1589,6 +1589,16 @@ def _current_user_label() -> str:
     return str(user) if user else "unknown"
 
 
+def _current_user_id() -> str:
+    """The logged-in user's Users.UserID (what Export_Log.ExportedBy stores)."""
+    user = st.session_state.get("user")
+    if isinstance(user, dict):
+        for key in ("userid", "UserID", "user_id"):
+            if user.get(key):
+                return str(user[key])
+    return "unknown"
+
+
 @st.cache_resource
 def _ensure_export_log_table():
     """Creates the audit table the first time it's needed (runs once per app process)."""
@@ -1625,7 +1635,7 @@ def log_export(filters: dict, row_count: int, file_name: str):
             cur.execute(
                 "INSERT INTO Export_Log (ExportedBy, Page, Filters, RowCount, FileName) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (_current_user_label(), "Executive Overview (PDF)" if file_name.endswith(".pdf")
+                (_current_user_id(), "Executive Overview (PDF)" if file_name.endswith(".pdf")
                  else "Executive Overview (Excel)", json.dumps(filters), row_count, file_name),
             )
             conn.commit()
