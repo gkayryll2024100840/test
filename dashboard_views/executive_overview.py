@@ -374,8 +374,8 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_head [data-testid="stHorizontalBlock"]{min-width:880px !important;align-items:flex-end !important;}
 .st-key-eo_table [data-testid="stColumn"],
 .st-key-eo_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
-        display:flex !important;flex-direction:column !important;width:auto !important;min-width:0 !important;
-        flex:var(--column-flex, 1 1 0%) !important;}
+        display:flex !important;flex-direction:column !important;justify-content:center !important;
+        min-width:0 !important;overflow:visible !important;}
 .eo-th{font-size:11.5px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--eo-muted);
        white-space:normal !important;word-break:keep-all !important;overflow-wrap:normal !important;
        line-height:1.25 !important;display:block !important;}
@@ -467,9 +467,9 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
   .st-key-eo_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
     display: flex !important;
     flex-direction: column !important;
-    width: auto !important;
+    justify-content: center !important;
     min-width: 0 !important;
-    flex: var(--column-flex, 1 1 0%) !important;
+    overflow: visible !important;
   }
   .eo-th {
     font-size: 11px !important;
