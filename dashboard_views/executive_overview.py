@@ -221,12 +221,6 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
     max-width: none !important;
     min-width: 0 !important;
 }
-/* Program Chair: read-only Program filter */
-.eo-locked-filter{display:flex;flex-direction:column;gap:4px;}
-.eo-locked-label{font-size:14px;font-weight:600;color:var(--eo-label);}
-.eo-locked-value{font-size:14px;color:var(--eo-text);background:var(--eo-surface-2);
-    border:1px solid var(--eo-border);border-radius:6px;padding:8px 12px;
-}
 
 /* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
 .eo-header{padding-bottom:10px;border-bottom:1px solid var(--eo-border);margin:0;}
@@ -1595,6 +1589,16 @@ def _current_user_label() -> str:
     return str(user) if user else "unknown"
 
 
+def _current_user_id() -> str:
+    """The logged-in user's Users.UserID (what Export_Log.ExportedBy stores)."""
+    user = st.session_state.get("user")
+    if isinstance(user, dict):
+        for key in ("userid", "UserID", "user_id"):
+            if user.get(key):
+                return str(user[key])
+    return "unknown"
+
+
 @st.cache_resource
 def _ensure_export_log_table():
     """Creates the audit table the first time it's needed (runs once per app process)."""
@@ -1631,7 +1635,7 @@ def log_export(filters: dict, row_count: int, file_name: str):
             cur.execute(
                 "INSERT INTO Export_Log (ExportedBy, Page, Filters, RowCount, FileName) "
                 "VALUES (%s, %s, %s, %s, %s)",
-                (_current_user_label(), "Executive Overview (PDF)" if file_name.endswith(".pdf")
+                (_current_user_id(), "Executive Overview (PDF)" if file_name.endswith(".pdf")
                  else "Executive Overview (Excel)", json.dumps(filters), row_count, file_name),
             )
             conn.commit()
@@ -1757,12 +1761,12 @@ def render_executive_overview():
         # Program is chosen before Cohort in code (the cohort list depends on it)
         with f1:
             if _is_program_chair:
-                # Locked: show the assigned program as a read-only caption (no dropdown)
-                st.markdown(
-                    f'<div class="eo-locked-filter"><span class="eo-locked-label">Program</span>'
-                    f'<span class="eo-locked-value">{html.escape(_chair_program["ProgramCode"])} — '
-                    f'{html.escape(_chair_program["ProgramName"])} 🔒</span></div>',
-                    unsafe_allow_html=True,
+                # Locked: a disabled dropdown, so it lines up with (and looks like) the other filters
+                st.selectbox(
+                    "Program 🔒",
+                    [f'{_chair_program["ProgramCode"]} — {_chair_program["ProgramName"]}'],
+                    disabled=True,
+                    key="eo_program_locked",
                 )
                 selected_program = {
                     "ProgramID": _chair_program["ProgramID"],
