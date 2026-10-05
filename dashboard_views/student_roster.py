@@ -448,6 +448,52 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   .st-key-sr_refresh { justify-content: stretch !important; }
   .st-key-sr_refresh button { width: 100% !important; }
 }
+
+/* ---- Tablets (added): the sideways-scrolling table above gave every column the same width, so long
+   cells ("Defended for Completion", long adviser names) ran into the next column. Use the desktop
+   column proportions again (col_widths: 10 columns with Program, 9 without), on a slightly wider table. ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-roster_table [data-testid="stHorizontalBlock"],
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] { min-width: 1250px !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(1) { flex: 0.9 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(2) { flex: 1.4 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(3) { flex: 0.7 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(4) { flex: 0.8 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(5) { flex: 1.6 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(6) { flex: 1.2 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(7) { flex: 1.2 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(8) { flex: 1.8 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(9) { flex: 1.0 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(10) { flex: 0.7 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(1) { flex: 0.9 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(2) { flex: 1.5 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(3) { flex: 0.8 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(5) { flex: 1.2 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(6) { flex: 1.2 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(7) { flex: 1.8 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(8) { flex: 1.0 1 0 !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(9) { flex: 0.7 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(1) { flex: 0.9 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(2) { flex: 1.4 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(3) { flex: 0.7 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(4) { flex: 0.8 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(5) { flex: 1.6 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(6) { flex: 1.2 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(7) { flex: 1.2 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(8) { flex: 1.8 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(9) { flex: 1.0 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(10) { flex: 0.7 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(1) { flex: 0.9 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(2) { flex: 1.5 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(3) { flex: 0.8 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(5) { flex: 1.2 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(6) { flex: 1.2 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(7) { flex: 1.8 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(8) { flex: 1.0 1 0 !important; }
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(9) { flex: 0.7 1 0 !important; }
+}
 </style>"""
  
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -605,39 +651,54 @@ html[data-eo-theme="dark"] [data-testid="stPopoverBody"]:has(.ma-head){--sr-h-te
 .st-key-ma_top{padding-bottom:14px;margin-bottom:6px;border-bottom:1px solid var(--sr-h-border);}
 .ma-head{display:block;width:100%;}
 .ma-mid{display:block;width:100%;}
-.ma-title{font-size:18px;font-weight:700;color:var(--sr-h-text);display:flex;align-items:center;gap:10px;}
+.ma-title{white-space:nowrap;font-size:18px;font-weight:700;color:var(--sr-h-text);display:flex;align-items:center;gap:10px;}
 .ma-count{font-size:12px;font-weight:700;color:#B91B21;background:#FEF2F2;border:1px solid #FECACA;
         border-radius:999px;padding:2px 9px;}
 html[data-eo-theme="dark"] .ma-count{color:#FCA5A5;background:rgba(185,27,33,.18);border-color:rgba(185,27,33,.4);}
 .ma-desc{font-size:13px;color:var(--sr-h-label);line-height:1.5;}
 /* one box per student */
-[class*="st-key-ma_row_"]{border:1px solid var(--sr-h-border);border-radius:12px;padding:12px 16px;margin-top:4px;}
-[class*="st-key-ma_row_"] [data-testid="stColumn"]:not(:first-child){border-left:1px solid var(--sr-h-border);
-        padding-left:16px;}
+[class*="st-key-ma_row_"]{border:1px solid var(--sr-h-border);border-radius:12px;padding:12px 16px;margin-top:4px;
+        flex-wrap:nowrap !important;}
+/* (Streamlit wraps each part in a stLayoutWrapper box - that wrapper is what sits in the row) */
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_who_"]){flex:1.6 1 0 !important;min-width:0 !important;}
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_what_"]),[data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_act_"]){border-left:1px solid var(--sr-h-border);
+        padding-left:16px;min-width:0 !important;}
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_what_"]){flex:2.4 1 0 !important;}
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_act_"]){flex:1.1 1 0 !important;}
 .ma-name{font-size:15px;font-weight:600;color:var(--sr-h-text) !important;line-height:1.35;
         text-decoration:none !important;}
 .ma-name:hover{text-decoration:underline !important;}
 /* inside the panel: no extra space under text blocks, so everything centres exactly */
 [data-testid="stPopoverBody"]:has(.ma-head) [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
-.st-key-ma_show_seen{display:flex;justify-content:flex-end;width:100%;}
-.st-key-ma_show_seen label{margin-left:auto;margin-right:16px;}   /* lines up with the Acknowledge buttons */
+.st-key-ma_toprow{flex-wrap:nowrap !important;}
+.st-key-ma_show_seen{margin-right:16px;}   /* lines up with the Acknowledge buttons */
+.st-key-ma_show_seen label{align-items:center !important;}   /* switch in the middle of its text */
+.st-key-ma_show_seen label p{white-space:nowrap;}
 .ma-sn{font-size:12px;color:var(--sr-h-label);margin-top:2px;}
 .ma-change{font-size:14px;color:var(--sr-h-text);line-height:1.4;}
 .ma-bad{color:#B91B21;font-weight:700;}
 html[data-eo-theme="dark"] .ma-bad{color:#FCA5A5;}
 .ma-when{font-size:12px;color:var(--sr-h-label);margin-top:3px;}
 .ma-empty{font-size:14px;color:var(--sr-h-label);padding:6px 0;}
-/* phones: the 3 parts of a box stack, so the dividers go on top instead of the left */
+/* phones: Name + ID with the button on the right, then the status change underneath (full width) */
 @media (max-width: 640px) {
-  [class*="st-key-ma_row_"] [data-testid="stColumn"]:not(:first-child){border-left:none;padding-left:0;
-          border-top:1px solid var(--sr-h-border);padding-top:8px;}
+  [class*="st-key-ma_row_"]{flex-wrap:wrap !important;row-gap:10px !important;}
+  [data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_who_"]){flex:1 1 0 !important;order:1;}
+  [data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_act_"]){flex:0 0 auto !important;width:auto !important;order:2;border-left:none;
+          padding-left:0;}
+  [data-testid="stLayoutWrapper"]:has(> [class*="st-key-ma_what_"]){flex:1 1 100% !important;order:3;border-left:none;padding-left:0;
+          border-top:1px solid var(--sr-h-border);padding-top:10px;}
+  .st-key-ma_show_seen{margin-right:0;}
+  [data-testid="stPopoverBody"]:has(.ma-head){width:calc(100vw - 20px) !important;max-width:calc(100vw - 20px) !important;
+          padding:16px 14px !important;}
+  .ma-title{font-size:16px;gap:8px;}
+  .st-key-ma_show_seen label p{font-size:13px;}
 }
 </style>"""
 MA_RED_DOT_CSS = """<style>
 .st-key-ma_bell button::after{content:"";position:absolute;top:-6px;right:-6px;width:14px;height:14px;
         border-radius:50%;background:#DC2626;box-shadow:0 0 0 2px var(--background-color, #FFFFFF);}
 </style>"""
-MA_WIDTHS = [1.6, 2.4, 1.1]   # Name + ID | What changed + when | Acknowledge
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -675,12 +736,13 @@ def my_alerts_bell():
 
     with st.popover(":material/notifications:", key="ma_bell"):
         with st.container(key="ma_top"):
-            # "My Alerts" and the switch on one line (switch at the right edge), the description underneath
-            c_head, c_toggle = st.columns([3, 1.3], vertical_alignment="center")
-            count = f'<span class="ma-count">{len(new_alerts)} new</span>' if new_alerts else ""
-            c_head.markdown(f'<div class="ma-head"><div class="ma-title">My Alerts {count}</div></div>',
-                            unsafe_allow_html=True)
-            c_toggle.toggle("Show acknowledged", key="ma_show_seen")
+            # "My Alerts" and the switch on one line on every screen size, the description underneath
+            # (a horizontal container, not st.columns: columns stack on top of each other on phones)
+            with st.container(key="ma_toprow", horizontal=True, vertical_alignment="center"):
+                count = f'<span class="ma-count">{len(new_alerts)} new</span>' if new_alerts else ""
+                st.markdown(f'<div class="ma-head"><div class="ma-title">My Alerts {count}</div></div>',
+                            unsafe_allow_html=True, width="stretch")
+                st.toggle("Show acknowledged", key="ma_show_seen", wrap=False)
             st.markdown(f'<div class="ma-head"><div class="ma-desc">Your advisees who moved to '
                         f'{", ".join(BAD_STATUSES[:-1])} or {BAD_STATUSES[-1]} in the last {LOOKBACK_DAYS} days.'
                         '</div></div>', unsafe_allow_html=True)
@@ -693,21 +755,25 @@ def my_alerts_bell():
         for a in alerts:
             sn = str(a["StudentNumber"])
             name = a["Student"].rsplit(" (", 1)[0] or sn
-            with st.container(key=f"ma_row_{a['AlertID']}"):
-                c_student, c_change, c_ack = st.columns(MA_WIDTHS, vertical_alignment="center")
-                c_student.markdown(
-                    f'<div class="ma-mid"><a class="ma-name" href="student_profile?student_id={html.escape(sn)}" '
-                    f'target="_self">{html.escape(name)}</a><div class="ma-sn">{html.escape(sn)}</div></div>',
-                    unsafe_allow_html=True)
-                c_change.markdown(f'<div class="ma-mid"><div class="ma-change">{_ma_change_html(a["Change"])}</div>'
-                                  f'<div class="ma-when">{_ma_when(a["CreatedAt"])}</div></div>',
-                                  unsafe_allow_html=True)
-                if show_seen:
-                    c_ack.markdown(f'<div class="ma-when">Acknowledged<br>{_ma_when(a["AcknowledgedAt"])}</div>',
-                                   unsafe_allow_html=True)
-                elif c_ack.button("Acknowledge", key=f"ma_ack_{a['AlertID']}", use_container_width=True):
-                    acknowledge(a["AlertID"], user_id)
-                    st.rerun(scope="fragment")
+            aid = a["AlertID"]
+            # one box: Name + ID | what changed + when | Acknowledge (on phones the change moves under the name)
+            with st.container(key=f"ma_row_{aid}", horizontal=True, vertical_alignment="center", gap="medium"):
+                with st.container(key=f"ma_who_{aid}"):
+                    st.markdown(
+                        f'<div class="ma-mid"><a class="ma-name" href="student_profile?student_id={html.escape(sn)}" '
+                        f'target="_self">{html.escape(name)}</a><div class="ma-sn">{html.escape(sn)}</div></div>',
+                        unsafe_allow_html=True)
+                with st.container(key=f"ma_what_{aid}"):
+                    st.markdown(f'<div class="ma-mid"><div class="ma-change">{_ma_change_html(a["Change"])}</div>'
+                                f'<div class="ma-when">{_ma_when(a["CreatedAt"])}</div></div>',
+                                unsafe_allow_html=True)
+                with st.container(key=f"ma_act_{aid}"):
+                    if show_seen:
+                        st.markdown(f'<div class="ma-when">Acknowledged<br>{_ma_when(a["AcknowledgedAt"])}</div>',
+                                    unsafe_allow_html=True)
+                    elif st.button("Acknowledge", key=f"ma_ack_{aid}", width="stretch"):
+                        acknowledge(aid, user_id)
+                        st.rerun(scope="fragment")
 
 
 # Header & Sync Controls

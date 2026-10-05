@@ -371,6 +371,7 @@ def program_instances_section():
                             unsafe_allow_html=True,
                         )
                     with c_owner:
+                        st.markdown('<div class="ac-mlabel">Owner</div>', unsafe_allow_html=True)   # phones only
                         picked = st.selectbox(f"Owner for {pid}", options, index=options.index(cur_owner),
                                               key=f"owner_pick_{pid}", label_visibility="collapsed")
                         # Owner (Program.OwnerUserID): Save shows up when the pick changed (original logic)
@@ -388,6 +389,7 @@ def program_instances_section():
                                 st.rerun(scope="fragment")
                     with c_chair:
                         chair_uid = inst.get("ChairUserID")
+                        st.markdown('<div class="ac-mlabel">Program Chair</div>', unsafe_allow_html=True)   # phones only
                         chair_pick = st.selectbox(f"Chair for {pid}", options, index=options.index(cur_chair),
                                                   key=f"chair_pick_{pid}", label_visibility="collapsed")
                         # Chair (Users.CurrentProgramID): Assign shows up when the pick changed (original logic)
@@ -407,11 +409,13 @@ def program_instances_section():
                                 st.session_state["pi_flash"] = (False, err)
                                 st.rerun(scope="fragment")
                     with c_n:
-                        st.markdown(f'<span class="ac-num">{int(inst.get("StudentCount") or 0):,}</span>',
+                        st.markdown(f'<span class="ac-mlabel-in">Students</span>'   # label: phones only
+                                    f'<span class="ac-num">{int(inst.get("StudentCount") or 0):,}</span>',
                                     unsafe_allow_html=True)
                     with c_status:
-                        st.markdown('<span class="ac-pill ac-pill-ok">Active</span>' if inst.get("IsActive") else
-                                    '<span class="ac-pill ac-pill-warn">Inactive</span>', unsafe_allow_html=True)
+                        st.markdown('<span class="ac-mlabel-in">Status</span>'   # label: phones only
+                                    + ('<span class="ac-pill ac-pill-ok">Active</span>' if inst.get("IsActive") else
+                                       '<span class="ac-pill ac-pill-warn">Inactive</span>'), unsafe_allow_html=True)
                     with c_act:
                         st.page_link("dashboard_views/admin_config.py", label="⚙ Configure",
                                      query_params={"program": str(pid)})
@@ -560,6 +564,101 @@ html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,
   }
   /* User Permissions: hide the wide 4-column layout; show name+role stacked */
   .ac-table-wrap { font-size: 12px; }
+}
+
+/* Program Instances: small labels that only show on phones (their column headers are hidden there) */
+[data-testid="stElementContainer"]:has(.ac-mlabel){display:none;}
+.ac-mlabel-in{display:none;}
+
+/* ---- Phones (added): tables stay tables and scroll sideways; Program Instances become labelled cards ---- */
+@media (max-width: 640px) {
+  /* KPI Tiles / User Permissions / recent backups: keep the desktop columns, scroll left-right */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"],
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important; gap: 12px !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 560px !important; }
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stColumn"],
+  .st-key-ac_bktable [data-testid="stColumn"] {
+    width: auto !important; min-width: 0 !important;
+  }
+  /* same column proportions as on desktop (KPI_WIDTHS, perm_widths, BK_WIDTHS) */
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(1) { flex: 1.25 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(2) { flex: 3.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(3) { flex: 2.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(4) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(5) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(6) { flex: 0.55 1 0 !important; }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(1) { flex: 2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(2) { flex: 2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(3) { flex: 1.4 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(1) { flex: 0.7 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(2) { flex: 1.8 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(3) { flex: 1.2 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_permtable .ac-th-line { min-width: 560px; }
+
+  /* Permission Audit Log: full-width table that scrolls left-right instead of squeezing the columns */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
+
+  /* Program Instances: "2 programs · 2 active · 0 inactive" on the left */
+  .ac-stats { justify-content: flex-start !important; }
+
+  /* Restore box: same space above the "Replace the current settings" checkbox as between the lines above it
+     (Streamlit pulls the line under a text block up by 16px) */
+  .st-key-bkrestore [data-testid="stMarkdownContainer"]:has(.ac-hint) { margin-bottom: 0 !important; }
+
+  /* Field Mapping: "Mapped" switch on the left under the input */
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+
+  /* Program Instances: no column headers; Owner / Program Chair labels above the dropdowns,
+     Students / Status labels next to their values */
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"]:has(.ac-th2) { display: none !important; }
+  [data-testid="stElementContainer"]:has(.ac-mlabel) { display: block !important; }
+  .ac-mlabel { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6B7280;
+          margin-bottom: -6px; }
+  .ac-mlabel-in { display: inline-block; min-width: 92px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
+          text-transform: uppercase; color: #6B7280; }
+  html[data-eo-theme="dark"] .ac-mlabel, html[data-eo-theme="dark"] .ac-mlabel-in { color: #94A3B8; }
+}
+
+/* ---- Tablets (added) ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Program Instances: keep the table, scroll left-right (columns were too narrow: "STUDEN TS",
+     cut-off dropdowns, and "Configure" running into the "Created ..." line) */
+  .st-key-acbody_programs { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 1000px !important; }
+  .st-key-acbody_programs .ac-th2 { white-space: nowrap; }
+
+  /* At-Risk Threshold and Data Refresh Schedule: one card per row instead of side by side */
+  .st-key-ac_pair [data-testid="stHorizontalBlock"]:not([class*="st-key-acbody_"] *) {
+    flex-direction: column !important; gap: 16px !important;
+  }
+  .st-key-ac_pair [data-testid="stColumn"]:not([class*="st-key-acbody_"] *) {
+    width: 100% !important; min-width: 100% !important; flex: 0 0 auto !important;
+  }
+
+  /* Add a Tile: "Visible" above its switch (like "Accent" above its colour), so the word fits */
+  [class*="st-key-kpi_new_visible_"] label { flex-direction: column-reverse !important; align-items: flex-start !important;
+          gap: 6px !important; }
+  /* ... and the "+ Add" button keeps room for its label */
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6) {
+    flex: 0 0 84px !important; min-width: 84px !important;
+  }
 }
 </style>"""
 st.markdown(CARD_CSS, unsafe_allow_html=True)
@@ -876,41 +975,43 @@ def kpi_tiles_section():
                 _kpi_load_draft(pid)
             draft = st.session_state[_kpi_draft_key(pid)]
 
-            # header row
-            for col, label in zip(st.columns(KPI_WIDTHS, vertical_alignment="bottom"),
-                                  ["Order", "Label", "Source", "Visible", "Accent", ""]):
-                col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+            # the table (header + one row per tile) - on phones it scrolls sideways instead of stacking
+            with st.container(key="ac_kpitable"):
+                # header row
+                for col, label in zip(st.columns(KPI_WIDTHS, vertical_alignment="bottom"),
+                                      ["Order", "Label", "Source", "Visible", "Accent", ""]):
+                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
 
-            move, delete = None, None
-            for i, t in enumerate(draft):
-                tkey = t.get("key") or f"tile{i}"
-                with st.container(key=f"kpirow_{pid}_{tkey}"):
-                    c_ord, c_lbl, c_src, c_vis, c_col, c_del = st.columns(KPI_WIDTHS, vertical_alignment="center")
-                    with c_ord:
-                        with st.container(key=f"kpiord_{pid}_{tkey}"):
-                            o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
-                            o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
-                            if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
-                                move = (i, i - 1)
-                            if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
-                                             disabled=i == len(draft) - 1):
-                                move = (i, i + 1)
-                    with c_lbl:
-                        t["label"] = st.text_input("Label", value=t.get("label", ""),
-                                                   key=f"kpi_l_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_src:
-                        st.markdown(f'<span class="ac-chip">{html.escape(str(t.get("source", "")))}</span>',
-                                    unsafe_allow_html=True)
-                    with c_vis:
-                        t["visible"] = st.toggle("Visible", value=bool(t.get("visible", True)),
-                                                 key=f"kpi_v_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_col:
-                        t["color"] = st.color_picker("Accent", value=t.get("color", "#1F3864"),
-                                                     key=f"kpi_c_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_del:
-                        with st.container(key=f"kpidel_{pid}_{tkey}"):
-                            if st.button("✕", key=f"kpi_d_{pid}_{tkey}", help="Remove this tile"):
-                                delete = i
+                move, delete = None, None
+                for i, t in enumerate(draft):
+                    tkey = t.get("key") or f"tile{i}"
+                    with st.container(key=f"kpirow_{pid}_{tkey}"):
+                        c_ord, c_lbl, c_src, c_vis, c_col, c_del = st.columns(KPI_WIDTHS, vertical_alignment="center")
+                        with c_ord:
+                            with st.container(key=f"kpiord_{pid}_{tkey}"):
+                                o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
+                                o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
+                                if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
+                                    move = (i, i - 1)
+                                if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
+                                                 disabled=i == len(draft) - 1):
+                                    move = (i, i + 1)
+                        with c_lbl:
+                            t["label"] = st.text_input("Label", value=t.get("label", ""),
+                                                       key=f"kpi_l_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_src:
+                            st.markdown(f'<span class="ac-chip">{html.escape(str(t.get("source", "")))}</span>',
+                                        unsafe_allow_html=True)
+                        with c_vis:
+                            t["visible"] = st.toggle("Visible", value=bool(t.get("visible", True)),
+                                                     key=f"kpi_v_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_col:
+                            t["color"] = st.color_picker("Accent", value=t.get("color", "#1F3864"),
+                                                         key=f"kpi_c_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_del:
+                            with st.container(key=f"kpidel_{pid}_{tkey}"):
+                                if st.button("✕", key=f"kpi_d_{pid}_{tkey}", help="Remove this tile"):
+                                    delete = i
 
             if move is not None:
                 a, b = move
@@ -1013,43 +1114,45 @@ def user_permissions_section():
                                    step=1, key=f"perm_page_{search_query}")
     page_users = users[(page - 1) * USERS_PER_PAGE: page * USERS_PER_PAGE]
 
-    # column headers (same look as the Student Roster / Executive Overview table headers)
-    perm_widths = [2, 2, 1.4, 1.6]
-    for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
-                          ["UserID", "Name", "Role", "Permission"]):
-        col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+    # the table (header + one row per user) - on phones it scrolls sideways instead of stacking
+    with st.container(key="ac_permtable"):
+        # column headers (same look as the Student Roster / Executive Overview table headers)
+        perm_widths = [2, 2, 1.4, 1.6]
+        for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
+                              ["UserID", "Name", "Role", "Permission"]):
+            col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
 
-    for u in page_users:
-        cols = st.columns(perm_widths)
+        for u in page_users:
+            cols = st.columns(perm_widths)
 
-        with cols[0]:
-            st.write(f"**{u['UserID']}**")
-        with cols[1]:
-            st.write(f"{u['FirstName']} {u['LastName']}")
-        with cols[2]:
-            st.write(f"{u['Role']}")
-        with cols[3]:
-            current = u.get("RolePermission") or "View Only"
-            idx = 0 if current == "View Only" else 1
-            new_perm = st.selectbox(
-                f"Permission for {u['UserID']}",
-                ["View Only", "Edit"],
-                index=idx,
-                key=f"perm_{u['UserID']}",
-                label_visibility="collapsed",
-            )
+            with cols[0]:
+                st.write(f"**{u['UserID']}**")
+            with cols[1]:
+                st.write(f"{u['FirstName']} {u['LastName']}")
+            with cols[2]:
+                st.write(f"{u['Role']}")
+            with cols[3]:
+                current = u.get("RolePermission") or "View Only"
+                idx = 0 if current == "View Only" else 1
+                new_perm = st.selectbox(
+                    f"Permission for {u['UserID']}",
+                    ["View Only", "Edit"],
+                    index=idx,
+                    key=f"perm_{u['UserID']}",
+                    label_visibility="collapsed",
+                )
 
-            if new_perm != current:
-                if st.button("Save", key=f"save_{u['UserID']}"):
-                    require_edit()   # only IT/Admin has Edit
-                    ok, err = set_user_permission(u["UserID"], new_perm)
-                    if ok:
-                        st.success(f"{u['UserID']} → {new_perm}")
-                        st.cache_data.clear()   # other pages cache each user's permission for a short time
-                        st.rerun(scope="fragment")
-                    else:
-                        st.error(f"Failed: {err}")
+                if new_perm != current:
+                    if st.button("Save", key=f"save_{u['UserID']}"):
+                        require_edit()   # only IT/Admin has Edit
+                        ok, err = set_user_permission(u["UserID"], new_perm)
+                        if ok:
+                            st.success(f"{u['UserID']} → {new_perm}")
+                            st.cache_data.clear()   # other pages cache each user's permission for a short time
+                            st.rerun(scope="fragment")
+                        else:
+                            st.error(f"Failed: {err}")
 
     if n_pages > 1:
         st.caption(f"Showing {len(page_users)} of {len(users)} users.")
@@ -1198,18 +1301,20 @@ def config_backup_section():
         with st.container(key="acbody_backup"):
             # ---- recent backups ----
             if backups:
-                for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
-                                      ["Backup", "Created", "Type", "By"]):
-                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
-                for b in backups[:BK_SHOWN]:
-                    kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
-                    with st.container(key=f"bkrow_{b['BackupID']}"):
-                        c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
-                        c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
-                        c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
-                        c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
-                        c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
-                                      unsafe_allow_html=True)
+                # the list as a table - on phones it scrolls sideways instead of stacking
+                with st.container(key="ac_bktable"):
+                    for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
+                                          ["Backup", "Created", "Type", "By"]):
+                        col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+                    for b in backups[:BK_SHOWN]:
+                        kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
+                        with st.container(key=f"bkrow_{b['BackupID']}"):
+                            c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
+                            c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
+                            c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
+                            c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
+                            c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
+                                          unsafe_allow_html=True)
             else:
                 st.markdown('<div class="ac-hint">No backups yet. Click <b>Back up now</b> to make the first one.</div>',
                             unsafe_allow_html=True)

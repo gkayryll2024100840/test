@@ -400,6 +400,19 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
   .sp-pillar-title { font-size: 16px !important; margin-top: 8px !important; }
   .st-key-sp_actions { margin-top: 10px !important; padding: 8px 12px !important; }
 }
+
+/* Phones: the title and the student picker are stacked there, so each is only as tall as its content
+   (the 300px / 260px / 100% flex sizes above become HEIGHTS once stacked -> tall, mostly empty boxes) */
+@media (max-width: 640px) {
+  .st-key-sp_top [data-testid="stColumn"],
+  .st-key-sp_top [data-testid="stColumn"]:first-child,
+  .st-key-sp_top [data-testid="stColumn"]:last-child { flex: 0 0 auto !important; }
+  /* student card: the Enrollment Status label sits right above its pill (like the other facts) */
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] { gap: 4px !important; }
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stMarkdownContainer"]:has(.sp-fact-label) {
+    margin-bottom: 0 !important;
+  }
+}
 </style>
 """
 st.markdown(PAGE_CSS, unsafe_allow_html=True)

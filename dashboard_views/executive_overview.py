@@ -493,6 +493,36 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
     width: auto !important;
   }
 }
+
+/* Phones: Streamlit wraps each export button in a box that only fits the button, so the full-width
+   rule above had nothing to fill. Stretch that box too -> two equal buttons side by side. */
+@media (max-width: 640px) {
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) [data-testid="stElementContainer"],
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) [data-testid="stDownloadButton"] {
+    width: 100% !important;
+  }
+}
+
+/* Charts on phones + tablets: Plotly tilts the names under the bars when the chart is narrow and they ran
+   past the bottom of the chart, where they were cut off. Let them show below it and keep room there. */
+@media (max-width: 1150px) {
+  .st-key-eo_charts .js-plotly-plot,
+  .st-key-eo_charts .js-plotly-plot .plot-container,
+  .st-key-eo_charts .js-plotly-plot .svg-container,
+  .st-key-eo_charts .js-plotly-plot svg.main-svg {
+    overflow: visible !important;
+  }
+  .st-key-eo_charts [data-testid="stPlotlyChart"] { margin-bottom: 26px !important; }
+}
+
+/* Tablets (added): the three filters were a fixed 300px each, so only two fit per row. The three share the
+   first row now (shorter dropdowns), and both export buttons sit together on the right of the next row. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+3) {
+    flex: 1 1 calc(33.33% - 12px) !important; min-width: 150px !important; width: auto !important;
+  }
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { margin-left: auto !important; }
+}
 </style>
 """
 
@@ -908,10 +938,21 @@ BASE_LAYOUT = dict(
 )
 
 
+def _two_line_label(label):
+    """Long stage names on two lines (e.g. 'Coursework<br>Completion'), so they still fit under the bars on a
+    phone. Plotly tilts one-line names there and the tilted text ran past the bottom of the chart."""
+    words = str(label).split()
+    if len(label) <= 12 or len(words) < 2:
+        return label
+    best = min(range(1, len(words)),
+               key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))))
+    return " ".join(words[:best]) + "<br>" + " ".join(words[best:])
+
+
 def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
     fig = go.Figure(
         go.Bar(
-            x=[stage_name(s) for s in counts["Stage"]],   # US-30 labels (customdata keeps the stage key)
+            x=[_two_line_label(stage_name(s)) for s in counts["Stage"]],   # US-30 labels (customdata keeps the stage key)
             y=counts["Count"],
             marker_color=[STAGE_COLORS[s] for s in counts["Stage"]],
             text=counts["Count"],
@@ -923,6 +964,7 @@ def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
         )
     )
     fig.update_layout(**BASE_LAYOUT, bargap=0.3)
+    fig.update_layout(margin=dict(l=10, r=10, t=30, b=52))   # room for two-line stage names under the bars
     fig.update_yaxes(visible=False, range=[0, max(int(counts["Count"].max()), 1) * 1.2])
     fig.update_xaxes(showgrid=False, showline=True, linecolor="#D1D5DB",
                      tickfont=dict(size=11, color="#6B7280"))
