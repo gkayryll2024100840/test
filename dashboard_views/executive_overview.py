@@ -30,6 +30,7 @@ from dashboard_views.components import DARK_MODE_CSS, set_header_context
 from field_mapping import load_mappings
 from prefetch import prefetch
 from perf import timed   # US-49: [TIMING] lines
+from kpi_alerts import thresholds_for   # US-36: KPI thresholds live in kpi_thresholds.json
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -68,12 +69,10 @@ STAGE_STATUS_COL = {
 AT_RISK_STATUSES = {"Incomplete", "Cancelled"}
 
 # KPI value colours: green = on track, normal text colour = in between, red = needs attention.
-# (green_at, red_below) in %. Same green / red as the Cohort by Lifecycle Stage chart.
-KPI_THRESHOLDS = {
-    "overall_completion": (50.0, 40.0),
-    "completion_rate": (50.0, 40.0),
-    "on_time_rate": (40.0, 30.0),
-}
+# {kpi: (green_at, red_below)} in %, read from kpi_thresholds.json (US-36: configurable, not hardcoded;
+# the Dean's alert emails use the same file). render_executive_overview() swaps in the selected program's values.
+# Same green / red as the Cohort by Lifecycle Stage chart.
+KPI_THRESHOLDS = thresholds_for()
 KPI_GOOD_COLOR = STAGE_COLORS["Capstone"]     # #55AB22
 KPI_BAD_COLOR = STAGE_COLORS["Coursework"]    # #B91B21
 ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
@@ -1949,6 +1948,7 @@ def render_executive_overview():
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
     tiles = cached_kpi_tiles(selected_program["ProgramID"])
+    KPI_THRESHOLDS.update(thresholds_for(selected_program["ProgramCode"] if selected_program["ProgramID"] else None))
     cards_data = []   # (label, value, sub_html, accent, info, value_color) for each tile, in order
     for t in tiles or []:
         src = (t.get("source") or "").strip().lower()

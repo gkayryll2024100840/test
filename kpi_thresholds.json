@@ -1,0 +1,8 @@
+{
+  "_how_to": "KPI colour + email-alert thresholds in %. green_at = number turns green at or above this; red_below = number turns red (and the Dean gets an email, US-36) below this. 'default' is used for every program. To give one program its own values, add it under 'programs' by ProgramCode, e.g. \"programs\": {\"MBA\": {\"on_time_rate\": {\"green_at\": 35, \"red_below\": 25}}}",
+  "default": {
+    "overall_completion": {"green_at": 50, "red_below": 40},
+    "on_time_rate": {"green_at": 40, "red_below": 30}
+  },
+  "programs": {}
+}

@@ -568,6 +568,148 @@ if active_login_id:
             f"({retry_count} attempts). Check Admin logs."
         )
  
+# ---------------------------------------------------------------
+# US-23: Faculty/Program Advisor sees ONLY their own advisees.
+# ---------------------------------------------------------------
+my_adviser_name = None
+is_advisor_view = (role == "Faculty_Advisor")   # the role name login.py stores
+
+if is_advisor_view:
+    my_adviser_name = cached_adviser_name(user_id)
+
+
+# ---------------------------------------------------------------
+# US-37: advisee alerts - a bell next to the page title (red dot = new alerts); clicking it opens the list.
+# Alerts = advisees who moved to Cancelled / Incomplete / Conditionally Enrolled. Logic: advisee_alerts.py,
+# stored in Alert_Logs.
+# ---------------------------------------------------------------
+from advisee_alerts import scan_status_changes, my_alerts, acknowledge, BAD_STATUSES, LOOKBACK_DAYS
+
+MY_ALERTS_CSS = """<style>
+/* the bell: top right of the page title */
+.st-key-sr_top{position:relative;}
+.st-key-ma_bell{position:absolute !important;top:4px;right:0;width:auto !important;z-index:5;overflow:visible !important;}
+.st-key-ma_bell button{width:48px;height:48px;min-height:48px;padding:0;border-radius:14px;position:relative;
+        overflow:visible;display:flex;align-items:center;justify-content:center;}
+.st-key-ma_bell button p{font-size:28px;line-height:1;margin:0;}
+.st-key-ma_bell button span[role="img"]{font-variation-settings:"FILL" 0, "wght" 400;}   /* outline bell */
+.st-key-ma_bell button div[aria-hidden="true"]{display:none;}   /* no open/close arrow next to the bell */
+.st-key-sr_top:has(.st-key-ma_bell) .sr-head{padding-right:60px;}   /* keep the title clear of the bell */
+/* the panel that opens */
+[data-testid="stPopoverBody"]:has(.ma-head){width:min(760px, 92vw) !important;max-width:92vw !important;
+        padding:20px 22px !important;}
+/* the panel is drawn outside the page, so it gets the roster's colours itself (same values as HEADER_CSS) */
+[data-testid="stPopoverBody"]:has(.ma-head){--sr-h-text:#0F172A; --sr-h-label:#4B5563; --sr-h-border:#E5E7EB;}
+html[data-eo-theme="dark"] [data-testid="stPopoverBody"]:has(.ma-head){--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8;
+        --sr-h-border:#263044;}
+.st-key-ma_top{padding-bottom:14px;margin-bottom:6px;border-bottom:1px solid var(--sr-h-border);}
+.ma-head{display:block;width:100%;}
+.ma-mid{display:block;width:100%;}
+.ma-title{font-size:18px;font-weight:700;color:var(--sr-h-text);display:flex;align-items:center;gap:10px;}
+.ma-count{font-size:12px;font-weight:700;color:#B91B21;background:#FEF2F2;border:1px solid #FECACA;
+        border-radius:999px;padding:2px 9px;}
+html[data-eo-theme="dark"] .ma-count{color:#FCA5A5;background:rgba(185,27,33,.18);border-color:rgba(185,27,33,.4);}
+.ma-desc{font-size:13px;color:var(--sr-h-label);line-height:1.5;}
+/* one box per student */
+[class*="st-key-ma_row_"]{border:1px solid var(--sr-h-border);border-radius:12px;padding:12px 16px;margin-top:4px;}
+[class*="st-key-ma_row_"] [data-testid="stColumn"]:not(:first-child){border-left:1px solid var(--sr-h-border);
+        padding-left:16px;}
+.ma-name{font-size:15px;font-weight:600;color:var(--sr-h-text) !important;line-height:1.35;
+        text-decoration:none !important;}
+.ma-name:hover{text-decoration:underline !important;}
+/* inside the panel: no extra space under text blocks, so everything centres exactly */
+[data-testid="stPopoverBody"]:has(.ma-head) [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
+.st-key-ma_show_seen{display:flex;justify-content:flex-end;width:100%;}
+.st-key-ma_show_seen label{margin-left:auto;margin-right:16px;}   /* lines up with the Acknowledge buttons */
+.ma-sn{font-size:12px;color:var(--sr-h-label);margin-top:2px;}
+.ma-change{font-size:14px;color:var(--sr-h-text);line-height:1.4;}
+.ma-bad{color:#B91B21;font-weight:700;}
+html[data-eo-theme="dark"] .ma-bad{color:#FCA5A5;}
+.ma-when{font-size:12px;color:var(--sr-h-label);margin-top:3px;}
+.ma-empty{font-size:14px;color:var(--sr-h-label);padding:6px 0;}
+/* phones: the 3 parts of a box stack, so the dividers go on top instead of the left */
+@media (max-width: 640px) {
+  [class*="st-key-ma_row_"] [data-testid="stColumn"]:not(:first-child){border-left:none;padding-left:0;
+          border-top:1px solid var(--sr-h-border);padding-top:8px;}
+}
+</style>"""
+MA_RED_DOT_CSS = """<style>
+.st-key-ma_bell button::after{content:"";position:absolute;top:-6px;right:-6px;width:14px;height:14px;
+        border-radius:50%;background:#DC2626;box-shadow:0 0 0 2px var(--background-color, #FFFFFF);}
+</style>"""
+MA_WIDTHS = [1.6, 2.4, 1.1]   # Name + ID | What changed + when | Acknowledge
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_status_scan():
+    """Turn new status changes into alerts (at most once a minute, shared by every adviser)."""
+    return scan_status_changes()
+
+
+def _ma_when(value):
+    try:
+        return f"{value:%b %d, %Y} · {value.hour % 12 or 12}:{value:%M %p}"
+    except Exception:
+        return str(value or "")
+
+
+def _ma_change_html(change):
+    """'Comprehensive Exam changed from In-Progress to Incomplete on ...' -> the bad status in red."""
+    text = html.escape(change.split(" on ")[0])
+    for bad in BAD_STATUSES:
+        text = text.replace(f"to {html.escape(bad)}", f'to <span class="ma-bad">{html.escape(bad)}</span>')
+    return text
+
+
+@st.fragment
+def my_alerts_bell():
+    try:
+        cached_status_scan()
+        new_alerts = my_alerts(user_id)
+        show_seen = st.session_state.get("ma_show_seen", False)
+        alerts = my_alerts(user_id, acknowledged=True) if show_seen else new_alerts
+    except Exception as e:
+        st.warning(f"Couldn't load your alerts: {e}")
+        return
+    st.markdown(MY_ALERTS_CSS + (MA_RED_DOT_CSS if new_alerts else ""), unsafe_allow_html=True)
+
+    with st.popover(":material/notifications:", key="ma_bell"):
+        with st.container(key="ma_top"):
+            # "My Alerts" and the switch on one line (switch at the right edge), the description underneath
+            c_head, c_toggle = st.columns([3, 1.3], vertical_alignment="center")
+            count = f'<span class="ma-count">{len(new_alerts)} new</span>' if new_alerts else ""
+            c_head.markdown(f'<div class="ma-head"><div class="ma-title">My Alerts {count}</div></div>',
+                            unsafe_allow_html=True)
+            c_toggle.toggle("Show acknowledged", key="ma_show_seen")
+            st.markdown(f'<div class="ma-head"><div class="ma-desc">Your advisees who moved to '
+                        f'{", ".join(BAD_STATUSES[:-1])} or {BAD_STATUSES[-1]} in the last {LOOKBACK_DAYS} days.'
+                        '</div></div>', unsafe_allow_html=True)
+
+        if not alerts:
+            st.markdown('<div class="ma-empty">' + ("No acknowledged alerts yet." if show_seen else
+                        "No new alerts. You're all caught up.") + '</div>', unsafe_allow_html=True)
+            return
+
+        for a in alerts:
+            sn = str(a["StudentNumber"])
+            name = a["Student"].rsplit(" (", 1)[0] or sn
+            with st.container(key=f"ma_row_{a['AlertID']}"):
+                c_student, c_change, c_ack = st.columns(MA_WIDTHS, vertical_alignment="center")
+                c_student.markdown(
+                    f'<div class="ma-mid"><a class="ma-name" href="student_profile?student_id={html.escape(sn)}" '
+                    f'target="_self">{html.escape(name)}</a><div class="ma-sn">{html.escape(sn)}</div></div>',
+                    unsafe_allow_html=True)
+                c_change.markdown(f'<div class="ma-mid"><div class="ma-change">{_ma_change_html(a["Change"])}</div>'
+                                  f'<div class="ma-when">{_ma_when(a["CreatedAt"])}</div></div>',
+                                  unsafe_allow_html=True)
+                if show_seen:
+                    c_ack.markdown(f'<div class="ma-when">Acknowledged<br>{_ma_when(a["AcknowledgedAt"])}</div>',
+                                   unsafe_allow_html=True)
+                elif c_ack.button("Acknowledge", key=f"ma_ack_{a['AlertID']}", use_container_width=True):
+                    acknowledge(a["AlertID"], user_id)
+                    st.rerun(scope="fragment")
+
+
 # Header & Sync Controls
 st.markdown(HEADER_CSS, unsafe_allow_html=True)
 with st.container(key="sr_top"):
@@ -579,15 +721,8 @@ with st.container(key="sr_top"):
             unsafe_allow_html=True,
         )
 
- 
-# ---------------------------------------------------------------
-# US-23: Faculty/Program Advisor sees ONLY their own advisees.
-# ---------------------------------------------------------------
-my_adviser_name = None
-is_advisor_view = (role == "FacultyAdvisor")
- 
-if is_advisor_view:
-    my_adviser_name = cached_adviser_name(user.get("UserID"))
+    if is_advisor_view and my_adviser_name:
+        my_alerts_bell()   # US-37
  
 cohort_choice = "All Cohorts"
 

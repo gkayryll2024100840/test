@@ -993,7 +993,7 @@ section_header(
 def user_permissions_section():
     search_query = st.text_input(
         "Search User by Name or UserID",
-        placeholder="e.g. Juan, dela Cruz, or 2024-10012",
+        placeholder="e.g. Juan, dela Cruz, or ADV0000001",
         key="perm_search",
     )
 
@@ -1289,3 +1289,149 @@ def config_backup_section():
 
 
 config_backup_section()
+
+# ============================================================
+# KPI EMAIL ALERTS (US-36)  -  logic lives in kpi_alerts.py, thresholds in kpi_thresholds.json
+# ============================================================
+from kpi_alerts import (
+    ALERT_KPIS, check_kpi_alerts, kpi_status, thresholds_for, email_is_configured,
+)
+
+# Styles for this card only (new class names, so nothing else on the page changes)
+ALERT_CARD_CSS = """<style>
+.st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:1px solid var(--ac-h-border);padding-left:20px;}
+.al-name{font-size:16px;font-weight:700;color:var(--ac-h-text);margin-top:8px;line-height:1.35;}
+.al-email{font-size:14px;color:var(--ac-h-label);display:flex;align-items:center;gap:8px;margin-top:4px;
+        word-break:break-all;}
+.al-account{font-size:12px;color:var(--ac-h-label);margin-top:10px;line-height:1.5;}
+.al-wrap{overflow-x:auto;margin-top:6px;}
+.al-table{width:100%;border-collapse:collapse;}
+.al-table th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;
+        text-align:center;padding:4px 8px 8px 8px;border-bottom:1px solid var(--ac-h-border);}
+html[data-eo-theme="dark"] .al-table th{color:#94A3B8;}
+.al-table td{font-size:14px;color:var(--ac-h-text);padding:10px 8px;border-bottom:1px solid var(--ac-h-border);
+        vertical-align:middle;text-align:center;}
+.al-table .ac-pill{white-space:normal;line-height:1.35;}
+.al-table tr:last-child td{border-bottom:none;}
+.al-val{font-weight:700;}
+.al-line{font-size:12px;color:var(--ac-h-label);margin-top:2px;white-space:nowrap;}
+.ac-pill-bad{color:#B91B21;background:#FEF2F2;border-color:#FECACA;}
+html[data-eo-theme="dark"] .ac-pill-bad{color:#FCA5A5;background:rgba(185,27,33,.18);border-color:rgba(185,27,33,.4);}
+/* this card only: on phones the two sides stack, so the divider goes on top instead of the left */
+@media (max-width: 640px) {
+  .st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:none;padding-left:0;
+          border-top:1px solid var(--ac-h-border);padding-top:16px;}
+}
+</style>"""
+GOOD_COLOR, BAD_COLOR = "#55AB22", "#B91B21"   # same green / red as the Executive Overview KPI numbers
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_kpi_status():
+    return kpi_status()
+
+
+def _status_pill(row):
+    """What happened for this KPI: OK, or (when it's below the red line) whether the Dean was emailed."""
+    if not row["is_red"]:
+        return '<span class="ac-pill ac-pill-ok">OK</span>'
+    if row["email"] == "sent":
+        sent = row["sent_at"]
+        return (f'<span class="ac-pill ac-pill-bad">Emailed {sent:%b %d}, '
+                f'{sent.hour % 12 or 12}:{sent:%M %p}</span>')
+    if row["email"] == "failed":
+        return '<span class="ac-pill ac-pill-warn">Failed · will retry</span>'
+    return '<span class="ac-pill ac-pill-warn">Not emailed yet</span>'
+
+
+def _value_color(row):
+    if row["is_red"]:
+        return BAD_COLOR
+    return GOOD_COLOR if row["value"] >= row["green_at"] else "var(--ac-h-text)"
+
+
+@st.fragment
+def kpi_alerts_section():
+    try:
+        recipients, status_rows = cached_kpi_status()
+    except Exception as e:
+        st.error(f"Could not load KPI alerts: {e}")
+        return
+    limits = thresholds_for()
+    st.markdown(ALERT_CARD_CSS, unsafe_allow_html=True)
+
+    with st.container(key="accard_alerts"):
+        with st.container(key="achead_alerts"):
+            st.markdown(
+                '<div class="ac-card-title">KPI Email Alerts</div>'
+                '<div class="ac-card-desc">Emails the Dean once when a program\'s '
+                + " or ".join(f"{name} drops below {limits[k][1]:g}%" for k, (name, _) in ALERT_KPIS.items())
+                + '. Checked every night after the data refresh. Thresholds are set in '
+                '<span class="ac-chip">kpi_thresholds.json</span>.</div>',
+                unsafe_allow_html=True,
+            )
+
+        with st.container(key="acbody_alerts"):
+            with st.container(key="alertcols"):
+                c_to, c_status = st.columns([1, 3])
+                with c_to:   # ---- who gets the emails ----
+                    dot = "ac-dot-ok" if email_is_configured() else "ac-dot-fail"
+                    people = "".join(
+                        f'<div class="al-name">{html.escape(r["Name"])}</div>'
+                        f'<div class="al-email"><span class="ac-dot {dot}"></span>{html.escape(r["Email"])}</div>'
+                        for r in recipients
+                    ) or '<div class="al-name">No Dean found</div>'
+                    account = ("" if email_is_configured() else
+                               '<div class="al-account">Email account not set up: add ALERT_SMTP_PASSWORD '
+                               '(the Gmail app password) to .env</div>')
+                    st.markdown(f'<div class="ac-th2">Sends to</div>{people}{account}', unsafe_allow_html=True)
+
+                with c_status:   # ---- every program's KPIs right now ----
+                    if status_rows:
+                        body = "".join(
+                            f'<tr><td><b>{html.escape(str(r["ProgramCode"]))}</b></td>'
+                            f'<td>{html.escape(r["kpi"])}</td>'
+                            f'<td><span class="al-val" style="color:{_value_color(r)};">{r["value"]:.1f}%</span>'
+                            f'<div class="al-line">red below {r["red_below"]:g}%</div></td>'
+                            f'<td>{_status_pill(r)}</td></tr>'
+                            for r in status_rows
+                        )
+                        st.markdown(
+                            '<div class="ac-th2">KPI status</div>'
+                            '<div class="al-wrap"><table class="al-table"><thead><tr><th>Program</th><th>KPI</th>'
+                            f'<th>Now</th><th>Dean email</th></tr></thead><tbody>{body}</tbody></table></div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown('<div class="ac-th2">KPI status</div>'
+                                    '<div class="ac-hint">No programs with students yet.</div>', unsafe_allow_html=True)
+
+            flash = st.session_state.pop("alert_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_alerts"):
+            email_clicked = st.button("Check KPI Status", type="primary", key="alert_check", use_container_width=True)
+
+    if email_clicked:
+        require_edit()   # US-13 gate
+        with st.spinner("Checking KPIs..."):
+            r = check_kpi_alerts()   # same check as the nightly one: new drops only, all in ONE email
+        cached_kpi_status.clear()
+        emails = r.get("emails", 1 if r.get("sent") else 0)
+        if r.get("errors"):
+            msg = f"Couldn't send the email: {r['errors'][0]}"
+        elif emails:
+            msg = (f"1 email sent to {', '.join(r['recipients'])} about {r['sent']} KPI(s) below their threshold."
+                   if emails == 1 else f"{emails} emails sent about {r['sent']} KPI(s).")
+        elif r["red"]:
+            msg = (f"Nothing new to email: the Dean was already emailed about the {r['red']} KPI(s) "
+                   "below their threshold.")
+        else:
+            msg = f"Nothing to email: all {r['checked']} KPIs are above their threshold."
+        st.session_state["alert_flash"] = (not r["errors"], msg)
+        st.rerun(scope="fragment")
+
+section_divider()
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+kpi_alerts_section()
