@@ -1551,6 +1551,16 @@ def run_scheduled_refresh_if_due(now=None):
         set_setting("last_scheduled_status", "Success" if ok else "Failed", "SCHEDULER")
     except Exception as e:
         print(f"Scheduled refresh ran but its status couldn't be saved: {e}")
+
+    # US-48: nightly configuration backup, right after the refresh (a failure shows in System Sync Logs)
+    try:
+        from config_backup import create_backup   # imported here: config_backup imports this module
+        backup_ok, backup_msg, _ = create_backup("SCHEDULER", "scheduled")
+        if not backup_ok:
+            log_sync_attempt_local("FAILED", error_message=f"Scheduled config backup: {backup_msg}",
+                                   login_id="SCHEDULED")
+    except Exception as e:
+        print(f"Scheduled config backup failed: {e}")
     return True
 
 
