@@ -118,6 +118,21 @@ def eo_col_labels():
             stage_name("Capstone"), "Time in Stage", "Flag"]
 
 
+def split_label_two_lines(label: str) -> str:
+    """Format a table header label into 2 lines for compact and clean presentation."""
+    cleaned = str(label).strip()
+    words = cleaned.split()
+    if len(words) <= 1:
+        return html.escape(cleaned)
+    if len(words) == 2:
+        return f"{html.escape(words[0])}<br>{html.escape(words[1])}"
+    if len(words) == 3:
+        # e.g. "Time in Stage" -> "Time in<br>Stage"
+        return f"{html.escape(words[0])} {html.escape(words[1])}<br>{html.escape(words[2])}"
+    mid = (len(words) + 1) // 2
+    return f"{html.escape(' '.join(words[:mid]))}<br>{html.escape(' '.join(words[mid:]))}"
+
+
 DRILL_STAGE_KEY = "eo_drill_stage"        # session_state key: the stage currently drilled into
 DRILL_CLEAR_LABEL = "← Back to all stages"
 DRILL_CHART_VERSION_KEY = "eo_drill_chart_v"   # bumped by "Back" to clear the chart's bar selection
@@ -177,8 +192,24 @@ html[data-eo-theme="dark"] .stApp{
 .st-key-eo_charts .js-plotly-plot .svg-container{margin-left:auto !important;margin-right:auto !important;
     flex:0 0 auto;max-width:100%;}
 /* trend card title row: title + subtitle on the left, Completion % / Students at Risk switch on the right */
-.st-key-eo_trend_head [data-testid="stHorizontalBlock"]{align-items:flex-start !important;}
-.st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:4px;}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"]{
+    align-items:flex-start !important;
+    flex-wrap:wrap !important;
+    gap:10px !important;
+}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child{
+    flex:1 1 240px !important;
+    min-width:220px !important;
+}
+.st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child{
+    flex:0 0 auto !important;
+    min-width:max-content !important;
+}
+.st-key-eo_trend_head .eo-card-title{
+    white-space:normal !important;
+    line-height:1.25 !important;
+}
+.st-key-eo_trend_switch{display:flex;justify-content:flex-end;width:100%;margin-top:2px;}
 .st-key-eo_trend_switch [data-testid="stElementContainer"]{justify-content:flex-end !important;width:100%;}
 .st-key-eo_trend_switch [data-testid="stButtonGroup"],
 .st-key-eo_trend_switch [role="radiogroup"]{justify-content:flex-end;flex-wrap:nowrap;margin-left:auto;}
@@ -221,6 +252,12 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
     max-width: none !important;
     min-width: 0 !important;
 }
+/* Program Chair: read-only Program filter */
+.eo-locked-filter{display:flex;flex-direction:column;gap:4px;}
+.eo-locked-label{font-size:14px;font-weight:600;color:var(--eo-label);}
+.eo-locked-value{font-size:14px;color:var(--eo-text);background:var(--eo-surface-2);
+    border:1px solid var(--eo-border);border-radius:6px;padding:8px 12px;
+}
 
 /* page header = title + caption, with the divider line under both (one element = no extra Streamlit gaps) */
 .eo-header{padding-bottom:10px;border-bottom:1px solid var(--eo-border);margin:0;}
@@ -233,8 +270,28 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .st-key-eo_filters [data-testid="stWidgetLabel"]{margin-bottom:4px;min-height:0;}
 .eo-subtitle{color:var(--eo-label);font-size:14px;margin:-14px 0 14px 0;}
 .eo-kpi-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:6px 0 18px 0;}
-@media (max-width:1200px){.eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr));}}
-@media (max-width:700px){.eo-kpi-row{grid-template-columns:repeat(1,minmax(0,1fr));}}
+@media (max-width:1200px) and (min-width:769px){
+  .eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:10px !important;}
+}
+@media (max-width:768px) and (min-width:641px){
+  .eo-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:8px !important;}
+}
+@media (max-width:640px){
+  .eo-kpi-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:8px !important;}
+  .eo-kpi{padding:10px 12px !important;min-height:86px !important;}
+  .eo-kpi-value{font-size:22px !important;margin:6px 0 4px 0 !important;}
+  .eo-kpi-label{font-size:10px !important;}
+  .eo-kpi-sub{font-size:10.5px !important;}
+  .eo-kpi:last-child{grid-column:span 2 !important;}
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .eo-kpi-row{grid-template-columns:repeat(5,minmax(0,1fr)) !important;gap:8px !important;margin:4px 0 12px 0 !important;}
+  .eo-kpi{padding:8px 10px !important;min-height:76px !important;}
+  .eo-kpi-value{font-size:20px !important;margin:4px 0 2px 0 !important;}
+  .eo-kpi-label{font-size:9.5px !important;}
+  .eo-kpi-sub{font-size:10px !important;}
+}
+
 .eo-kpi{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;padding:18px 20px;
         box-shadow:var(--eo-shadow);min-height:122px;display:flex;flex-direction:column;}
 .eo-kpi-label{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-label);}
@@ -264,25 +321,36 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .eo-flat{color:var(--eo-muted);}
 .eo-up{color:var(--eo-up);} .eo-down{color:var(--eo-down);} .eo-risk{color:var(--eo-down);}
 
+/* ---- Responsive Charts Layout (stack to 100% width on tablet & mobile <= 1150px) ---- */
+@media (max-width: 1150px) {
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+  .st-key-eo_charts > [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .st-key-eo_charts .js-plotly-plot { min-height: 220px !important; height: 220px !important; }
+}
+
 div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);border:1px solid var(--eo-border) !important;
         border-radius:12px !important;box-shadow:var(--eo-shadow);}
 .eo-card-head{display:flex;flex-direction:column;align-items:flex-start;}
 .eo-card-title{display:block;font-size:20px;font-weight:700;color:var(--eo-text);margin:4px 0 2px 4px;}
 .eo-card-sub{display:block;font-size:12px;color:var(--eo-muted);margin:0 0 4px 4px;}
 
-.eo-table-wrap{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;overflow:auto;
-        max-height:560px;margin-top:18px;box-shadow:var(--eo-shadow);}
-.eo-table{width:100%;border-collapse:collapse;font-size:14px;color:var(--eo-text-2);margin:0;}
-.eo-table th{position:sticky;top:0;z-index:1;background:var(--eo-surface-2);text-align:left;font-size:12px;
-        font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);
-        padding:12px 18px;border:none;border-bottom:1px solid var(--eo-border);}
-.eo-table td{padding:10px 18px;border:none;border-bottom:1px solid var(--eo-border-soft);vertical-align:middle;white-space:nowrap;}
-.eo-table tr:last-child td{border-bottom:none;}
-.eo-student{display:flex;align-items:center;gap:12px;}
-.eo-avatar{width:34px;height:34px;border-radius:50%;background:#475569;color:#FFFFFF;font-size:13px;
-        font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.eo-name{font-weight:600;color:var(--eo-text-2);} .eo-id{font-size:12px;color:var(--eo-muted);}
-.eo-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
+.eo-name{font-weight:600;color:var(--eo-text-2);white-space:nowrap !important;word-break:keep-all !important;}
+.eo-id{font-size:12px;color:var(--eo-muted);white-space:nowrap !important;word-break:keep-all !important;}
+.eo-pill{display:inline-flex !important;align-items:center !important;justify-content:center !important;
+        white-space:nowrap !important;line-height:1 !important;padding:4px 10px;border-radius:999px;
+        font-size:12px;font-weight:600;border:1px solid;width:auto !important;max-width:none !important;
+        word-break:keep-all !important;flex-wrap:nowrap !important;}
+.eo-pill *{white-space:nowrap !important;word-break:keep-all !important;}
 .pill-green{background:var(--pg-bg);color:var(--pg-fg);border-color:var(--pg-bd);}
 .pill-red{background:var(--pr-bg);color:var(--pr-fg);border-color:var(--pr-bd);}
 .pill-blue{background:var(--pb-bg);color:var(--pb-fg);border-color:var(--pb-bd);}
@@ -291,14 +359,26 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .pill-gray{background:var(--px-bg);color:var(--px-fg);border-color:var(--px-bd);}
 .eo-muted{color:var(--eo-muted);}
 
-/* ---- student table (built from Streamlit rows so the names can open Student Profile) ---- */
+/* ---- student table: unified smooth horizontal scrolling without broken words ---- */
 .st-key-eo_table{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;
-        box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow:hidden;}
-.st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;}
-.eo-th{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-muted);}
-.st-key-eo_table_rows{gap:0 !important;}
+        box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow-x:auto !important;
+        -webkit-overflow-scrolling:touch !important;width:100% !important;display:block !important;}
+.st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;
+        min-width:880px !important;width:max-content !important;}
+.st-key-eo_table_rows{gap:0 !important;min-width:880px !important;overflow-x:hidden !important;width:max-content !important;}
+.st-key-eo_table_rows > div{min-width:880px !important;}
 .st-key-eo_table_rows [data-testid="stHorizontalBlock"]{padding:10px 18px;border-bottom:1px solid var(--eo-border-soft);
-        align-items:center;}
+        align-items:center;min-width:880px !important;}
+.st-key-eo_table [data-testid="stHorizontalBlock"]{gap:12px !important;column-gap:12px !important;
+        display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;min-width:880px !important;}
+.st-key-eo_table_head [data-testid="stHorizontalBlock"]{min-width:880px !important;align-items:flex-end !important;}
+.st-key-eo_table [data-testid="stColumn"],
+.st-key-eo_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]{
+        display:flex !important;flex-direction:column !important;width:auto !important;min-width:0 !important;
+        flex:var(--column-flex, 1 1 0%) !important;}
+.eo-th{font-size:11.5px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--eo-muted);
+       white-space:normal !important;word-break:keep-all !important;overflow-wrap:normal !important;
+       line-height:1.25 !important;display:block !important;}
 /* name + student number sit right on top of each other */
 .st-key-eo_table_rows [data-testid="stColumn"],
 .st-key-eo_table_rows [data-testid="stColumn"] > div,
@@ -310,7 +390,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows [data-testid="stButton"]{margin:0 !important;padding:0 !important;line-height:1.3;}
 .st-key-eo_table_rows .eo-id{margin-top:2px;line-height:1.3;}   /* space between name and student number */
 .st-key-eo_table [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
-.eo-cell{font-size:14px;color:var(--eo-text-2);}
+.eo-cell{font-size:14px;color:var(--eo-text-2);white-space:nowrap !important;word-break:keep-all !important;}
 /* student name = clickable link-style button that opens their Student Profile */
 /* strip the button look completely (any button type, overrides the app-wide button styling):
    no box, no border, no fill, no shadow, no focus ring -> just the name as text */
@@ -334,11 +414,12 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"] p{font-size:14px;font-weight:600;color:var(--eo-text-2);margin:0 !important;line-height:1.3;}
 .st-key-eo_table_rows button[kind="tertiary"]:hover p,
 .st-key-eo_table_rows [data-testid="stBaseButton-tertiary"]:hover p{color:#B91B21;text-decoration:underline;}
-/* ---- MOBILE (<= 640px): stack filters, tighten header ---- */
+
+/* ---- MOBILE (<= 640px): stack filters, tighten header, 2-col export ---- */
 @media (max-width: 640px) {
   .st-key-eo_filters [data-testid="stHorizontalBlock"] {
     flex-wrap: wrap !important;
-    gap: 10px !important;
+    gap: 8px !important;
   }
   .st-key-eo_filters [data-testid="stColumn"],
   .st-key-eo_filters [data-testid="column"] {
@@ -349,21 +430,68 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
   /* Export buttons side by side, full width, below the filters */
   .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
   .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) {
-    flex: 1 1 calc(50% - 5px) !important;
+    flex: 1 1 calc(50% - 6px) !important;
+    width: calc(50% - 6px) !important;
+    min-width: 130px !important;
     margin-left: 0 !important;
   }
   .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) button,
   .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) button {
     width: 100% !important;
+    min-height: 40px !important;
+    white-space: nowrap !important;
   }
   .eo-title { font-size: 1.85rem !important; }
   .eo-caption { font-size: 13px !important; }
-  /* The charts already stack via the 1150px rule; tighten their height a bit */
-  .st-key-eo_charts .js-plotly-plot { min-height: 240px; }
-  /* KPI cards: 2 per row (matches existing rule) */
-  .eo-kpi-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 10px !important;
+  .st-key-eo_charts .js-plotly-plot { min-height: 250px; }
+
+  /* Table on portrait mobile: enforce horizontal row layout (never stack columns vertically) */
+  .st-key-eo_table,
+  .st-key-eo_table_head,
+  .st-key-eo_table_rows {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  .st-key-eo_table [data-testid="stHorizontalBlock"],
+  .st-key-eo_table_head [data-testid="stHorizontalBlock"],
+  .st-key-eo_table_rows [data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    min-width: 880px !important;
+    width: 100% !important;
+  }
+  .st-key-eo_table [data-testid="stColumn"],
+  .st-key-eo_table_head [data-testid="stColumn"],
+  .st-key-eo_table_rows [data-testid="stColumn"],
+  .st-key-eo_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+    display: flex !important;
+    flex-direction: column !important;
+    width: auto !important;
+    min-width: 0 !important;
+    flex: var(--column-flex, 1 1 0%) !important;
+  }
+  .eo-th {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"],
+  .st-key-eo_filters [data-testid="column"] {
+    flex: 1 1 calc(33.33% - 8px) !important;
+    width: auto !important;
+    min-width: 160px !important;
+  }
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2),
+  .st-key-eo_filters [data-testid="column"]:nth-last-child(-n+2) {
+    flex: 1 1 calc(50% - 6px) !important;
+    width: auto !important;
   }
 }
 </style>
@@ -867,7 +995,7 @@ STUDENT_PROFILE_PAGE = "dashboard_views/student_profile.py"   # same page the St
 EO_ROWS_VISIBLE = 10    # students shown before the table scrolls
 EO_MAX_ROWS = 50        # rows built at first (a big drill-down, e.g. 122 Completed, is slow to draw)
 EO_ROW_HEIGHT_PX = 64   # height of one row in px (nudge if 10 rows show a bit more / less)
-EO_COL_WIDTHS = [2.4, 1.1, 1.3, 1.3, 1.7, 1.1, 1.0]
+EO_COL_WIDTHS = [2.3, 1.0, 1.3, 1.4, 1.6, 1.2, 1.0]
 EO_COL_LABELS = ["Student", "Cohort", "Coursework", "Comp. Exam", "Capstone", "Time in Stage", "Flag"]
 
 
@@ -969,7 +1097,7 @@ def render_student_table(df: pd.DataFrame, drill_stage=None):
         # header row (stays put while the rows scroll)
         with st.container(key="eo_table_head"):
             for col, label in zip(st.columns(EO_COL_WIDTHS, vertical_alignment="center"), eo_col_labels()):
-                col.markdown(f'<div class="eo-th">{label}</div>', unsafe_allow_html=True)
+                col.markdown(f'<div class="eo-th">{split_label_two_lines(label)}</div>', unsafe_allow_html=True)
 
         height = EO_ROW_HEIGHT_PX * EO_ROWS_VISIBLE if len(df) > EO_ROWS_VISIBLE else None
         scroll_kwargs = {"height": height} if height else {}   # never pass height=None (older Streamlit rejects it)
@@ -1927,7 +2055,7 @@ def render_executive_overview():
             if st.session_state.get("eo_trend_view") not in (None, *options):
                 st.session_state.pop("eo_trend_view")   # old option name from an earlier version
             with st.container(key="eo_trend_head"):
-                h_title, h_switch = st.columns([1.15, 1], vertical_alignment="top")
+                h_title, h_switch = st.columns([1.6, 1], vertical_alignment="top")
                 with h_switch:
                     with st.container(key="eo_trend_switch"):
                         if hasattr(st, "segmented_control"):      # pill toggle (Streamlit 1.40+)

@@ -96,6 +96,20 @@ def get_risk_flags(program_id):
     return {str(sn): (reason or "") for sn, reason in zip(flags["StudentNumber"], flags["flag_reason"])}
 
 
+def split_label_two_lines(label: str) -> str:
+    """Format a table header label into 2 lines for compact and clean presentation."""
+    cleaned = str(label).strip()
+    words = cleaned.split()
+    if len(words) <= 1:
+        return html.escape(cleaned)
+    if len(words) == 2:
+        return f"{html.escape(words[0])}<br>{html.escape(words[1])}"
+    if len(words) == 3:
+        return f"{html.escape(words[0])} {html.escape(words[1])}<br>{html.escape(words[2])}"
+    mid = (len(words) + 1) // 2
+    return f"{html.escape(' '.join(words[:mid]))}<br>{html.escape(' '.join(words[mid:]))}"
+
+
 # filter row + refresh button styling
 st.markdown(
     """<style>
@@ -120,35 +134,39 @@ st.markdown(
 .st-key-sr_refresh{display:flex !important;flex-direction:row !important;justify-content:flex-end !important;
     align-items:center;width:100% !important;}
 .st-key-sr_refresh [data-testid="stElementContainer"]{width:auto !important;}
-/* long text (e.g. 2 advisers) wraps onto more lines inside its column instead of running past it */
-.st-key-roster_scroll .roster-cell-text{display:block;white-space:normal !important;overflow-wrap:anywhere;
-    word-break:break-word;line-height:1.35;}
-/* every cell in the roster row is allowed to wrap; nothing overflows horizontally */
-.st-key-roster_scroll [data-testid="stColumn"]{min-width:0 !important;overflow-wrap:anywhere;word-break:break-word;}
-/* status pills inside the roster stay inside their cell */
+/* Table cells maintain clean single-line structure without broken letters */
+.st-key-roster_scroll .roster-cell-text,
+.st-key-roster_table .roster-cell-text{display:inline-flex;align-items:center;white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;line-height:1.35;}
+.st-key-roster_scroll .roster-cell-id,
+.st-key-roster_table .roster-cell-id{white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;min-width:85px !important;display:inline-block !important;}
+/* status pills inside the roster: single line, no broken words or letters */
 .st-key-roster_scroll .status-pill,
-.st-key-roster_scroll [class*="status-pill"]{
-    white-space:normal !important;line-height:1.2 !important;
-    height:auto !important;min-height:26px !important;
-    padding:4px 10px !important;max-width:100% !important;
-    text-align:center;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}
+.st-key-roster_scroll [class*="status-pill"],
+.st-key-roster_table .status-pill,
+.st-key-roster_table [class*="status-pill"]{
+    white-space:nowrap !important;line-height:1 !important;
+    word-break:keep-all !important;
+    height:26px !important;min-height:26px !important;
+    padding:0 11px !important;width:auto !important;max-width:none !important;
+    text-align:center;display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;justify-content:center !important;box-sizing:border-box;}
 /* RISK column pill */
 .sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
 html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#FCA5A5;border-color:rgba(239,68,68,.3);}
 .sr-risk-none{color:#9CA3AF;}
-/* ---- MOBILE card list (shown only at <= 640px) ---- */
-.st-key-sr_mobile_cards { display: none; }   /* hidden by default; the mobile @media block turns it on */
 
+/* ---- MOBILE card list (shown only at <= 640px) ---- */
+.st-key-sr_mobile_cards { display: none; }
 .sr-mc {
   background: var(--roster-cell-bg, transparent);
-  border: 1px solid var(--roster-th-border);
+  border: 1px solid var(--roster-th-border, #E5E7EB);
   border-radius: 12px;
   padding: 14px 16px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 .sr-mc-head {
   display: flex;
@@ -156,20 +174,29 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--roster-th-border);
+  border-bottom: 1px solid var(--roster-th-border, #E5E7EB);
 }
-.sr-mc-name { font-size: 16px; font-weight: 700; color: var(--roster-cell-text); line-height: 1.3; word-break: keep-all; }
-.sr-mc-id   { font-family: monospace; font-size: 12px; color: var(--roster-cell-id); white-space: nowrap; }
+.sr-mc-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2563EB !important;
+  text-decoration: none !important;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.sr-mc-name:hover { text-decoration: underline !important; }
+html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
+.sr-mc-id   { font-family: monospace; font-size: 12px; color: var(--roster-cell-id, #64748B); white-space: nowrap; }
 .sr-mc-row  { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.4; }
-.sr-mc-label { color: var(--roster-th-color); font-weight: 600; text-transform: uppercase;
+.sr-mc-label { color: var(--roster-th-color, #64748B); font-weight: 600; text-transform: uppercase;
                letter-spacing: .05em; font-size: 11px; }
-.sr-mc-value { color: var(--roster-cell-text); text-align: right; word-break: keep-all; }
+.sr-mc-value { color: var(--roster-cell-text, #334155); text-align: right; word-break: keep-all; }
 .sr-mc-pills {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 8px 0 4px 0;
-  border-top: 1px solid var(--roster-th-border);
+  border-top: 1px solid var(--roster-th-border, #E5E7EB);
 }
 .sr-mc-pill-block {
   display: flex;
@@ -179,7 +206,7 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
 }
 .sr-mc-pill-label {
   font-size: 12px;
-  color: var(--roster-th-color);
+  color: var(--roster-th-color, #64748B);
   font-weight: 600;
   word-break: keep-all;
 }
@@ -189,13 +216,64 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
   justify-content: space-between;
   gap: 10px;
   padding-top: 8px;
-  border-top: 1px solid var(--roster-th-border);
+  border-top: 1px solid var(--roster-th-border, #E5E7EB);
 }
 
-/* turn the card list ON and the desktop grid OFF at 640px */
+/* Turn mobile cards ON and desktop table OFF on mobile phones <= 640px */
 @media (max-width: 640px) {
+  .st-key-roster_table { display: none !important; }
   .st-key-sr_mobile_cards { display: block !important; }
-  .st-key-sr_mobile_cards .st-key-sr_mobile_cards { display: block !important; }
+}
+@media (min-width: 641px) {
+  .st-key-roster_table { display: block !important; }
+  .st-key-sr_mobile_cards { display: none !important; }
+}
+
+/* Enterprise table scroll wrapper (desktop, tablet, landscape mobile) */
+.st-key-roster_table {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  width: 100% !important;
+}
+.st-key-roster_table [data-testid="stHorizontalBlock"],
+.st-key-roster_table .roster-th-divider,
+.st-key-roster_table .roster-row-divider,
+.st-key-roster_table .st-key-roster_scroll,
+.st-key-roster_table .st-key-roster_scroll > div,
+.st-key-roster_table [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) {
+  min-width: 1100px !important;
+}
+.st-key-roster_table .st-key-roster_scroll {
+  overflow-x: hidden !important;
+}
+.st-key-roster_table [data-testid="stHorizontalBlock"] {
+  gap: 12px !important;
+  column-gap: 12px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-end !important;
+  min-width: 1100px !important;
+}
+.st-key-roster_table [data-testid="stColumn"],
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+  display: flex !important;
+  flex-direction: column !important;
+  width: auto !important;
+  min-width: 0 !important;
+  flex: var(--column-flex, 1 1 0%) !important;
+}
+.st-key-roster_table .roster-th {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: .02em !important;
+  text-transform: uppercase !important;
+  color: var(--roster-th-color, #64748B);
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  line-height: 1.25 !important;
+  display: block !important;
 }
 </style>""",
     unsafe_allow_html=True,
@@ -213,10 +291,9 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 /* caption under the title */
 .sr-caption{font-size:14px !important;line-height:1.5 !important;color:var(--sr-h-label) !important;
         margin:4px 0 0 0 !important;padding:0 !important;opacity:1 !important;}
-/* Roster column headers must be able to wrap ("Coursework Completion" is longer than
-   its column). Without this they overlap the neighbouring header. */
-.roster-th{white-space:normal !important;overflow-wrap:anywhere;line-height:1.2 !important;
-    display:block !important;}
+/* Roster column headers: allows clean 2-line headers */
+.roster-th{white-space:normal !important;word-break:keep-all !important;overflow-wrap:normal !important;line-height:1.25 !important;
+    display:block !important;font-size:11.5px !important;font-weight:600 !important;text-transform:uppercase !important;}
 /* line under the whole header row */
 .st-key-sr_top{border-bottom:1px solid var(--sr-h-border);padding-bottom:10px;}
 .st-key-sr_top [data-testid="stElementContainer"]:has(.sr-title),
@@ -246,11 +323,18 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 }
 
 /* Tablet & Mobile responsive table scroll wrapper - never force columns to break letters */
+.st-key-roster_table,
 .st-key-sr_table_wrap {
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
   width: 100% !important;
 }
+.st-key-roster_table [data-testid="stHorizontalBlock"],
+.st-key-roster_table .roster-th-divider,
+.st-key-roster_table .roster-row-divider,
+.st-key-roster_table .st-key-roster_scroll,
+.st-key-roster_table .st-key-roster_scroll > div,
+.st-key-roster_table [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll),
 .st-key-sr_table_wrap [data-testid="stHorizontalBlock"],
 .st-key-sr_table_wrap .roster-th-divider,
 .st-key-sr_table_wrap .roster-row-divider,
@@ -259,60 +343,76 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 .st-key-sr_table_wrap [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) {
   min-width: 1100px !important;
 }
+.st-key-roster_table .st-key-roster_scroll,
 .st-key-sr_table_wrap .st-key-roster_scroll {
   overflow-x: hidden !important;
 }
+.st-key-roster_table [data-testid="stHorizontalBlock"],
 .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
   gap: 12px !important;
   column-gap: 12px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-end !important;
 }
+.st-key-roster_table [data-testid="stColumn"],
+.st-key-sr_table_wrap [data-testid="stColumn"],
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+.st-key-sr_table_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+  display: flex !important;
+  flex-direction: column !important;
+  width: auto !important;
+  min-width: 0 !important;
+  flex: var(--column-flex, 1 1 0%) !important;
+}
+.st-key-roster_table .roster-th,
 .st-key-sr_table_wrap .roster-th {
-  white-space: nowrap !important;
+  white-space: normal !important;
   word-break: keep-all !important;
   overflow-wrap: normal !important;
+  line-height: 1.25 !important;
+  font-size: 11.5px !important;
 }
 /* ============================================================
-   TABLET (<= 1150px): header labels wrap, table scrolls sideways
+   TABLET & LANDSCAPE (<= 1150px): smooth sideways scroll without text wrapping
    ============================================================ */
 @media (max-width: 1150px) {
-  /* Allow header labels to wrap onto a second line instead of overlapping.
-     Without this the "nowrap" rule above pushes them into the neighbouring column. */
   .roster-th {
     white-space: normal !important;
     word-break: keep-all !important;
-    overflow-wrap: break-word !important;
-    line-height: 1.15 !important;
+    overflow-wrap: normal !important;
+    line-height: 1.25 !important;
     display: block !important;
-    min-height: 28px;
+    font-size: 11.5px !important;
   }
-  /* Align the header cells at the top so a wrapped 2-line label doesn't drag the row down */
+  .st-key-roster_table [data-testid="stHorizontalBlock"],
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
-    align-items: flex-start !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    column-gap: 10px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
   }
-  /* Slightly tighter gap so more of the table fits before the scroll starts */
-  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
-    gap: 8px !important;
-    column-gap: 8px !important;
-  }
-  /* Horizontal scroll container for the whole grid.
-     The inner width stays wide enough for the columns; the user scrolls to see the rest. */
+  .st-key-roster_table,
   .st-key-sr_table_wrap {
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
     width: 100% !important;
     padding-bottom: 6px !important;
   }
-  /* Keep a sensible minimum width so column ratios still make sense */
+  .st-key-roster_table > [data-testid="stVerticalBlock"],
+  .st-key-roster_table [data-testid="stHorizontalBlock"],
   .st-key-sr_table_wrap > [data-testid="stVerticalBlock"],
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
-    min-width: 1050px !important;
+    min-width: 1100px !important;
   }
-  /* Cells still never break a word mid-way, but wrap their content */
   .st-key-roster_scroll .roster-cell-text,
   .st-key-roster_scroll .roster-cell-id {
-    white-space: normal !important;
+    white-space: nowrap !important;
     word-break: keep-all !important;
-    overflow-wrap: break-word !important;
+    overflow-wrap: normal !important;
     line-height: 1.3 !important;
   }
 }
@@ -656,7 +756,7 @@ try:
         table_box = st.container(key="roster_table")   # header + rows live in one box so they scroll sideways together
         header_cols = table_box.columns(col_widths, vertical_alignment="center")
         for col, label in zip(header_cols, header_labels):
-            col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
+            col.markdown(f'<div class="roster-th">{split_label_two_lines(label)}</div>', unsafe_allow_html=True)
         table_box.markdown('<div class="roster-th-divider"></div>', unsafe_allow_html=True)
  
         if df_filtered.empty:
@@ -750,7 +850,7 @@ try:
                     f"""
 <div class="sr-mc">
   <div class="sr-mc-head">
-    <div class="sr-mc-name">{html.escape(s_name)}</div>
+    <a class="sr-mc-name" href="student_profile?student_id={html.escape(s_id)}" target="_self">{html.escape(s_name)}</a>
     <div class="sr-mc-id">{html.escape(s_id)}</div>
   </div>
   {program_html}

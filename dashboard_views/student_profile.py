@@ -217,6 +217,13 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
 .sp-changed{font-size:11px;font-weight:600;color:#A16207;margin-bottom:2px;}
 
 /* ---- status pills (popover buttons), coloured by tone ---- */
+[class*="st-key-sp_pill_"] button,
+[class*="st-key-sp_pill_"] button *,
+.sp-static-pill {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    flex-wrap: nowrap !important;
+}
 [class*="st-key-sp_pill_"] button{min-height:32px !important;height:32px;padding:0 12px !important;border-radius:8px !important;
     font-size:13px !important;font-weight:700 !important;box-shadow:none !important;width:auto !important;}
 [class*="st-key-sp_pill_"] button p{font-size:13px !important;font-weight:700 !important;}
@@ -239,6 +246,160 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
 .st-key-sp_save button *{color:#FFFFFF !important;}
 .st-key-sp_discard button{background:var(--sp-surface) !important;}
 .st-key-sp_save button:disabled,.st-key-sp_discard button:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ============================================================
+   RESPONSIVE DESIGN (Tablets & Phones: Portrait and Landscape)
+   ============================================================ */
+
+/* Tablet & Mobile (<= 1150px): stack milestone cards and adjust header */
+@media (max-width: 1150px) {
+  .sp-page-title { font-size: 2.0rem !important; }
+  .st-key-sp_top [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+  }
+  .st-key-sp_top [data-testid="stColumn"]:first-child {
+    flex: 1 1 300px !important;
+    min-width: 260px !important;
+  }
+  .st-key-sp_top [data-testid="stColumn"]:last-child {
+    flex: 1 1 260px !important;
+    min-width: 240px !important;
+  }
+  /* Milestone cards stack vertically with 100% width */
+  .st-key-sp_pillars [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+  .st-key-sp_pillars [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+
+/* Tablet & Landscape phones (641px - 1150px): wrap save bar cleanly */
+@media (max-width: 1150px) and (min-width: 641px) {
+  .st-key-sp_actions [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+  }
+  .st-key-sp_actions [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    margin-bottom: 2px;
+  }
+  .st-key-sp_actions [data-testid="stColumn"]:not(:first-child) {
+    flex: 1 1 calc(50% - 12px) !important;
+  }
+  .st-key-sp_save button,
+  .st-key-sp_discard button {
+    width: 100% !important;
+    min-height: 40px !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* Medium tablets / Landscape phones (<= 950px): student info card */
+@media (max-width: 950px) {
+  .st-key-sp_head [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:not(:first-child) {
+    flex: 1 1 calc(33.33% - 1px) !important;
+    min-width: 130px !important;
+  }
+}
+
+/* Mobile Phones (<= 640px): portrait phone layout */
+@media (max-width: 640px) {
+  .sp-page-title {
+    font-size: 1.55rem !important;
+    line-height: 1.2 !important;
+  }
+  .sp-page-sub {
+    font-size: 13px !important;
+  }
+  .st-key-sp_top [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .st-key-sp_top [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* Student info card on phone */
+  .st-key-sp_head [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+    padding: 12px 14px !important;
+    min-height: auto !important;
+    border-left: none !important;
+    border-bottom: 1px solid var(--sp-border) !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:last-child {
+    border-bottom: none !important;
+  }
+
+  /* Pillar card internals */
+  [class*="st-key-sp_pillar_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  /* Save / Discard bar on phone */
+  .st-key-sp_actions {
+    padding: 14px !important;
+  }
+  .st-key-sp_actions [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  .st-key-sp_actions [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  .st-key-sp_actions .sp-hint {
+    text-align: center;
+    margin-bottom: 4px;
+    font-size: 12.5px;
+  }
+  .st-key-sp_save button,
+  .st-key-sp_discard button {
+    width: 100% !important;
+    min-height: 42px !important;
+    white-space: nowrap !important;
+    font-size: 13.5px !important;
+  }
+}
+
+/* Landscape Phones (short viewport height <= 520px) */
+@media (max-height: 520px) and (orientation: landscape) {
+  .st-key-sp_top { padding-bottom: 6px !important; margin-bottom: 4px !important; }
+  .sp-page-title { font-size: 1.45rem !important; }
+  .sp-page-sub { font-size: 12px !important; margin-top: 2px !important; }
+  .st-key-sp_head { margin-top: 10px !important; }
+  .st-key-sp_head [data-testid="stColumn"] { padding: 8px 12px !important; min-height: auto !important; }
+  .sp-name { font-size: 17px !important; }
+  .sp-note { margin: 10px 0 !important; padding: 8px 12px !important; font-size: 12px !important; }
+  .sp-section { font-size: 16px !important; }
+  [class*="st-key-sp_pillar_"] { padding: 12px 14px !important; }
+  .sp-pillar-title { font-size: 16px !important; margin-top: 8px !important; }
+  .st-key-sp_actions { margin-top: 10px !important; padding: 8px 12px !important; }
+}
 </style>
 """
 st.markdown(PAGE_CSS, unsafe_allow_html=True)

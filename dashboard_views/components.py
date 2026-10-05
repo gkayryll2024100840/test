@@ -723,18 +723,25 @@ div[data-testid="stMarkdownContainer"] h3.section-title {{
 
 /* Unified Status Pill Styles */
 .status-pill {{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 26px;
-    padding: 0 11px;
-    border-radius: 9999px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-    width: fit-content;
-    box-sizing: border-box;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 26px !important;
+    min-height: 26px !important;
+    padding: 0 11px !important;
+    border-radius: 9999px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    flex-wrap: nowrap !important;
+    width: fit-content !important;
+    box-sizing: border-box !important;
+}}
+.status-pill * {{
+    white-space: nowrap !important;
+    word-break: keep-all !important;
 }}
 
 .pill-success {{
@@ -1224,31 +1231,39 @@ html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
     transform:translate(-65%, -50%) rotate(45deg);pointer-events:none;}
 html[data-eo-theme="dark"] [data-testid="stExpandSidebarButton"]::after{border-color:#E5E7EB;}
 /* ============================================================
-   MOBILE (<= 640px): stack the header bars, shrink the logo/text
+   MOBILE (<= 640px): phone portrait layout
    ============================================================ */
 @media (max-width: 640px) {
-  /* Header red bar: smaller title, tighter padding */
+  /* Header red bar: compact single line, title with ellipsis if constrained */
   .ps-red {
-    padding: 12px 16px !important;
-    gap: 10px !important;
-    flex-wrap: wrap !important;
+    padding: 10px 14px !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    min-height: 52px !important;
   }
-  .ps-logo { width: 38px !important; height: 38px !important; }
-  .ps-kicker { font-size: 10px !important; }
-  .ps-title  { font-size: 18px !important; line-height: 1.2 !important; }
+  .ps-logo { width: 34px !important; height: 34px !important; min-width: 34px !important; }
+  .ps-kicker { font-size: 9.5px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+  .ps-title  { font-size: 16px !important; line-height: 1.2 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+
+  /* Toolbar buttons positioned cleanly in header without collision */
+  [data-testid="stToolbar"] { top: 10px !important; right: 10px !important; height: 28px !important; }
+  [data-testid="stHeader"] { height: 52px !important; }
 
   /* Yellow bar: stack the two meta blocks vertically */
   .ps-yellow {
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 6px !important;
-    padding: 8px 16px !important;
+    gap: 4px !important;
+    padding: 6px 14px !important;
   }
-  .ps-meta { flex-wrap: wrap !important; gap: 6px !important; }
+  .ps-meta { flex-wrap: wrap !important; gap: 4px 8px !important; }
+  .ps-meta-sep { display: none !important; }
   .ps-meta-label { font-size: 9px !important; }
   .ps-meta-value { font-size: 11px !important; }
 
-  /* No sticky header on mobile — it eats too much vertical space */
+  /* No sticky header on mobile — saves vertical scrolling space */
   [data-testid="stElementContainer"]:has(.ps-header),
   .element-container:has(.ps-header) {
     position: static !important;
@@ -1257,22 +1272,46 @@ html[data-eo-theme="dark"] [data-testid="stExpandSidebarButton"]::after{border-c
   /* Page content padding tighter */
   [data-testid="stMainBlockContainer"],
   .block-container {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
   }
-  .ps-header { margin: 0 -1rem 16px -1rem !important; }
+  .ps-header { margin: 0 -0.85rem 14px -0.85rem !important; }
 
-  /* Sidebar default-collapsed on mobile so the roster fills the screen */
+  /* Sidebar drawer on mobile */
   [data-testid="stSidebar"] {
-    min-width: 280px !important;
-    max-width: 82vw !important;
+    min-width: 270px !important;
+    max-width: 85vw !important;
+  }
+}
+
+/* ============================================================
+   MOBILE LANDSCAPE: compact height, preserve screen real estate
+   ============================================================ */
+@media (max-height: 520px) and (orientation: landscape), (max-width: 950px) and (orientation: landscape) {
+  [data-testid="stElementContainer"]:has(.ps-header),
+  .element-container:has(.ps-header) {
+    position: static !important;
+  }
+  .ps-header { margin: 0 -1.25rem 10px -1.25rem !important; }
+  .ps-red { padding: 6px 16px !important; min-height: 42px !important; gap: 8px !important; }
+  .ps-logo { width: 30px !important; height: 30px !important; min-width: 30px !important; }
+  .ps-title { font-size: 15px !important; }
+  .ps-kicker { font-size: 8.5px !important; }
+  .ps-yellow { padding: 4px 16px !important; font-size: 10.5px !important; gap: 6px !important; }
+  .ps-meta-label { font-size: 8.5px !important; }
+  .ps-meta-value { font-size: 10.5px !important; }
+  [data-testid="stToolbar"] { top: 6px !important; right: 12px !important; height: 28px !important; }
+  [data-testid="stHeader"] { height: 42px !important; }
+  [data-testid="stMainBlockContainer"], .block-container {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
   }
 }
 
 /* ============================================================
    TABLET (<= 1024px): tighten the header so it doesn't wrap awkwardly
    ============================================================ */
-@media (max-width: 1024px) and (min-width: 641px) {
+@media (max-width: 1024px) and (min-width: 641px) and (min-height: 521px) {
   .ps-red { padding: 14px 22px !important; gap: 12px !important; }
   .ps-title { font-size: 22px !important; }
   .ps-yellow { padding: 8px 22px !important; gap: 12px !important; flex-wrap: wrap !important; }

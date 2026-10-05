@@ -81,6 +81,19 @@ html[data-eo-theme="dark"] .ac-th{color:#94A3B8;}
         overflow-wrap:anywhere;}
 .ac-table tbody tr:first-child td{border-top:none;}
 .ac-table tbody tr:hover td{background:rgba(148,163,184,.10);}
+
+@media (max-width: 1150px) {
+  .ac-title { font-size: 2.0rem !important; }
+}
+@media (max-width: 640px) {
+  .ac-title { font-size: 1.55rem !important; line-height: 1.2 !important; }
+  .ac-section-title { font-size: 1.35rem !important; }
+  .ac-section { padding-top: 20px; padding-bottom: 20px; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .ac-title { font-size: 1.45rem !important; }
+  .ac-section { padding-top: 14px; padding-bottom: 14px; }
+}
 </style>"""
 
 
