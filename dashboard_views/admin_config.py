@@ -312,153 +312,113 @@ def cached_program_instances():
 
 
 section_divider()
-section_header(
-    "Program Instances",
-    "Every program instance running on the platform. Each row links directly to that program's "
-    "configuration (stage labels, KPI tiles, at-risk threshold). New instances appear here automatically.",
-)
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+
+PI_WIDTHS = [2.4, 2.0, 2.0, 0.8, 0.9, 1.1]   # Program | Owner | Chair | Students | Status | (actions)
 
 
 @st.fragment
 def program_instances_section():
     instances = cached_program_instances()
-
-    if not instances:
-        st.info("No program instances exist yet. Create one from the Student Roster's Active Program panel.")
-        return
-
-    # ---- Summary chips ----
     total = len(instances)
     active_n = sum(1 for r in instances if r.get("IsActive"))
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(f"**Total programs:** {total}")
-    c2.markdown(f"**Active:** {active_n}")
-    c3.markdown(f"**Inactive:** {total - active_n}")
 
-    st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
-
-    # ---- Column headers (same style as the User Permissions table) ----
-    # Added "Chair" (Users.CurrentProgramID) next to "Owner" (Program.OwnerUserID).
-    widths = [0.8, 2.0, 1.8, 1.8, 0.9, 0.8, 2.3]
-    for col, label in zip(st.columns(widths, vertical_alignment="bottom"),
-                          ["Code", "Program", "Owner", "Chair", "Status", "Students", "Actions"]):
-        col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
-
-    # cached user list (shared by every row's picker -> one DB read per page, not per program)
+    # cached user list (shared by every row's pickers -> one DB read per page, not per program)
     all_users = cached_users("") or []
     user_labels = {f"{u['FirstName']} {u['LastName']} ({u['UserID']})": u["UserID"] for u in all_users}
-    user_options = ["— Unassigned —"] + list(user_labels)
+    options = ["— Unassigned —"] + list(user_labels)
 
-    # ---- One row per program ----
-    for inst in instances:
-        pid = inst["ProgramID"]
-        cols = st.columns(widths, vertical_alignment="center")
+    def label_for(uid):
+        return next((lbl for lbl, u in user_labels.items() if u == uid), "— Unassigned —")
 
-        # Code
-        with cols[0]:
-            st.markdown(f"**{html.escape(str(inst['ProgramCode']))}**")
-
-        # Program name + created date
-        with cols[1]:
-            st.markdown(
-                f"{html.escape(str(inst['ProgramName']))}"
-                + (f'<div class="ac-note-sm">Created '
-                   f'{inst["CreatedAt"].strftime("%b %d, %Y") if inst.get("CreatedAt") else "—"}</div>'
-                   if inst.get("CreatedAt") else ""),
-                unsafe_allow_html=True,
-            )
-
-        # Owner (Program.OwnerUserID)
-        with cols[2]:
-            if inst.get("OwnerName"):
-                st.markdown(f"{html.escape(str(inst['OwnerName']))}")
-                if inst.get("OwnerEmail"):
-                    st.markdown(f'<div class="ac-note-sm">{html.escape(str(inst["OwnerEmail"]))}</div>',
-                                unsafe_allow_html=True)
-            else:
-                st.markdown('<span class="ac-note-sm">Unassigned</span>', unsafe_allow_html=True)
-
-        # Chair (Users.CurrentProgramID) — picker + Save
-        with cols[3]:
-            chair_uid = inst.get("ChairUserID")
-            current_chair = next(
-                (lbl for lbl, uid in user_labels.items() if uid == chair_uid),
-                "— Unassigned —",
-            )
-            chair_pick = st.selectbox(
-                f"Chair for {pid}",
-                user_options,
-                index=user_options.index(current_chair) if current_chair in user_options else 0,
-                key=f"chair_pick_{pid}",
-                label_visibility="collapsed",
-            )
-            if chair_pick != current_chair and st.button("Assign", key=f"chair_save_{pid}",
-                                                          use_container_width=True):
-                require_edit()
-                new_uid = None if chair_pick.startswith("—") else user_labels.get(chair_pick)
-                # Clear the previous chair's CurrentProgramID (so they don't stay locked to this program)
-                if chair_uid and chair_uid != new_uid:
-                    set_user_program(chair_uid, None)
-                ok, err = set_user_program(new_uid, pid) if new_uid else (True, None)
-                if ok:
-                    st.cache_data.clear()
-                    st.session_state["pi_flash"] = (True, f"Chair updated for {inst['ProgramCode']}.")
-                    st.rerun(scope="fragment")
-                else:
-                    st.session_state["pi_flash"] = (False, err)
-                    st.rerun(scope="fragment")
-
-        # Status pill
-        with cols[4]:
-            if inst.get("IsActive"):
-                st.markdown('<span class="ac-chip" style="color:#15803D;background:#ECFDF3;'
-                            'border-color:#BBF7D0;">ACTIVE</span>', unsafe_allow_html=True)
-            else:
-                st.markdown('<span class="ac-chip" style="color:#B45309;background:#FFFBEB;'
-                            'border-color:#FDE68A;">INACTIVE</span>', unsafe_allow_html=True)
-
-        # Student count
-        with cols[5]:
-            st.markdown(f"{int(inst.get('StudentCount') or 0):,}")
-
-        # Actions: Configure link + owner picker
-        with cols[6]:
-            act_left, act_right = st.columns([1.2, 1])
-            with act_left:
-                st.page_link(
-                    "dashboard_views/admin_config.py",
-                    label="⚙ Configure",
-                    query_params={"program": str(pid)},
+    with st.container(key="accard_programs"):
+        with st.container(key="achead_programs"):
+            c_title, c_stats = st.columns([2.6, 1.1], vertical_alignment="top")
+            with c_title:
+                st.markdown(
+                    '<div class="ac-card-title">Program Instances</div>'
+                    '<div class="ac-card-desc">Every program on the platform. Assign its owner and program chair, '
+                    'or open its settings (stage labels, KPI tiles, at-risk threshold).</div>',
+                    unsafe_allow_html=True,
                 )
-            with act_right:
-                owner_options = ["— Unassigned —"] + list(user_labels)
-                current_owner = next(
-                    (lbl for lbl, uid in user_labels.items() if uid == inst.get("OwnerUserID")),
-                    "— Unassigned —",
+            with c_stats:
+                st.markdown(
+                    f'<div class="ac-stats"><span><b>{total}</b> programs</span>'
+                    f'<span><b>{active_n}</b> active</span><span><b>{total - active_n}</b> inactive</span></div>',
+                    unsafe_allow_html=True,
                 )
-                picked = st.selectbox(
-                    f"Owner for {pid}",
-                    owner_options,
-                    index=owner_options.index(current_owner) if current_owner in owner_options else 0,
-                    key=f"owner_pick_{pid}",
-                    label_visibility="collapsed",
-                )
-                if picked != current_owner and st.button("Save", key=f"owner_save_{pid}"):
-                    require_edit()
-                    new_uid = None if picked.startswith("—") else user_labels.get(picked)
-                    ok, err = set_program_owner(pid, new_uid)
-                    if ok:
-                        cached_program_instances.clear()
-                        st.session_state["pi_flash"] = (True, f"Owner updated for {inst['ProgramCode']}.")
-                        st.rerun(scope="fragment")
-                    else:
-                        st.session_state["pi_flash"] = (False, err)
-                        st.rerun(scope="fragment")
 
-    flash = st.session_state.pop("pi_flash", None)
-    if flash:
-        (st.success if flash[0] else st.error)(flash[1])
+        with st.container(key="acbody_programs"):
+            if not instances:
+                st.info("No program instances exist yet. Create one from the Student Roster's Active Program panel.")
+                return
+
+            for col, label in zip(st.columns(PI_WIDTHS, vertical_alignment="bottom"),
+                                  ["Program", "Owner", "Program Chair", "Students", "Status", ""]):
+                col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+
+            for inst in instances:
+                pid = inst["ProgramID"]
+                cur_owner, cur_chair = label_for(inst.get("OwnerUserID")), label_for(inst.get("ChairUserID"))
+                with st.container(key=f"pirow_{pid}"):
+                    c_prog, c_owner, c_chair, c_n, c_status, c_act = st.columns(PI_WIDTHS, vertical_alignment="center")
+                    with c_prog:
+                        created = inst["CreatedAt"].strftime("%b %d, %Y") if inst.get("CreatedAt") else None
+                        st.markdown(
+                            f'<div class="ac-prog"><span class="ac-tag">{html.escape(str(inst["ProgramCode"]))}</span>'
+                            f'{html.escape(str(inst["ProgramName"]))}</div>'
+                            + (f'<div class="ac-prog-sub">Created {created}</div>' if created else ""),
+                            unsafe_allow_html=True,
+                        )
+                    with c_owner:
+                        picked = st.selectbox(f"Owner for {pid}", options, index=options.index(cur_owner),
+                                              key=f"owner_pick_{pid}", label_visibility="collapsed")
+                        # Owner (Program.OwnerUserID): Save shows up when the pick changed (original logic)
+                        if picked != cur_owner and st.button("Save", key=f"owner_save_{pid}",
+                                                             use_container_width=True):
+                            require_edit()
+                            new_uid = None if picked.startswith("—") else user_labels.get(picked)
+                            ok, err = set_program_owner(pid, new_uid)
+                            if ok:
+                                cached_program_instances.clear()
+                                st.session_state["pi_flash"] = (True, f"Owner updated for {inst['ProgramCode']}.")
+                                st.rerun(scope="fragment")
+                            else:
+                                st.session_state["pi_flash"] = (False, err)
+                                st.rerun(scope="fragment")
+                    with c_chair:
+                        chair_uid = inst.get("ChairUserID")
+                        chair_pick = st.selectbox(f"Chair for {pid}", options, index=options.index(cur_chair),
+                                                  key=f"chair_pick_{pid}", label_visibility="collapsed")
+                        # Chair (Users.CurrentProgramID): Assign shows up when the pick changed (original logic)
+                        if chair_pick != cur_chair and st.button("Assign", key=f"chair_save_{pid}",
+                                                                 use_container_width=True):
+                            require_edit()
+                            new_uid = None if chair_pick.startswith("—") else user_labels.get(chair_pick)
+                            # Clear the previous chair's CurrentProgramID (so they don't stay locked to this program)
+                            if chair_uid and chair_uid != new_uid:
+                                set_user_program(chair_uid, None)
+                            ok, err = set_user_program(new_uid, pid) if new_uid else (True, None)
+                            if ok:
+                                st.cache_data.clear()
+                                st.session_state["pi_flash"] = (True, f"Chair updated for {inst['ProgramCode']}.")
+                                st.rerun(scope="fragment")
+                            else:
+                                st.session_state["pi_flash"] = (False, err)
+                                st.rerun(scope="fragment")
+                    with c_n:
+                        st.markdown(f'<span class="ac-num">{int(inst.get("StudentCount") or 0):,}</span>',
+                                    unsafe_allow_html=True)
+                    with c_status:
+                        st.markdown('<span class="ac-pill ac-pill-ok">Active</span>' if inst.get("IsActive") else
+                                    '<span class="ac-pill ac-pill-warn">Inactive</span>', unsafe_allow_html=True)
+                    with c_act:
+                        st.page_link("dashboard_views/admin_config.py", label="⚙ Configure",
+                                     query_params={"program": str(pid)})
+
+            flash = st.session_state.pop("pi_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
 
 
 program_instances_section()
@@ -500,7 +460,9 @@ html[data-eo-theme="dark"] .ac-eyebrow{color:#94A3B8;}
 .ac-card-desc{font-size:14px;color:var(--ac-h-label);margin:4px 0 0 0;line-height:1.5;}
 .ac-foot-note{font-size:14px;color:var(--ac-h-label);}
 .ac-foot-note b{color:var(--ac-h-text);}
-.ac-field-label{font-size:14px;font-weight:600;color:var(--ac-h-text);margin:0 0 -6px 0;}
+.ac-field-label{font-size:14px;font-weight:600;color:var(--ac-h-text);margin:0 0 6px 0;
+        display:flex;align-items:center;gap:8px;line-height:1.3;}
+.ac-field-label .ac-tag{margin-right:0;}
 .ac-suffix{font-size:14px;color:var(--ac-h-label);}
 .ac-hint{font-size:13px;color:var(--ac-h-label);line-height:1.55;}
 
@@ -537,6 +499,28 @@ html[data-eo-theme="dark"] .ac-th2{color:#94A3B8;}
 [class*="st-key-kpiadd_"]{border:1px dashed var(--ac-h-border);border-radius:12px;padding:16px 20px;
         background:var(--ac-foot-bg);margin-top:10px;}
 .ac-add-title{font-size:16px;font-weight:700;color:var(--ac-h-text);margin:0;}
+/* Program Instances + Backup cards (same look as the KPI tiles table) */
+[class*="st-key-pirow_"],[class*="st-key-bkrow_"]{border-bottom:1px solid var(--ac-h-border);padding:6px 0;}
+[class*="st-key-bkrow_"]{padding:10px 0;}
+.ac-prog{font-size:14px;font-weight:600;color:var(--ac-h-text);line-height:1.4;}
+.ac-prog-sub{font-size:12px;color:var(--ac-h-label);margin-top:2px;}
+.ac-num{font-size:14px;font-weight:600;color:var(--ac-h-text);}
+.ac-cell{font-size:14px;color:var(--ac-h-text);}
+.ac-cell-muted{font-size:13px;color:var(--ac-h-label);}
+.ac-pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;border:1px solid;
+        white-space:nowrap;}
+.ac-pill-ok{color:#15803D;background:#ECFDF3;border-color:#BBF7D0;}
+.ac-pill-warn{color:#B45309;background:#FFFBEB;border-color:#FDE68A;}
+.ac-pill-info{color:#1D4ED8;background:#EFF6FF;border-color:#BFDBFE;}
+.ac-pill-muted{color:#4B5563;background:#F3F4F6;border-color:#E5E7EB;}
+html[data-eo-theme="dark"] .ac-pill-ok{color:#34D399;background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);}
+html[data-eo-theme="dark"] .ac-pill-warn{color:#FCD34D;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.3);}
+html[data-eo-theme="dark"] .ac-pill-info{color:#93C5FD;background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);}
+html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.24);}
+.ac-stats{display:flex;justify-content:flex-end;gap:18px;font-size:13px;color:var(--ac-h-label);padding-top:6px;}
+.ac-stats b{color:var(--ac-h-text);font-size:16px;margin-right:3px;}
+.st-key-bkrestore{border:1px dashed var(--ac-h-border);border-radius:12px;padding:16px 20px;
+        background:var(--ac-foot-bg);margin-top:10px;gap:10px !important;}
 /* Tablet: keep the pair side by side but tighter */
 @media (max-width: 1150px) and (min-width: 641px) {
   .st-key-ac_pair [data-testid="stHorizontalBlock"] { gap: 12px !important; }
@@ -1147,3 +1131,161 @@ def sync_logs_section():
 
 
 sync_logs_section()
+
+# ============================================================
+# CONFIGURATION BACKUP & RESTORE (US-48)  -  logic lives in config_backup.py
+# ============================================================
+from config_backup import (
+    create_backup, list_backups, get_backup, backup_file_bytes, parse_backup_file, restore_backup,
+)
+
+section_divider()
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+
+BACKUP_TYPES = {   # Reason column -> (label, pill style)
+    "manual": ("Manual", "ac-pill-info"),
+    "scheduled": ("Nightly", "ac-pill-ok"),
+    "before restore": ("Before restore", "ac-pill-warn"),
+}
+BK_WIDTHS = [0.7, 1.8, 1.2, 1.6]   # Backup | Created | Type | By
+BK_SHOWN = 5                        # rows in the list (older ones are still in the Restore dropdown)
+
+
+def _when(value):
+    """datetime -> 'Oct 04, 2026 · 10:21 PM'."""
+    try:
+        return f"{value:%b %d, %Y} · {value.hour % 12 or 12}:{value:%M %p}"
+    except Exception:
+        return str(value)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_backups():
+    return list_backups(limit=20)
+
+
+def _restore_facts(payload):
+    """One short line about a backup, shown before restoring it."""
+    programs = ", ".join(p["ProgramCode"] for p in payload.get("programs", [])) or "no programs"
+    refresh = (payload.get("app_settings") or {}).get("refresh_time", "not set")
+    try:
+        saved = _when(datetime.strptime(str(payload.get("created_at")), "%Y-%m-%d %H:%M:%S"))
+    except ValueError:
+        saved = str(payload.get("created_at", "?"))
+    return (f"Saved {html.escape(saved)} · {html.escape(programs)} · "
+            f"{len(payload.get('field_mappings', {}))} field mappings · refresh time {html.escape(str(refresh))}")
+
+
+@st.fragment
+def config_backup_section():
+    try:
+        backups = cached_backups()
+    except Exception as e:
+        st.error(f"Could not load backups: {e}")
+        return
+    latest = backups[0] if backups else None
+
+    with st.container(key="accard_backup"):
+        with st.container(key="achead_backup"):
+            st.markdown(
+                '<div class="ac-card-title">Configuration Backup</div>'
+                '<div class="ac-card-desc">Saves field mappings, KPI tiles, at-risk thresholds, stage labels, the '
+                'refresh time and the database connection (never the password). Runs every night with the data '
+                'refresh. Back up before any big change.</div>',
+                unsafe_allow_html=True,
+            )
+
+        with st.container(key="acbody_backup"):
+            # ---- recent backups ----
+            if backups:
+                for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
+                                      ["Backup", "Created", "Type", "By"]):
+                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+                for b in backups[:BK_SHOWN]:
+                    kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
+                    with st.container(key=f"bkrow_{b['BackupID']}"):
+                        c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
+                        c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
+                        c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
+                        c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
+                        c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
+                                      unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ac-hint">No backups yet. Click <b>Back up now</b> to make the first one.</div>',
+                            unsafe_allow_html=True)
+
+            # ---- restore ----
+            with st.container(key="bkrestore"):
+                c_title, c_toggle = st.columns([2, 1], vertical_alignment="center")
+                c_title.markdown('<div class="ac-add-title">Restore</div>', unsafe_allow_html=True)
+                from_file = c_toggle.toggle("Use a backup file", key="cfg_restore_from_file")
+
+                payload, problem = None, None
+                if from_file:
+                    upload = st.file_uploader("Backup file (.json)", type=["json"], key="cfg_restore_file")
+                    if upload is not None:
+                        payload, problem = parse_backup_file(upload.getvalue())
+                elif backups:
+                    labels = {f"#{b['BackupID']} · {_when(b['CreatedAt'])} · "
+                              f"{BACKUP_TYPES.get(b['Reason'], (b['Reason'],))[0]}": b["BackupID"] for b in backups}
+                    chosen = st.selectbox("Backup to restore", list(labels), key="cfg_restore_pick")
+                    try:
+                        payload = get_backup(labels[chosen])
+                    except Exception as e:
+                        problem = f"Could not read that backup: {e}"
+                else:
+                    st.markdown('<div class="ac-hint">Nothing to restore yet.</div>', unsafe_allow_html=True)
+
+                if problem:
+                    st.error(problem)
+                restore_clicked = False
+                if payload:
+                    st.markdown(f'<div class="ac-hint">{_restore_facts(payload)}</div>', unsafe_allow_html=True)
+                    c_ok, c_btn = st.columns([3, 1], vertical_alignment="center")
+                    confirm = c_ok.checkbox("Replace the current settings (they're backed up first, "
+                                            "so this can be undone)", key="cfg_restore_confirm")
+                    restore_clicked = c_btn.button("Restore", type="primary", disabled=not confirm,
+                                                   key="cfg_restore_go", use_container_width=True)
+
+            flash = st.session_state.pop("cfg_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_backup"):
+            c_dl, c_note, c_now = st.columns([1.2, 2, 1], vertical_alignment="center")
+            with c_dl:
+                st.download_button(
+                    "⬇ Download latest",
+                    data=(lambda: backup_file_bytes(get_backup(latest["BackupID"]))) if latest else b"",
+                    file_name=f"dashboard_config_backup_{latest['BackupID'] if latest else 0}.json",
+                    mime="application/json",
+                    disabled=latest is None,
+                    help="Keep a copy outside the database (e.g. a shared drive), so you can still restore "
+                         "if the database itself is down.",
+                    key="cfg_backup_download",
+                )
+            with c_note:
+                if latest:
+                    st.markdown(f'<span class="ac-foot-note">Last backup <b>{_when(latest["CreatedAt"])}</b></span>',
+                                unsafe_allow_html=True)
+            with c_now:
+                backup_now = st.button("Back up now", type="primary", key="cfg_backup_now", use_container_width=True)
+
+    if backup_now:
+        ok, msg, _ = create_backup(current_user_id(), "manual")
+        cached_backups.clear()
+        st.session_state["cfg_flash"] = (ok, msg)
+        st.rerun(scope="fragment")
+
+    if restore_clicked:
+        require_edit()   # US-13 gate: View Only users are stopped and the attempt is logged
+        with st.spinner("Restoring..."):
+            ok, msg = restore_backup(payload, current_user_id())
+        if ok:
+            st.cache_data.clear()   # every page picks up the restored settings right away
+            st.session_state.pop("cfg_restore_confirm", None)
+        st.session_state["cfg_flash"] = (ok, msg)
+        st.rerun()
+
+
+config_backup_section()

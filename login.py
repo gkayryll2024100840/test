@@ -57,7 +57,7 @@ def find_asset(*candidates):
 
 
 def log_failed_attempt(user_id, ip_address=None):
-    """Insert a wrong-password attempt into login_logs."""
+    """Insert a wrong-password attempt into Login_Logs."""
     try:
         connection = get_db_connection()
     except mysql.connector.Error:
@@ -66,7 +66,7 @@ def log_failed_attempt(user_id, ip_address=None):
     try:
         with connection.cursor(dictionary=True) as cursor:
             sql = """
-                INSERT INTO login_logs (UserID, ip_address, attempted_at)
+                INSERT INTO Login_Logs (UserID, IPAddress, AttemptedAt)
                 VALUES (%s, %s, NOW())
             """
             cursor.execute(sql, (user_id, ip_address))
@@ -212,7 +212,8 @@ if not st.session_state.get('user'):
             }}
 
             /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
-               position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is. */
+               position:fixed + 50%/50% + translate(-50%,-50%) centres it no matter how tall it is.
+               To make the card wider/narrower, change the 540px. */
             .st-key-login_card {{
                 position: fixed !important;
                 top: 50% !important;
@@ -255,7 +256,6 @@ if not st.session_state.get('user'):
                     margin-bottom: 10px !important;
                 }}
             }}
-
             .login-logo {{
                 width: 64px;
                 height: 64px;
