@@ -6,19 +6,21 @@ import pandas as pd
 import streamlit as st
 
 from db_connect import (
+    add_student_note,                 # US-45
     build_student_onepager_html,      # US-46
     can_edit,
     get_all_programs,
     get_lifecycle_status_options,
-    get_stage_labels,                 # US-30: program-specific stage names
+    get_stage_labels,
     get_student_at_risk_flag,         # US-46
     get_student_email,
     get_student_lifecycle_detail,
-    get_student_notes,                # US-46
+    get_student_notes,                # US-45 / US-46
     get_student_roster_data,
     get_user_program,
     update_enrollment_status,
     update_lifecycle_statuses,
+    NOTES_MAX_LEN,                    # US-45
 )
 from permissions import require_edit
 from dashboard_views.components import (
@@ -95,6 +97,13 @@ def cached_student_email(student_id):
 def cached_program_ids():
     """{"MBA": 1, "BIA": 2, ...}: with "All Programs", each student's own program is looked up by its code."""
     return {p["ProgramCode"]: p["ProgramID"] for p in (get_all_programs() or [])}
+    
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_my_adviser_id(user_id):
+    """AdviserID linked to this login, or None. Cached briefly so the notes card doesn't re-query
+    on every keystroke in the textarea."""
+    from db_connect import get_my_adviser_id
+    return get_my_adviser_id(user_id)
 
 
 # PILLARS key -> the stage key used by get_stage_labels()
@@ -700,7 +709,96 @@ elif selected_label:
     changes = {k: v for k, v in chosen.items() if v != current[k]}
     enrollment_changed = bool(current_enrollment) and chosen_enrollment != current_enrollment
     n_changes = len(changes) + (1 if enrollment_changed else 0)
+    # ----------------- US-45 Adviser Notes -----------------
+    # Visible to any authorized role that can open Student Profile (Dean / IT-Admin / Program Chair /
+    # Adviser / Success Advisor) — the same gate the rest of this page already uses.
+    # Only Edit-permission users see the textarea + "Add Note" button; View Only users see read-only.
+    # Notes are append-only: no edit/delete from the UI, so the record stays tamper-evident (US-43).
+    #
+    # Schema note: Adviser_Notes stores AdviserID (not UserID), so the caller must be an adviser
+    # to post. If they aren't, we hide the textarea and explain why instead of showing a button
+    # that would fail on submit.
+    with st.container(key="sp_notes"):
+        st.markdown(
+            '<div class="sp-notes-title">📝 Adviser Notes</div>'
+            '<div class="sp-notes-sub">Context for handoff — retained on the student\'s record for '
+            'audit purposes. Notes cannot be edited or deleted once saved.</div>',
+            unsafe_allow_html=True,
+        )
 
+        _notes_now = get_student_notes(selected_id)
+        if _notes_now:
+            st.markdown(
+                f'<div class="sp-notes-count">{len(_notes_now)} note'
+                f'{"s" if len(_notes_now) != 1 else ""} on file</div>',
+                unsafe_allow_html=True,
+            )
+            for n in _notes_now:
+                _when = n.get("NoteDate")
+                try:
+                    _when_txt = pd.to_datetime(_when).strftime("%b %d, %Y · %I:%M %p") if _when else "—"
+                except Exception:
+                    _when_txt = str(_when or "—")
+                # AuthorName comes from a LEFT JOIN on Adviser; fall back to the raw AdviserID if the
+                # adviser row was deleted. Never blank.
+                _author = str(n.get("AuthorName") or n.get("AdviserID") or "Unknown")
+                st.markdown(
+                    f'<div class="sp-note-item">'
+                    f'<div class="sp-note-head">'
+                    f'<span class="sp-note-author">{html.escape(_author)}</span>'
+                    f'<span class="sp-note-when">{html.escape(_when_txt)}</span>'
+                    f'</div>'
+                    f'<div class="sp-note-body">{html.escape(str(n.get("NoteText") or ""))}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown(
+                '<div class="sp-notes-empty">No notes on file yet.</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Only Edit-permission users who are also linked to an adviser profile can post.
+        _my_adviser_id = cached_my_adviser_id(user_id) if editable else None
+
+        if editable and _my_adviser_id:
+            _note_key = f"sp_note_text_{selected_id}"
+            _new_note = st.text_area(
+                "Add a note",
+                key=_note_key,
+                height=90,
+                max_chars=NOTES_MAX_LEN,
+                placeholder="e.g. Student is being reassigned to a new adviser — prior adviser confirmed the "
+                            "comp exam date is 2026-11-12.",
+                label_visibility="collapsed",
+            )
+            with st.container(key="sp_note_add"):
+                if st.button("Add Note", key=f"sp_note_save_{selected_id}",
+                             disabled=not (_new_note or "").strip()):
+                    require_edit()   # US-13 gate (redundant with the flag above, but consistent)
+                    _ok, _err = add_student_note(user_id, selected_id, _new_note)
+                    if _ok:
+                        st.session_state[f"sp_note_flash_{selected_id}"] = (True, "Note added.")
+                        st.session_state.pop(_note_key, None)   # clear the textarea
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.session_state[f"sp_note_flash_{selected_id}"] = (False, _err)
+                        st.rerun()
+
+            _note_flash = st.session_state.pop(f"sp_note_flash_{selected_id}", None)
+            if _note_flash:
+                (st.success if _note_flash[0] else st.error)(_note_flash[1])
+        elif editable:
+            # Edit permission, but not an adviser — the write path would refuse, so say so up front.
+            st.caption(
+                "Notes can only be added by users linked to an adviser profile. "
+                "Ask IT/Admin to link your account to an Adviser record."
+            )
+        else:
+            st.caption("Your account has View Only access, so you can't add notes.")
+
+    # ----------------- US-46 One-page summary -----------------
     # ----------------- US-46 One-page summary -----------------
     # Sits between the pillar cards and the save bar. Single download button (no two-step
     # "click Generate then a second button appears" flow, which shifted the layout on mobile).
