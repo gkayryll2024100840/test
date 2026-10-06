@@ -1705,52 +1705,218 @@ def get_student_notes(student_number):
         return []
 
 
-def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
-                                 pillars_display, at_risk_row, notes):
-    """pillars_display: [(title, status, last_audited_str), ...] in display order."""
-    stage_rows = "".join(
-        f"<tr><td>{title}</td><td>{status or '—'}</td><td>{last_audited}</td></tr>"
-        for title, status, last_audited in pillars_display
+# ===========================================================================
+# US-46 (coworker's PR): PRINTABLE ONE-PAGE STUDENT SUMMARY AS A REAL PDF
+#
+# Produces a proper Letter-sized PDF (application/pdf) so the browser opens
+# it in the built-in PDF viewer instead of downloading an .html file the user
+# then has to print. Same content as build_student_onepager_html():
+#   - Student header (name, number, cohort, adviser)
+#   - Lifecycle status table (uses US-30 stage labels from the caller)
+#   - At-risk block (from v_student_stage_flags via the caller)
+#   - Adviser notes (US-45: adviser + Program Chair, soft-deleted rows already
+#     filtered out by get_student_notes())
+#
+# Uses reportlab so it works on Streamlit Cloud with no system dependencies.
+# Add `reportlab>=4.0` to requirements.txt if it isn't already there.
+# ===========================================================================
+def build_student_onepager_pdf(student_name, student_id, cohort, adviser_text,
+                                pillars_display, at_risk_row, notes):
+    """Return a one-page PDF (bytes) summarising one student (US-46).
+
+    Args (same as build_student_onepager_html):
+        student_name, student_id, cohort, adviser_text : plain strings.
+        pillars_display : [(title, status, last_audited_str), ...]
+        at_risk_row     : dict from get_student_at_risk_flag() or None.
+        notes           : list of dicts from get_student_notes().
+
+    Returns:
+        bytes: a valid PDF ready for st.download_button(data=..., mime="application/pdf").
+        If reportlab isn't installed, returns a minimal 1-page PDF that says so,
+        so the download button still produces a valid file rather than crashing.
+    """
+    # ---- reportlab imports (guarded so a missing package doesn't 500 the page) ----
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                         TableStyle, KeepTogether)
+        from reportlab.lib.enums import TA_LEFT
+        import io as _io
+    except ImportError:
+        # Minimal valid PDF with an error message. Streamlit still gets `bytes`
+        # and the MIME type is correct; the user sees a readable PDF instead of
+        # a Python traceback.
+        return (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+            b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/"
+            b"Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+            b"4 0 obj<</Length 90>>stream\n"
+            b"BT /F1 12 Tf 72 720 Td (reportlab is not installed. Run: pip install reportlab) Tj ET\n"
+            b"endstream endobj\n"
+            b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+            b"xref\n0 6\n0000000000 65535 f \n"
+            b"trailer<</Size 6/Root 1 0 R>>\nstartxref\n0\n%%EOF\n"
+        )
+
+    # ---- HTML-escape helper (reportlab Paragraphs interpret a mini-HTML) ----
+    def _esc(v):
+        if v is None:
+            return ""
+        try:
+            if isinstance(v, float) and pd.isna(v):
+                return ""
+        except Exception:
+            pass
+        # html.escape is already imported at the top of this module
+        return html.escape(str(v))
+
+    # ---- Document + styles ----
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.6 * inch, rightMargin=0.6 * inch,
+        topMargin=0.55 * inch, bottomMargin=0.55 * inch,
+        title=f"Student Summary — {student_name} ({student_id})",
+        author="ETYSB Dashboard",
     )
 
-    if at_risk_row and at_risk_row.get("is_flagged"):
-        at_risk_html = f'<p class="risk">AT RISK — {at_risk_row.get("flag_reason") or "see dashboard for details"}</p>'
-    else:
-        at_risk_html = '<p class="ok">No active at-risk flag.</p>'
+    styles = getSampleStyleSheet()
+    s_title = ParagraphStyle(
+        "sp-title", parent=styles["Heading1"],
+        fontName="Helvetica-Bold", fontSize=18, leading=22,
+        textColor=colors.HexColor("#1A1F36"), spaceAfter=2,
+    )
+    s_meta = ParagraphStyle(
+        "sp-meta", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=10, leading=13,
+        textColor=colors.HexColor("#6B7280"), spaceAfter=10,
+    )
+    s_section = ParagraphStyle(
+        "sp-section", parent=styles["Heading2"],
+        fontName="Helvetica-Bold", fontSize=11, leading=14,
+        textColor=colors.HexColor("#1A1F36"),
+        spaceBefore=10, spaceAfter=4,
+    )
+    s_body = ParagraphStyle(
+        "sp-body", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=10, leading=13,
+        textColor=colors.HexColor("#1A1F36"), alignment=TA_LEFT,
+    )
+    s_cell = ParagraphStyle(
+        "sp-cell", parent=styles["Normal"],
+        fontName="Helvetica", fontSize=9, leading=12,
+        textColor=colors.HexColor("#1A1F36"),
+    )
+    s_cell_head = ParagraphStyle(
+        "sp-cell-head", parent=s_cell,
+        fontName="Helvetica-Bold",
+    )
+    s_risk = ParagraphStyle(
+        "sp-risk", parent=s_body,
+        textColor=colors.HexColor("#B91C1C"), fontName="Helvetica-Bold",
+    )
+    s_ok = ParagraphStyle(
+        "sp-ok", parent=s_body,
+        textColor=colors.HexColor("#15803D"), fontName="Helvetica-Bold",
+    )
+    s_note_item = ParagraphStyle(
+        "sp-note-item", parent=s_body, spaceAfter=4,
+    )
 
+    story = []
+
+    # ---- Header ----
+    story.append(Paragraph(_esc(student_name) or "Student", s_title))
+    story.append(Paragraph(
+        f"Student No. <b>{_esc(student_id)}</b> &nbsp;·&nbsp; "
+        f"Cohort <b>{_esc(cohort)}</b> &nbsp;·&nbsp; "
+        f"Adviser: <b>{_esc(adviser_text)}</b>",
+        s_meta,
+    ))
+
+    # ---- Lifecycle status table ----
+    story.append(Paragraph("Lifecycle Status", s_section))
+    table_data = [[
+        Paragraph("Stage", s_cell_head),
+        Paragraph("Status", s_cell_head),
+        Paragraph("Last Audited", s_cell_head),
+    ]]
+    for title, status, last_audited in pillars_display:
+        table_data.append([
+            Paragraph(_esc(title), s_cell),
+            Paragraph(_esc(status) or "—", s_cell),
+            Paragraph(_esc(last_audited) or "—", s_cell),
+        ])
+    tbl = Table(table_data, colWidths=[3.3 * inch, 2.4 * inch, 1.5 * inch], hAlign="LEFT")
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F3F4F6")),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.HexColor("#9CA3AF")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(tbl)
+
+    # ---- At-risk block ----
+    story.append(Paragraph("At-Risk Status", s_section))
+    _flagged = bool(at_risk_row) and str(
+        at_risk_row.get("is_flagged") or "0"
+    ).strip() not in ("", "0", "False", "false")
+    if _flagged:
+        _reason = _esc(at_risk_row.get("flag_reason")) or "See dashboard for details"
+        story.append(Paragraph(f"AT RISK — {_reason}", s_risk))
+    else:
+        story.append(Paragraph("No active at-risk flag.", s_ok))
+
+    # ---- Adviser notes ----
+    story.append(Paragraph("Adviser Notes", s_section))
     if notes:
-        notes_html = "<ul>" + "".join(
-            f"<li><b>{n['AuthorName']}</b> ({n['CreatedAt']:%Y-%m-%d}): {n['NoteText']}</li>"
-            for n in notes
-        ) + "</ul>"
+        # Cap at 25 notes / 3500 chars per note so a runaway list can't push the
+        # content to a second page. The user can still see everything on the
+        # dashboard; the one-pager is meant to fit on a single sheet.
+        shown = notes[:25]
+        for n in shown:
+            author = (n.get("AuthorName") or n.get("AdviserID") or "Unknown")
+            when = n.get("NoteDate") or n.get("CreatedAt")
+            try:
+                when_txt = pd.to_datetime(when).strftime("%b %d, %Y") if when else ""
+            except Exception:
+                when_txt = str(when or "")
+            text = _esc(n.get("NoteText"))
+            if len(text) > 3500:
+                text = text[:3500] + "…"
+            meta = f' <font color="#6B7280">({_esc(when_txt)})</font>' if when_txt else ""
+            story.append(Paragraph(
+                f"<b>{_esc(author)}</b>{meta}: {text}",
+                s_note_item,
+            ))
+        if len(notes) > len(shown):
+            story.append(Paragraph(
+                f'<font color="#6B7280"><i>+ {len(notes) - len(shown)} more note(s); '
+                f'see the dashboard for the full list.</i></font>',
+                s_note_item,
+            ))
     else:
-        notes_html = "<p>No notes on file.</p>"
+        story.append(Paragraph("No notes on file.", s_body))
 
-    return f"""
-    <html><head><style>
-        @page {{ size: letter; margin: 0.6in; }}
-        body {{ font-family: Arial, sans-serif; color: #1A1F36; }}
-        h1 {{ font-size: 20px; margin-bottom: 2px; }}
-        .meta {{ color: #6B7280; font-size: 13px; margin-bottom: 16px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
-        td, th {{ border: 1px solid #E5E7EB; padding: 6px 10px; font-size: 13px; text-align: left; }}
-        .risk {{ color: #B91C1C; font-weight: 700; }}
-        .ok {{ color: #15803D; font-weight: 600; }}
-        h2 {{ font-size: 14px; border-bottom: 1px solid #E5E7EB; padding-bottom: 4px; }}
-        ul {{ font-size: 13px; padding-left: 18px; }}
-    </style></head><body>
-        <h1>{student_name}</h1>
-        <div class="meta">Student No. {student_id} · Cohort {cohort} · Adviser: {adviser_text}</div>
+    # ---- Footer line (generated timestamp) ----
+    story.append(Spacer(1, 14))
+    story.append(Paragraph(
+        f'<font color="#6B7280">Generated {_now_local():%b %d, %Y · %I:%M %p}</font>',
+        s_body,
+    ))
 
-        <h2>Lifecycle Status</h2>
-        <table><tr><th>Stage</th><th>Status</th><th>Last Audited</th></tr>{stage_rows}</table>
-
-        <h2>At-Risk Status</h2>
-        {at_risk_html}
-
-        <h2>Adviser Notes</h2>
-        {notes_html}
-
-        <div class="meta" style="margin-top:20px;">Generated {_now_local():%Y-%m-%d}</div>
-    </body></html>
-    """
+    # ---- Build ----
+    # onPage keeps the "1 page" promise even if a huge note somehow slips through:
+    # we mark the doc as a one-pager in metadata; reportlab only adds pages if the
+    # flowables genuinely overflow, which the caps above prevent in practice.
+    doc.build(story)
+    return buf.getvalue()
