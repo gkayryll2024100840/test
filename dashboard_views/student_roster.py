@@ -134,11 +134,13 @@ st.markdown(
 .st-key-sr_refresh{display:flex !important;flex-direction:row !important;justify-content:flex-end !important;
     align-items:center;width:100% !important;}
 .st-key-sr_refresh [data-testid="stElementContainer"]{width:auto !important;}
-/* Table cells maintain clean single-line structure without broken letters */
+/* Table cells maintain clean single-line structure without broken letters or column spilling */
 .st-key-roster_scroll .roster-cell-text,
-.st-key-roster_table .roster-cell-text{display:inline-flex;align-items:center;white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;line-height:1.35;}
+.st-key-roster_table .roster-cell-text{display:block !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;word-break:keep-all !important;line-height:1.35;}
 .st-key-roster_scroll .roster-cell-id,
 .st-key-roster_table .roster-cell-id{white-space:nowrap !important;overflow-wrap:normal !important;word-break:keep-all !important;min-width:85px !important;display:inline-block !important;}
+.st-key-roster_table [data-testid="stPageLink-NavLink"],
+.st-key-roster_scroll [data-testid="stPageLink-NavLink"]{white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;display:inline-block !important;max-width:100% !important;}
 /* status pills inside the roster: single line, no broken words or letters */
 .st-key-roster_scroll .status-pill,
 .st-key-roster_scroll [class*="status-pill"],
@@ -241,7 +243,7 @@ html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
 .st-key-roster_table .st-key-roster_scroll,
 .st-key-roster_table .st-key-roster_scroll > div,
 .st-key-roster_table [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) {
-  min-width: 1100px !important;
+  min-width: 1250px !important;
 }
 .st-key-roster_table .st-key-roster_scroll {
   overflow-x: hidden !important;
@@ -252,16 +254,25 @@ html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
+  align-items: center !important;
+  min-width: 1250px !important;
+}
+.st-key-roster_table > div > [data-testid="stHorizontalBlock"]:first-child {
   align-items: flex-end !important;
-  min-width: 1100px !important;
 }
 .st-key-roster_table [data-testid="stColumn"],
 .st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
   display: flex !important;
   flex-direction: column !important;
-  width: auto !important;
+  justify-content: center !important;
   min-width: 0 !important;
-  flex: var(--column-flex, 1 1 0%) !important;
+  overflow: visible !important;
+}
+.st-key-roster_table [data-testid="stMarkdownContainer"] p,
+.st-key-roster_scroll [data-testid="stMarkdownContainer"] p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: normal !important;
 }
 .st-key-roster_table .roster-th {
   font-size: 11.5px !important;
@@ -341,7 +352,7 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 .st-key-sr_table_wrap .st-key-roster_scroll,
 .st-key-sr_table_wrap .st-key-roster_scroll > div,
 .st-key-sr_table_wrap [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) {
-  min-width: 1100px !important;
+  min-width: 1250px !important;
 }
 .st-key-roster_table .st-key-roster_scroll,
 .st-key-sr_table_wrap .st-key-roster_scroll {
@@ -354,6 +365,10 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
+  align-items: center !important;
+}
+.st-key-roster_table > div > [data-testid="stHorizontalBlock"]:first-child,
+.st-key-sr_table_wrap > div > [data-testid="stHorizontalBlock"]:first-child {
   align-items: flex-end !important;
 }
 .st-key-roster_table [data-testid="stColumn"],
@@ -362,9 +377,9 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
 .st-key-sr_table_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
   display: flex !important;
   flex-direction: column !important;
-  width: auto !important;
+  justify-content: center !important;
   min-width: 0 !important;
-  flex: var(--column-flex, 1 1 0%) !important;
+  overflow: visible !important;
 }
 .st-key-roster_table .roster-th,
 .st-key-sr_table_wrap .roster-th {
@@ -388,12 +403,16 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   }
   .st-key-roster_table [data-testid="stHorizontalBlock"],
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
-    align-items: flex-end !important;
+    align-items: center !important;
     gap: 10px !important;
     column-gap: 10px !important;
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
+  }
+  .st-key-roster_table > div > [data-testid="stHorizontalBlock"]:first-child,
+  .st-key-sr_table_wrap > div > [data-testid="stHorizontalBlock"]:first-child {
+    align-items: flex-end !important;
   }
   .st-key-roster_table,
   .st-key-sr_table_wrap {
@@ -406,13 +425,14 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   .st-key-roster_table [data-testid="stHorizontalBlock"],
   .st-key-sr_table_wrap > [data-testid="stVerticalBlock"],
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] {
-    min-width: 1100px !important;
+    min-width: 1250px !important;
   }
   .st-key-roster_scroll .roster-cell-text,
   .st-key-roster_scroll .roster-cell-id {
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     word-break: keep-all !important;
-    overflow-wrap: normal !important;
     line-height: 1.3 !important;
   }
 }
@@ -992,11 +1012,11 @@ try:
         show_program_col = active_program_id is None   # "All Programs" -> show the PROGRAM column
         if show_program_col:
             # 10 columns: ID | Student | Program | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            # CP is wider so "Defended for Completion" fits on one line like the other pills (same total width)
-            col_widths = [0.9, 1.4, 0.7, 0.8, 1.6, 1.2, 1.2, 1.8, 1.0, 0.7]
+            # Generous width for Adviser (2.1) and Capstone (2.1) so names and pills never spill
+            col_widths = [0.8, 1.4, 0.6, 0.7, 2.1, 1.1, 1.1, 2.1, 1.0, 0.6]
         else:
             # 9 columns: ID | Student | Cohort | Adviser | CW | CE | CP | Last Update | Risk
-            col_widths = [0.9, 1.5, 0.8, 1.6, 1.2, 1.2, 1.8, 1.0, 0.7]
+            col_widths = [0.8, 1.5, 0.7, 2.1, 1.1, 1.1, 2.1, 1.0, 0.6]
 
         try:
             risk_flags = get_risk_flags(active_program_id)
@@ -1064,7 +1084,7 @@ try:
                         unsafe_allow_html=True
                     ); idx += 1
                     r_cols[idx].markdown(
-                        f'<span class="roster-cell-text">{adviser}</span>',
+                        f'<span class="roster-cell-text" title="{html.escape(str(adviser_raw or ""))}">{adviser}</span>',
                         unsafe_allow_html=True
                     ); idx += 1
                     r_cols[idx].markdown(cw_pill, unsafe_allow_html=True); idx += 1
