@@ -1,5 +1,5 @@
 # STUDENT PROFILE.PY 
-# UPDATED: 9-28-26 (speed-optimized + US-30 stage labels)
+# UPDATED: 10-06-26 (speed-optimized + US-30 stage labels)
 
 import html
 import pandas as pd
