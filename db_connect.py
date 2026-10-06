@@ -2015,16 +2015,25 @@ def get_student_notes(student_number):
 
 
 def get_my_adviser_id(user_id):
-    """The ID to use when this user authors a note (Adviser_Notes.AdviserID).
+    """Return who this user is, in note-authoring terms.
 
-    Returns:
-      - the AdviserID when the user is an adviser (UserID == Adviser.AdviserID, the
-        existing convention), OR
-      - the UserID when the user has the Users.Role 'Program_Chair', OR
-      - None when neither applies (i.e. the user can't author notes).
+    Returns one of:
+      - the AdviserID (a string) when the user is an adviser,
+      - the UserID (a string) when the user is a Program Chair,
+      - None when the user can't author notes.
 
-    Kept under the historical name because the notes card in student_profile.py already
-    calls it. Despite the name, it now also covers Program Chairs.
+    Despite the historical name, this now covers Program Chairs too — and it does NOT
+    tell you which kind of ID you got. Use get_my_author_identity() if you need to
+    know, or just call get_my_adviser_id() to check "can they post at all?".
+    """
+    return (get_my_author_identity(user_id) or {}).get("id")
+
+
+def get_my_author_identity(user_id):
+    """Return {"kind": "adviser"|"chair", "id": <str>} for this user, or None.
+
+    - "adviser" -> Adviser.AdviserID is set (and equals the UserID per this app's convention)
+    - "chair"   -> Users.Role = 'Program_Chair'
     """
     if user_id is None or str(user_id).strip() == "":
         return None
@@ -2033,23 +2042,21 @@ def get_my_adviser_id(user_id):
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            # Adviser? (UserID doubles as AdviserID in this app's convention)
             cur.execute("SELECT 1 FROM Adviser WHERE AdviserID = %s LIMIT 1", (uid,))
             if cur.fetchone():
-                return uid
-            # Program Chair? (their UserID is stored in Adviser_Notes.AdviserID)
+                return {"kind": "adviser", "id": uid}
             cur.execute(
                 "SELECT 1 FROM Users WHERE UserID = %s AND Role = 'Program_Chair' LIMIT 1",
                 (uid,),
             )
             if cur.fetchone():
-                return uid
+                return {"kind": "chair", "id": uid}
             return None
         finally:
             cur.close()
             conn.close()
     except Exception as e:
-        print(f"Failed to fetch author id: {e}")
+        print(f"Failed to fetch author identity: {e}")
         return None
 
 
