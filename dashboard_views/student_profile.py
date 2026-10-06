@@ -9,6 +9,7 @@ from db_connect import (
     add_student_note,                 # US-45
     build_student_onepager_html,      # US-46
     can_edit,
+    delete_student_note,              # US-45 extension
     get_all_programs,
     get_lifecycle_status_options,
     get_stage_labels,
@@ -100,8 +101,9 @@ def cached_program_ids():
     
 @st.cache_data(ttl=30, show_spinner=False)
 def cached_my_adviser_id(user_id):
-    """AdviserID linked to this login, or None. Cached briefly so the notes card doesn't re-query
-    on every keystroke in the textarea."""
+    """Author ID for this login (AdviserID for advisers, UserID for Program Chairs),
+    or None if the user can't author notes. Cached briefly so the notes card doesn't
+    re-query on every keystroke in the textarea."""
     from db_connect import get_my_adviser_id
     return get_my_adviser_id(user_id)
 
@@ -709,24 +711,23 @@ elif selected_label:
     changes = {k: v for k, v in chosen.items() if v != current[k]}
     enrollment_changed = bool(current_enrollment) and chosen_enrollment != current_enrollment
     n_changes = len(changes) + (1 if enrollment_changed else 0)
-    # ----------------- US-45 Adviser Notes -----------------
-    # Visible to any authorized role that can open Student Profile (Dean / IT-Admin / Program Chair /
-    # Adviser / Success Advisor) — the same gate the rest of this page already uses.
-    # Only Edit-permission users see the textarea + "Add Note" button; View Only users see read-only.
-    # Notes are append-only: no edit/delete from the UI, so the record stays tamper-evident (US-43).
-    #
-    # Schema note: Adviser_Notes stores AdviserID (not UserID), so the caller must be an adviser
-    # to post. If they aren't, we hide the textarea and explain why instead of showing a button
-    # that would fail on submit.
+       # ----------------- US-45 Adviser Notes (advisers + Program Chairs) -----------------
+    # Who can add/delete: any user with an Adviser profile, OR any Program Chair.
+    # Independent of US-13's Edit / View Only permission (a View Only adviser or
+    # View Only Chair can still post and delete). Milestone editing above is Edit-only.
     with st.container(key="sp_notes"):
         st.markdown(
             '<div class="sp-notes-title">📝 Adviser Notes</div>'
             '<div class="sp-notes-sub">Context for handoff — retained on the student\'s record for '
-            'audit purposes. Notes cannot be edited or deleted once saved.</div>',
+            'audit purposes. Deleted notes are soft-hidden (kept in the audit trail).</div>',
             unsafe_allow_html=True,
         )
 
         _notes_now = get_student_notes(selected_id)
+        # cached_my_adviser_id() returns an ID for both advisers and Program Chairs,
+        # so this check now covers both roles.
+        _can_post_notes = bool(cached_my_adviser_id(user_id)) if user_id else False
+
         if _notes_now:
             st.markdown(
                 f'<div class="sp-notes-count">{len(_notes_now)} note'
@@ -739,31 +740,71 @@ elif selected_label:
                     _when_txt = pd.to_datetime(_when).strftime("%b %d, %Y · %I:%M %p") if _when else "—"
                 except Exception:
                     _when_txt = str(_when or "—")
-                # AuthorName comes from a LEFT JOIN on Adviser; fall back to the raw AdviserID if the
-                # adviser row was deleted. Never blank.
                 _author = str(n.get("AuthorName") or n.get("AdviserID") or "Unknown")
-                st.markdown(
-                    f'<div class="sp-note-item">'
-                    f'<div class="sp-note-head">'
-                    f'<span class="sp-note-author">{html.escape(_author)}</span>'
-                    f'<span class="sp-note-when">{html.escape(_when_txt)}</span>'
-                    f'</div>'
-                    f'<div class="sp-note-body">{html.escape(str(n.get("NoteText") or ""))}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+                _note_id = n.get("NoteID")
+
+                _row_l, _row_r = st.columns([10, 1], vertical_alignment="top")
+                with _row_l:
+                    st.markdown(
+                        f'<div class="sp-note-item">'
+                        f'<div class="sp-note-head">'
+                        f'<span class="sp-note-author">{html.escape(_author)}</span>'
+                        f'<span class="sp-note-when">{html.escape(_when_txt)}</span>'
+                        f'</div>'
+                        f'<div class="sp-note-body">{html.escape(str(n.get("NoteText") or ""))}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                with _row_r:
+                    if _can_post_notes and _note_id is not None:
+                        _confirm_key = f"sp_note_confirm_del_{_note_id}"
+                        if st.session_state.get(_confirm_key):
+                            if st.button("Confirm", key=f"sp_note_del_yes_{_note_id}",
+                                         type="primary", use_container_width=True):
+                                _ok, _err = delete_student_note(user_id, _note_id)
+                                st.session_state[f"sp_note_flash_{selected_id}"] = (
+                                    _ok, "Note deleted." if _ok else _err
+                                )
+                                st.session_state.pop(_confirm_key, None)
+                                st.cache_data.clear()
+                                st.rerun()
+                        else:
+                            if st.button("🗑", key=f"sp_note_del_{_note_id}",
+                                         help="Delete this note",
+                                         use_container_width=True):
+                                st.session_state[_confirm_key] = True
+                                st.rerun()
         else:
             st.markdown(
                 '<div class="sp-notes-empty">No notes on file yet.</div>',
+                /* Delete button on each note row (and its inline Confirm state) */
+                [class*="st-key-sp_note_del_"] button{
+                    background:transparent !important;border:1px solid var(--sp-border) !important;
+                    color:var(--sp-muted) !important;font-weight:700 !important;
+                    width:34px !important;min-width:34px !important;padding:0 !important;height:34px !important;
+                }
+                [class*="st-key-sp_note_del_"] button:hover{
+                    border-color:#B91C1C !important;color:#B91C1C !important;
+                    background:rgba(185,28,28,.06) !important;
+                }
+                [class*="st-key-sp_note_del_yes_"] button{
+                    background:#B91C1C !important;border-color:#B91C1C !important;
+                    color:#FFFFFF !important;font-weight:700 !important;
+                    font-size:11px !important;padding:0 6px !important;height:34px !important;
+                }
+                [class*="st-key-sp_note_del_yes_"] button *{color:#FFFFFF !important;}
+                /* Mobile: the delete column goes full-width below the note */
+                @media (max-width: 640px){
+                    [class*="st-key-sp_note_del_"], [class*="st-key-sp_note_del_yes_"]{
+                        margin-top:6px !important;
+                    }
+                    [class*="st-key-sp_note_del_"] button,
+                    [class*="st-key-sp_note_del_yes_"] button{
+                        width:100% !important;min-height:36px !important;
+                    }
+                }
                 unsafe_allow_html=True,
             )
-
-                # US-45 permission rule (independent of US-13's Edit / View Only):
-        #   any logged-in user whose account is linked to an Adviser profile can post a note,
-        #   whether their RolePermission is 'Edit' or 'View Only'. Users without an adviser
-        #   profile see the notes read-only. Milestone editing above is still Edit-only.
-        _my_adviser_id = cached_my_adviser_id(user_id) if user_id else None
-        _can_post_notes = bool(_my_adviser_id)
 
         if _can_post_notes:
             _note_key = f"sp_note_text_{selected_id}"
@@ -779,11 +820,11 @@ elif selected_label:
             with st.container(key="sp_note_add"):
                 if st.button("Add Note", key=f"sp_note_save_{selected_id}",
                              disabled=not (_new_note or "").strip()):
-                    # NOTE: no require_edit() here — US-13 does not apply to adviser notes.
+                    # No require_edit() call: US-13 does not apply to adviser notes.
                     _ok, _err = add_student_note(user_id, selected_id, _new_note)
                     if _ok:
                         st.session_state[f"sp_note_flash_{selected_id}"] = (True, "Note added.")
-                        st.session_state.pop(_note_key, None)   # clear the textarea
+                        st.session_state.pop(_note_key, None)
                         st.cache_data.clear()
                         st.rerun()
                     else:
@@ -794,10 +835,10 @@ elif selected_label:
             if _note_flash:
                 (st.success if _note_flash[0] else st.error)(_note_flash[1])
         else:
-            # No adviser profile (or not logged in): read-only view of the notes, with an explanation.
             st.caption(
-                "Notes can only be added by users linked to an adviser profile. "
-                "Ask IT/Admin to link your account to an Adviser record."
+                "Notes can only be added by advisers and Program Chairs. "
+                "Ask IT/Admin to link your account to an Adviser record or assign you the "
+                "Program Chair role."
             )
 
     # ----------------- US-46 One-page summary -----------------
