@@ -98,7 +98,8 @@ def cached_student_email(student_id):
 def cached_program_ids():
     """{"MBA": 1, "BIA": 2, ...}: with "All Programs", each student's own program is looked up by its code."""
     return {p["ProgramCode"]: p["ProgramID"] for p in (get_all_programs() or [])}
-    
+
+
 @st.cache_data(ttl=30, show_spinner=False)
 def cached_my_adviser_id(user_id):
     """Author ID for this login (AdviserID for advisers, UserID for Program Chairs),
@@ -276,6 +277,54 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
     font-weight:700 !important;white-space:nowrap !important;}
 .st-key-sp_op_btn button *{color:#FFFFFF !important;}
 
+/* ---- US-45 adviser notes ---- */
+.sp-notes-title{font-size:18px;font-weight:700;color:var(--sp-text);line-height:1.3;}
+.sp-notes-sub{font-size:13px;color:var(--sp-muted);margin:2px 0 10px 0;}
+.sp-notes-count{font-size:12px;color:var(--sp-muted);margin-bottom:6px;}
+.sp-notes-empty{font-size:13px;color:var(--sp-muted);font-style:italic;}
+.sp-note-item{
+    border:1px solid var(--sp-border);border-radius:10px;
+    padding:10px 14px;margin-bottom:8px;background:var(--sp-soft);
+}
+.sp-note-item:last-child{margin-bottom:0;}
+.sp-note-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:4px;}
+.sp-note-author{font-size:13px;font-weight:700;color:var(--sp-text);}
+.sp-note-when{font-size:12px;color:var(--sp-muted);white-space:nowrap;}
+.sp-note-body{font-size:13px;color:#374151;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+html[data-eo-theme="dark"] .sp-note-body{color:#CBD5E1;}
+
+/* Textarea + Add Note button inside the notes card */
+.st-key-sp_notes [data-testid="stTextArea"] textarea{
+    font-size:13px !important;line-height:1.5 !important;
+    background:var(--sp-surface) !important;color:var(--sp-text) !important;
+    border:1px solid var(--sp-border) !important;border-radius:8px !important;
+}
+.st-key-sp_notes [data-testid="stTextArea"] textarea:focus{
+    border-color:#B31B21 !important;box-shadow:0 0 0 1px #B31B21 !important;
+}
+.st-key-sp_note_add button{
+    background:#B31B21 !important;border-color:#B31B21 !important;
+    color:#FFFFFF !important;font-weight:700 !important;
+}
+.st-key-sp_note_add button *{color:#FFFFFF !important;}
+
+/* Delete button on each note row (and its inline Confirm state) */
+[class*="st-key-sp_note_del_"] button{
+    background:transparent !important;border:1px solid var(--sp-border) !important;
+    color:var(--sp-muted) !important;font-weight:700 !important;
+    width:34px !important;min-width:34px !important;padding:0 !important;height:34px !important;
+}
+[class*="st-key-sp_note_del_"] button:hover{
+    border-color:#B91C1C !important;color:#B91C1C !important;
+    background:rgba(185,28,28,.06) !important;
+}
+[class*="st-key-sp_note_del_yes_"] button{
+    background:#B91C1C !important;border-color:#B91C1C !important;
+    color:#FFFFFF !important;font-weight:700 !important;
+    font-size:11px !important;padding:0 6px !important;height:34px !important;
+}
+[class*="st-key-sp_note_del_yes_"] button *{color:#FFFFFF !important;}
+
 /* ============================================================
    RESPONSIVE DESIGN (Tablets & Phones: Portrait and Landscape)
    ============================================================ */
@@ -428,6 +477,18 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
     width: 100% !important;
     min-height: 42px !important;
     font-size: 13.5px !important;
+  }
+
+  /* US-45 notes card: full-width Add Note, delete column stacks under each note */
+  .st-key-sp_notes{padding:14px !important;}
+  .sp-notes-title{font-size:16px;}
+  .st-key-sp_note_add button{width:100% !important;min-height:42px !important;font-size:13.5px !important;}
+  [class*="st-key-sp_note_del_"], [class*="st-key-sp_note_del_yes_"]{
+    margin-top:6px !important;
+  }
+  [class*="st-key-sp_note_del_"] button,
+  [class*="st-key-sp_note_del_yes_"] button{
+    width:100% !important;min-height:36px !important;
   }
 }
 
@@ -711,7 +772,8 @@ elif selected_label:
     changes = {k: v for k, v in chosen.items() if v != current[k]}
     enrollment_changed = bool(current_enrollment) and chosen_enrollment != current_enrollment
     n_changes = len(changes) + (1 if enrollment_changed else 0)
-       # ----------------- US-45 Adviser Notes (advisers + Program Chairs) -----------------
+
+    # ----------------- US-45 Adviser Notes (advisers + Program Chairs) -----------------
     # Who can add/delete: any user with an Adviser profile, OR any Program Chair.
     # Independent of US-13's Edit / View Only permission (a View Only adviser or
     # View Only Chair can still post and delete). Milestone editing above is Edit-only.
@@ -777,32 +839,6 @@ elif selected_label:
         else:
             st.markdown(
                 '<div class="sp-notes-empty">No notes on file yet.</div>',
-                /* Delete button on each note row (and its inline Confirm state) */
-                [class*="st-key-sp_note_del_"] button{
-                    background:transparent !important;border:1px solid var(--sp-border) !important;
-                    color:var(--sp-muted) !important;font-weight:700 !important;
-                    width:34px !important;min-width:34px !important;padding:0 !important;height:34px !important;
-                }
-                [class*="st-key-sp_note_del_"] button:hover{
-                    border-color:#B91C1C !important;color:#B91C1C !important;
-                    background:rgba(185,28,28,.06) !important;
-                }
-                [class*="st-key-sp_note_del_yes_"] button{
-                    background:#B91C1C !important;border-color:#B91C1C !important;
-                    color:#FFFFFF !important;font-weight:700 !important;
-                    font-size:11px !important;padding:0 6px !important;height:34px !important;
-                }
-                [class*="st-key-sp_note_del_yes_"] button *{color:#FFFFFF !important;}
-                /* Mobile: the delete column goes full-width below the note */
-                @media (max-width: 640px){
-                    [class*="st-key-sp_note_del_"], [class*="st-key-sp_note_del_yes_"]{
-                        margin-top:6px !important;
-                    }
-                    [class*="st-key-sp_note_del_"] button,
-                    [class*="st-key-sp_note_del_yes_"] button{
-                        width:100% !important;min-height:36px !important;
-                    }
-                }
                 unsafe_allow_html=True,
             )
 
@@ -841,7 +877,6 @@ elif selected_label:
                 "Program Chair role."
             )
 
-    # ----------------- US-46 One-page summary -----------------
     # ----------------- US-46 One-page summary -----------------
     # Sits between the pillar cards and the save bar. Single download button (no two-step
     # "click Generate then a second button appears" flow, which shifted the layout on mobile).
