@@ -1992,12 +1992,15 @@ def add_student_note(user_id, student_number, note_text):
     """Insert one adviser note for a student.
 
     Returns (True, None) on success, (False, error_message) on failure.
-    Only an authenticated adviser can write (the caller's UserID must map to an
-    Adviser.AdviserID). Edit permission is required in addition to that.
+
+    Authorisation: the caller must be linked to an Adviser profile (their UserID
+    equals an Adviser.AdviserID). US-13's Edit / View Only permission does NOT
+    apply here — adding a handoff note is a communication action, not a
+    configuration change, so both Edit and View Only advisers can post.
+    Only users with no adviser profile at all are refused.
     """
-    if not can_edit(user_id):
-        log_permission_attempt(user_id)
-        return False, "You have View Only access, so you can't add notes."
+    if user_id is None or str(user_id).strip() == "":
+        return False, "You must be logged in to add a note."
 
     text = str(note_text or "").strip()
     if not text:
@@ -2028,7 +2031,7 @@ def add_student_note(user_id, student_number, note_text):
         return False, format_mysql_error(e)
     except Exception as e:
         return False, f"Unexpected error: {e}"
-
+        
 def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
                                  pillars_display, at_risk_row, notes):
     """Single-page printable summary for one student (US-46).
