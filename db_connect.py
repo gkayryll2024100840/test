@@ -2030,22 +2030,57 @@ def add_student_note(user_id, student_number, note_text):
 
 def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
                                  pillars_display, at_risk_row, notes):
-    """pillars_display: [(title, status, last_audited_str), ...] in display order."""
+    """Single-page printable summary for one student (US-46).
+
+    pillars_display: [(title, status, last_audited_str), ...] in display order.
+    at_risk_row:     dict from get_student_at_risk_flag() (or None).
+    notes:           list of rows from get_student_notes() — keys used here are
+                     AuthorName, AdviserID, NoteText, NoteDate (matching the real
+                     Adviser_Notes schema). Missing keys fall back to safe defaults,
+                     so this function never raises on an unexpected row shape.
+    """
+    def _esc(v):
+        """HTML-escape any value, treating None/NaN/empty as ''."""
+        if v is None:
+            return ""
+        try:
+            if isinstance(v, float) and pd.isna(v):
+                return ""
+        except Exception:
+            pass
+        return html.escape(str(v))
+
+    # ---- Lifecycle table ----
     stage_rows = "".join(
-        f"<tr><td>{title}</td><td>{status or '—'}</td><td>{last_audited}</td></tr>"
+        f"<tr><td>{_esc(title)}</td><td>{_esc(status or '—')}</td><td>{_esc(last_audited)}</td></tr>"
         for title, status, last_audited in pillars_display
     )
 
-    if at_risk_row and at_risk_row.get("is_flagged"):
-        at_risk_html = f'<p class="risk">AT RISK — {at_risk_row.get("flag_reason") or "see dashboard for details"}</p>'
+    # ---- At-risk block ----
+    # is_flagged may come back as 0/1, True/False, or a string like "1"; normalise it.
+    _flagged = bool(at_risk_row) and str(at_risk_row.get("is_flagged") or "0").strip() not in ("", "0", "False", "false")
+    if _flagged:
+        _reason = _esc(at_risk_row.get("flag_reason")) or "see dashboard for details"
+        at_risk_html = f'<p class="risk">AT RISK — {_reason}</p>'
     else:
         at_risk_html = '<p class="ok">No active at-risk flag.</p>'
 
+    # ---- Adviser notes ----
+    # Real schema: Adviser_Notes(NoteID, StudentNumber, AdviserID, NoteText, NoteDate).
+    # get_student_notes() returns AdviserID + AuthorName (joined from Adviser) + NoteDate.
     if notes:
-        notes_html = "<ul>" + "".join(
-            f"<li><b>{n['AuthorName']}</b> ({n['CreatedAt']:%Y-%m-%d}): {n['NoteText']}</li>"
-            for n in notes
-        ) + "</ul>"
+        items = []
+        for n in notes:
+            author = (n.get("AuthorName") or n.get("AdviserID") or "Unknown")
+            when = n.get("NoteDate") or n.get("CreatedAt")  # tolerate either column name
+            try:
+                when_txt = pd.to_datetime(when).strftime("%Y-%m-%d") if when else ""
+            except Exception:
+                when_txt = str(when or "")
+            text = _esc(n.get("NoteText"))
+            meta = f" <span class='when'>({_esc(when_txt)})</span>" if when_txt else ""
+            items.append(f"<li><b>{_esc(author)}</b>{meta}: {text}</li>")
+        notes_html = "<ul>" + "".join(items) + "</ul>"
     else:
         notes_html = "<p>No notes on file.</p>"
 
@@ -2061,9 +2096,10 @@ def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
         .ok {{ color: #15803D; font-weight: 600; }}
         h2 {{ font-size: 14px; border-bottom: 1px solid #E5E7EB; padding-bottom: 4px; }}
         ul {{ font-size: 13px; padding-left: 18px; }}
+        .when {{ color: #6B7280; font-weight: 400; }}
     </style></head><body>
-        <h1>{student_name}</h1>
-        <div class="meta">Student No. {student_id} · Cohort {cohort} · Adviser: {adviser_text}</div>
+        <h1>{_esc(student_name)}</h1>
+        <div class="meta">Student No. {_esc(student_id)} · Cohort {_esc(cohort)} · Adviser: {_esc(adviser_text)}</div>
 
         <h2>Lifecycle Status</h2>
         <table><tr><th>Stage</th><th>Status</th><th>Last Audited</th></tr>{stage_rows}</table>
