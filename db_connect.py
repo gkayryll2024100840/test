@@ -1907,6 +1907,18 @@ def set_program_owner(program_id, user_id):
     except mysql.connector.Error as e:
         return False, str(e)
 
+def get_student_at_risk_flag(student_number, program_id):
+    """One student's row from v_student_stage_flags, or None if not flagged/not found."""
+    try:
+        df = get_flagged_students(program_id=program_id)
+        if df.empty:
+            return None
+        match = df[df["StudentNumber"].astype(str) == str(student_number)]
+        return match.iloc[0].to_dict() if not match.empty else None
+    except Exception as e:
+        print(f"Failed to fetch at-risk flag: {e}")
+        return None
+
 def get_student_notes(student_number):
     """Adviser notes for one student. Returns [] if the table doesn't exist yet (US-45 not built)."""
     try:
@@ -1925,18 +1937,6 @@ def get_student_notes(student_number):
         return rows
     except mysql.connector.Error:
         return []
-
-def get_student_at_risk_flag(student_number, program_id):
-    """One student's row from v_student_stage_flags, or None if not flagged/not found."""
-    try:
-        df = get_flagged_students(program_id=program_id)
-        if df.empty:
-            return None
-        match = df[df["StudentNumber"].astype(str) == str(student_number)]
-        return match.iloc[0].to_dict() if not match.empty else None
-    except Exception as e:
-        print(f"Failed to fetch at-risk flag: {e}")
-        return None
 
 def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
                                  pillars_display, at_risk_row, notes):
