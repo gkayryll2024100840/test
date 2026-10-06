@@ -1,5 +1,5 @@
 # STUDENT PROFILE.PY 
-# UPDATED: 10-06-26 (speed-optimized + US-30 stage labels + US-46 one-page summary)
+# UPDATED: 10-06-26 (speed-optimized + US-30 stage labels + US-45 adviser notes + US-46 PDF one-pager)
 
 import html
 import pandas as pd
@@ -7,7 +7,7 @@ import streamlit as st
 
 from db_connect import (
     add_student_note,                 # US-45
-    build_student_onepager_html,      # US-46
+    build_student_onepager_pdf,       # US-46 (coworker's PR: real PDF, not HTML)
     can_edit,
     delete_student_note,              # US-45 extension
     get_all_programs,
@@ -877,17 +877,21 @@ elif selected_label:
                 "Program Chair role."
             )
 
-    # ----------------- US-46 One-page summary -----------------
-    # Sits between the pillar cards and the save bar. Single download button (no two-step
+    # ----------------- US-46 One-page summary (PDF) -----------------
+    # Sits between the notes card and the save bar. Single download button (no two-step
     # "click Generate then a second button appears" flow, which shifted the layout on mobile).
-    # Pillar titles use the program's stage labels (US-30), not the default PILLARS titles.
+    # Coworker's PR replaced the HTML output with a real PDF:
+    #   - the data= argument is the PDF bytes from build_student_onepager_pdf()
+    #   - mime="application/pdf" tells the browser to open it in the PDF viewer
+    #   - the file name ends in .pdf so Ctrl+P / "Save as" behaves as expected
+    # Pillar titles still use the program's stage labels (US-30), not the default PILLARS titles.
     _pillars_display = [
         (stage_labels.get(PILLAR_LABEL_KEY[key], title), current[key] or "—", fmt_date(updated[key]))
         for key, _tag, title, _pref in PILLARS
     ]
     _at_risk_row = get_student_at_risk_flag(selected_id, active_program_id)
     _notes = get_student_notes(selected_id)
-    _onepager_html = build_student_onepager_html(
+    _onepager_pdf_bytes = build_student_onepager_pdf(
         student_name, selected_id, cohort, adviser_text, _pillars_display, _at_risk_row, _notes
     )
 
@@ -895,15 +899,15 @@ elif selected_label:
         st.markdown(
             '<div><div class="sp-op-label">🖨️ One-Page Advising Summary</div>'
             '<div class="sp-op-hint">Lifecycle status, at-risk flags and adviser notes — '
-            'open the file and use your browser\'s Print (Ctrl+P) to save as PDF.</div></div>',
+            'downloaded as a print-ready PDF.</div></div>',
             unsafe_allow_html=True,
         )
         with st.container(key="sp_op_btn"):
             st.download_button(
-                "Download Summary (HTML)",
-                data=_onepager_html,
-                file_name=f"{selected_id}_summary.html",
-                mime="text/html",
+                "Download Summary (PDF)",
+                data=_onepager_pdf_bytes,
+                file_name=f"{selected_id}_summary.pdf",
+                mime="application/pdf",
                 key=f"sp_onepager_dl_{selected_id}",
             )
 
