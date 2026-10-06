@@ -1934,23 +1934,73 @@ def get_student_at_risk_flag(student_number, program_id):
 # ===========================================================================
 NOTES_MAX_LEN = 1000   # the NoteText column is likely VARCHAR(...); bump if yours is bigger
 
+# ===========================================================================
+# US-45 EXTENSION: columns needed for Program Chair notes + soft delete
+#
+#   - Adviser_Notes.AdviserID already holds "the author's ID" — for advisers
+#     it's their AdviserID; for Program Chairs it's their Users.UserID.
+#     The column is a plain VARCHAR (no FK), so both fit without a change.
+#   - DeletedAt / DeletedBy are added lazily (ALTER TABLE ... ADD COLUMN IF
+#     NOT EXISTS). Soft delete keeps the row for the US-43 audit trail.
+# ===========================================================================
+_notes_schema_ready = False
+_notes_schema_lock = threading.Lock()
 
+
+def _ensure_notes_schema(cur):
+    """Add the soft-delete columns once per app process (idempotent on MySQL 8+)."""
+    global _notes_schema_ready
+    if _notes_schema_ready:
+        return
+    with _notes_schema_lock:
+        if _notes_schema_ready:
+            return
+        try:
+            cur.execute(
+                "ALTER TABLE Adviser_Notes "
+                "ADD COLUMN IF NOT EXISTS DeletedAt DATETIME NULL, "
+                "ADD COLUMN IF NOT EXISTS DeletedBy VARCHAR(32) NULL"
+            )
+        except mysql.connector.Error as e:
+            # MySQL < 8.0.29 doesn't support ADD COLUMN IF NOT EXISTS; fall back to
+            # "try ADD COLUMN, swallow the duplicate-column error".
+            if e.errno == 1064 or "IF NOT EXISTS" in str(e):
+                for col_def in (
+                    "ADD COLUMN DeletedAt DATETIME NULL",
+                    "ADD COLUMN DeletedBy VARCHAR(32) NULL",
+                ):
+                    try:
+                        cur.execute(f"ALTER TABLE Adviser_Notes {col_def}")
+                    except mysql.connector.Error as e2:
+                        if e2.errno != 1060:  # 1060 = duplicate column, harmless
+                            print(f"Adviser_Notes migration warning: {e2}")
+            else:
+                print(f"Adviser_Notes migration warning: {e}")
+        _notes_schema_ready = True
+        
 def get_student_notes(student_number):
-    """Adviser notes for one student, newest first.
+    """Adviser or Program Chair notes for one student, newest first.
 
-    Columns returned: NoteID, NoteText, AdviserID, AuthorName, NoteDate.
-    Returns [] on any error (missing table, dropped connection, etc.).
+    Columns returned: NoteID, NoteText, AdviserID (the author's ID), AuthorName, NoteDate.
+    AuthorName prefers Adviser.AdviserName (for adviser authors) and falls back to
+    Users.FirstName + LastName (for Program Chair authors) and finally the raw ID.
+    Soft-deleted notes are hidden.
     """
     try:
         conn = get_db_connection()
         try:
             cur = conn.cursor(dictionary=True)
+            _ensure_notes_schema(cur)
             cur.execute(
                 "SELECT n.NoteID, n.NoteText, n.AdviserID, "
-                "       a.AdviserName AS AuthorName, n.NoteDate "
+                "       COALESCE(a.AdviserName, "
+                "                NULLIF(TRIM(CONCAT(u.FirstName, ' ', u.LastName)), ''), "
+                "                n.AdviserID) AS AuthorName, "
+                "       n.NoteDate "
                 "FROM Adviser_Notes n "
                 "LEFT JOIN Adviser a ON a.AdviserID = n.AdviserID "
-                "WHERE n.StudentNumber = %s "
+                "LEFT JOIN Users   u ON u.UserID    = n.AdviserID "
+                "WHERE n.StudentNumber = %s AND n.DeletedAt IS NULL "
                 "ORDER BY n.NoteDate DESC, n.NoteID DESC",
                 (str(student_number),),
             )
@@ -1965,39 +2015,53 @@ def get_student_notes(student_number):
 
 
 def get_my_adviser_id(user_id):
-    """The AdviserID that belongs to this logged-in user, or None.
+    """The ID to use when this user authors a note (Adviser_Notes.AdviserID).
 
-    Convention (same as get_my_adviser_name): an adviser logs in with a UserID
-    that equals their Adviser.AdviserID. If you later link Adviser.UserID to
-    Users.UserID instead, change this to `SELECT AdviserID FROM Adviser WHERE UserID = %s`.
+    Returns:
+      - the AdviserID when the user is an adviser (UserID == Adviser.AdviserID, the
+        existing convention), OR
+      - the UserID when the user has the Users.Role 'Program_Chair', OR
+      - None when neither applies (i.e. the user can't author notes).
+
+    Kept under the historical name because the notes card in student_profile.py already
+    calls it. Despite the name, it now also covers Program Chairs.
     """
     if user_id is None or str(user_id).strip() == "":
         return None
+    uid = str(user_id).strip()
     try:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT AdviserID FROM Adviser WHERE AdviserID = %s", (str(user_id).strip(),))
-            row = cur.fetchone()
-            cur.close()
+            # Adviser? (UserID doubles as AdviserID in this app's convention)
+            cur.execute("SELECT 1 FROM Adviser WHERE AdviserID = %s LIMIT 1", (uid,))
+            if cur.fetchone():
+                return uid
+            # Program Chair? (their UserID is stored in Adviser_Notes.AdviserID)
+            cur.execute(
+                "SELECT 1 FROM Users WHERE UserID = %s AND Role = 'Program_Chair' LIMIT 1",
+                (uid,),
+            )
+            if cur.fetchone():
+                return uid
+            return None
         finally:
+            cur.close()
             conn.close()
-        return row[0] if row else None
     except Exception as e:
-        print(f"Failed to fetch adviser id: {e}")
+        print(f"Failed to fetch author id: {e}")
         return None
 
 
 def add_student_note(user_id, student_number, note_text):
-    """Insert one adviser note for a student.
+    """Insert one adviser / Program Chair note for a student.
 
     Returns (True, None) on success, (False, error_message) on failure.
 
-    Authorisation: the caller must be linked to an Adviser profile (their UserID
-    equals an Adviser.AdviserID). US-13's Edit / View Only permission does NOT
-    apply here — adding a handoff note is a communication action, not a
-    configuration change, so both Edit and View Only advisers can post.
-    Only users with no adviser profile at all are refused.
+    Authorisation: the caller must be an Adviser (UserID == Adviser.AdviserID) or a
+    Program Chair. US-13's Edit / View Only permission does NOT apply here — adding
+    a handoff note is a communication action, not a config change, so View Only
+    advisers and View Only Chairs can also post.
     """
     if user_id is None or str(user_id).strip() == "":
         return False, "You must be logged in to add a note."
@@ -2010,8 +2074,9 @@ def add_student_note(user_id, student_number, note_text):
 
     adviser_id = get_my_adviser_id(user_id)
     if not adviser_id:
-        return False, ("Your account isn't linked to an adviser profile, so it can't author notes. "
-                       "Ask IT/Admin to link your UserID to an Adviser record.")
+        return False, ("Only advisers and Program Chairs can post notes. "
+                       "Ask IT/Admin to link your account to an Adviser record or assign "
+                       "you the Program Chair role.")
 
     try:
         conn = get_db_connection()
@@ -2021,6 +2086,60 @@ def add_student_note(user_id, student_number, note_text):
                 "INSERT INTO Adviser_Notes (StudentNumber, AdviserID, NoteText, NoteDate) "
                 "VALUES (%s, %s, %s, %s)",
                 (str(student_number).strip(), adviser_id, text, _now_local()),
+            )
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+        return True, None
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
+
+def delete_student_note(user_id, note_id):
+    """Soft-delete a note. Authorised for any adviser, any Program Chair, and IT/Admin.
+
+    Returns (True, None) on success, (False, error_message) on failure.
+    The row stays in Adviser_Notes with DeletedAt/DeletedBy set, so the US-43
+    audit trail is preserved.
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return False, "You must be logged in to delete a note."
+    if note_id is None:
+        return False, "Missing note ID."
+
+    uid = str(user_id).strip()
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(dictionary=True)
+
+            # Who is this user, in permission terms?
+            cur.execute("SELECT Role FROM Users WHERE UserID = %s", (uid,))
+            me = cur.fetchone() or {}
+            role = (me.get("Role") or "").strip()
+            cur.execute("SELECT 1 FROM Adviser WHERE AdviserID = %s LIMIT 1", (uid,))
+            is_adviser = cur.fetchone() is not None
+
+            if not (is_adviser or role in ("Program_Chair", "IT/Admin")):
+                return False, ("Only advisers, Program Chairs, and IT/Admin can delete notes.")
+
+            _ensure_notes_schema(cur)
+
+            cur.execute(
+                "SELECT NoteID, DeletedAt FROM Adviser_Notes WHERE NoteID = %s",
+                (note_id,),
+            )
+            note = cur.fetchone()
+            if not note:
+                return False, "That note no longer exists."
+            if note.get("DeletedAt"):
+                return False, "That note was already deleted."
+
+            cur.execute(
+                "UPDATE Adviser_Notes SET DeletedAt = %s, DeletedBy = %s WHERE NoteID = %s",
+                (_now_local(), uid, note_id),
             )
             conn.commit()
             cur.close()
