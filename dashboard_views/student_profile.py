@@ -758,10 +758,14 @@ elif selected_label:
                 unsafe_allow_html=True,
             )
 
-        # Only Edit-permission users who are also linked to an adviser profile can post.
-        _my_adviser_id = cached_my_adviser_id(user_id) if editable else None
+                # US-45 permission rule (independent of US-13's Edit / View Only):
+        #   any logged-in user whose account is linked to an Adviser profile can post a note,
+        #   whether their RolePermission is 'Edit' or 'View Only'. Users without an adviser
+        #   profile see the notes read-only. Milestone editing above is still Edit-only.
+        _my_adviser_id = cached_my_adviser_id(user_id) if user_id else None
+        _can_post_notes = bool(_my_adviser_id)
 
-        if editable and _my_adviser_id:
+        if _can_post_notes:
             _note_key = f"sp_note_text_{selected_id}"
             _new_note = st.text_area(
                 "Add a note",
@@ -775,7 +779,7 @@ elif selected_label:
             with st.container(key="sp_note_add"):
                 if st.button("Add Note", key=f"sp_note_save_{selected_id}",
                              disabled=not (_new_note or "").strip()):
-                    require_edit()   # US-13 gate (redundant with the flag above, but consistent)
+                    # NOTE: no require_edit() here — US-13 does not apply to adviser notes.
                     _ok, _err = add_student_note(user_id, selected_id, _new_note)
                     if _ok:
                         st.session_state[f"sp_note_flash_{selected_id}"] = (True, "Note added.")
@@ -789,14 +793,12 @@ elif selected_label:
             _note_flash = st.session_state.pop(f"sp_note_flash_{selected_id}", None)
             if _note_flash:
                 (st.success if _note_flash[0] else st.error)(_note_flash[1])
-        elif editable:
-            # Edit permission, but not an adviser — the write path would refuse, so say so up front.
+        else:
+            # No adviser profile (or not logged in): read-only view of the notes, with an explanation.
             st.caption(
                 "Notes can only be added by users linked to an adviser profile. "
                 "Ask IT/Admin to link your account to an Adviser record."
             )
-        else:
-            st.caption("Your account has View Only access, so you can't add notes.")
 
     # ----------------- US-46 One-page summary -----------------
     # ----------------- US-46 One-page summary -----------------
