@@ -808,6 +808,19 @@ THEME_DETECTOR_JS = """
       var red = document.querySelector(".ps-red");
       var gone = red && red.getBoundingClientRect().bottom <= 0 ? "1" : "0";
       if (h.getAttribute("data-ps-header-gone") !== gone) h.setAttribute("data-ps-header-gone", gone);
+      // Student Roster: the rows scroll inside their own box, whose scrollbar makes them a bit narrower than
+      // the header row. Share that scrollbar's width (it differs per OS) so the header can match the rows.
+      var rows = document.querySelector(".st-key-roster_scroll");
+      if (rows) {
+        var sb = (rows.offsetWidth - rows.clientWidth) + "px";
+        if (h.style.getPropertyValue("--sr-scrollbar") !== sb) h.style.setProperty("--sr-scrollbar", sb);
+      }
+      // Executive Overview, Students At Risk table: same idea (its rows scroll in their own box too)
+      var eoRows = document.querySelector(".st-key-eo_table_rows");
+      if (eoRows) {
+        var esb = (eoRows.offsetWidth - eoRows.clientWidth) + "px";
+        if (h.style.getPropertyValue("--eo-scrollbar") !== esb) h.style.setProperty("--eo-scrollbar", esb);
+      }
     }
     apply();
     setInterval(apply, 250);                                   // follows theme switches instantly

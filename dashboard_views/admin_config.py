@@ -660,6 +660,88 @@ html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,
     flex: 0 0 84px !important; min-width: 84px !important;
   }
 }
+
+/* ---- Tablets, portrait + landscape (added): with the sidebar open the page is only about 500px wide ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Field Mapping: the "Mapped" switch had about 60px and its word broke ("Map / ped"). It moves under the
+     input, on the left; the field name stays on the left of the input. */
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) {
+    flex-wrap: wrap !important; row-gap: 6px !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(1) {
+    flex: 0 0 30% !important; width: 30% !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 0 !important; width: auto !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(3) {
+    flex: 0 0 100% !important; width: 100% !important; min-width: 0 !important;
+    padding-left: calc(30% + 1rem) !important; box-sizing: border-box !important;   /* lines up with the input */
+  }
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+  [class*="st-key-fmtog_"] label { white-space: nowrap !important; }
+
+  /* KPI Tiles / User Permissions / recent backups: same as phones - keep the columns, scroll left-right
+     when there isn't room (nothing changes when there is) */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 640px !important; }   /* roles don't break mid-word */
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+
+  /* Stage Labels: the three label boxes keep a usable width and scroll left-right instead of squishing */
+  .st-key-acbody_labels { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 600px !important; }
+  /* ... its Program dropdown (and the KPI Tiles one) drops under the title when both don't fit on one line */
+  .st-key-achead_labels [data-testid="stHorizontalBlock"],
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 260px !important; min-width: 0 !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 1 1 220px !important; min-width: 0 !important; }
+  /* ... and "Save Labels" keeps room for its words (still on the right) */
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: 140px !important; }
+
+  /* Add a Tile: the six fields scroll left-right inside the dashed box instead of squishing */
+  [class*="st-key-kpiadd_"] { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 640px !important; }
+
+  /* KPI Tiles + Configuration Backup footers: the buttons keep their full words ("Reset to Defaults",
+     "Download latest", "Back up now"); the note in the middle takes what's left, or its own line */
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"],
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)) {
+    flex: 0 0 auto !important; width: auto !important; min-width: max-content !important;
+  }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 140px !important; width: auto !important; min-width: 0 !important;
+  }
+
+  /* Restore box: "Use a backup file" keeps its words, and the "Replace the current settings ..." checkbox
+     gets its own full line (its text wraps) with the Restore button under it */
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: max-content !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"]:has(.st-key-cfg_restore_go) > [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+  }
+  .st-key-bkrestore [data-testid="stCheckbox"] p { white-space: normal !important; overflow: visible !important;
+          text-overflow: clip !important; }
+
+  /* Permission Audit Log / sync log tables: same as phones - one line per cell, scroll left-right
+     (words like "SCHEDULED" were breaking in the middle) */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
+}
 </style>"""
 st.markdown(CARD_CSS, unsafe_allow_html=True)
 

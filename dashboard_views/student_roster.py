@@ -449,12 +449,11 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   .st-key-sr_refresh button { width: 100% !important; }
 }
 
-/* ---- Tablets (added): the sideways-scrolling table above gave every column the same width, so long
-   cells ("Defended for Completion", long adviser names) ran into the next column. Use the desktop
-   column proportions again (col_widths: 10 columns with Program, 9 without), on a slightly wider table. ---- */
-@media (min-width: 641px) and (max-width: 1150px) {
-  .st-key-roster_table [data-testid="stHorizontalBlock"],
-  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] { min-width: 1250px !important; }
+/* ---- Tablets + laptops + desktops (added): the roster table gave every column the same width, so long cells
+   ("Defended for Completion", long adviser names) ran into the next column. Use the desktop column proportions
+   (col_widths: 10 columns with Program, 9 without) on every screen from tablet up; the table scrolls
+   left-right when the screen is narrower than its minimum width. ---- */
+@media (min-width: 641px) {
   .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(1) { flex: 0.9 1 0 !important; }
   .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(2) { flex: 1.4 1 0 !important; }
   .st-key-roster_table [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(10)) > [data-testid="stColumn"]:nth-child(3) { flex: 0.7 1 0 !important; }
@@ -493,6 +492,67 @@ html[data-eo-theme="dark"] .stApp{--sr-h-text:#F1F5F9; --sr-h-label:#94A3B8; --s
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(7) { flex: 1.8 1 0 !important; }
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(8) { flex: 1.0 1 0 !important; }
   .st-key-sr_table_wrap [data-testid="stHorizontalBlock"]:not(:has(> [data-testid="stColumn"]:nth-child(10))) > [data-testid="stColumn"]:nth-child(9) { flex: 0.7 1 0 !important; }
+}
+/* the header row is as wide as the rows below it: those sit in their own scrolling box, whose scrollbar
+   (--sr-scrollbar, measured live in components.py) makes them narrower - otherwise the columns drift apart */
+@media (min-width: 641px) {
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(.roster-th) {
+    width: calc(100% - var(--sr-scrollbar, 0px)) !important;
+  }
+}
+/* minimum table width: tablets a bit wider (bigger touch text), laptops / desktops enough for the longest pill */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-roster_table [data-testid="stHorizontalBlock"],
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] { min-width: 1250px !important; }
+}
+@media (min-width: 1151px) {
+  .st-key-roster_table [data-testid="stHorizontalBlock"],
+  .st-key-sr_table_wrap [data-testid="stHorizontalBlock"] { min-width: 1300px !important; }
+  .st-key-roster_table { overflow-x: auto !important; }
+}
+/* Tablets + laptops + desktops (added): the two-line column headers ("STUDENT / ID") and the line under them hung
+   down into the rows (Streamlit pulls every text block up by 16px, and this table box has no gaps), so scrolled
+   rows slid under the header text and the line cut through a row. Give the header text and the line their own space. */
+@media (min-width: 641px) {
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(.roster-th) [data-testid="stMarkdownContainer"],
+  .st-key-roster_table [data-testid="stMarkdownContainer"]:has(> .roster-th-divider) { margin-bottom: 0 !important; }
+  /* the rows fill their scrolling box (which is as wide as the table, below) */
+  .st-key-roster_table .st-key-roster_scroll > div,
+  .st-key-roster_table .st-key-roster_scroll [data-testid="stHorizontalBlock"] { min-width: 0 !important; }
+}
+/* the rows' scrolling box was still 1100px wide while the table is wider, so it cut off the last columns
+   (Last Update, Risk). Make it (and the line under the header) as wide as the table; the header row leaves
+   room for the rows' scrollbar so the columns stay lined up. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-roster_table .roster-th-divider,
+  .st-key-roster_table .st-key-roster_scroll,
+  .st-key-roster_table [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) { min-width: 1250px !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(.roster-th) { min-width: calc(1250px - var(--sr-scrollbar, 0px)) !important; }
+}
+@media (min-width: 1151px) {
+  .st-key-roster_table .roster-th-divider,
+  .st-key-roster_table .st-key-roster_scroll,
+  .st-key-roster_table [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-roster_scroll) { min-width: 1300px !important; }
+  .st-key-roster_table [data-testid="stHorizontalBlock"]:has(.roster-th) { min-width: calc(1300px - var(--sr-scrollbar, 0px)) !important; }
+}
+/* Tablets, portrait (added): filters in three rows - Search across the whole row; Cohort From + To side by side;
+   Filter by Adviser next to Sort by. (Desktop keeps the one-row layout from the code.) */
+@media (min-width: 641px) and (max-width: 1150px) and (orientation: portrait) {
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_search) { flex-wrap: wrap !important; }
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_search) > [data-testid="stColumn"] {
+    order: 3; flex: 1 1 calc(50% - 12px) !important; min-width: 0 !important;
+  }
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_search) > [data-testid="stColumn"]:has(.st-key-sr_search) {
+    order: 1; flex: 1 1 100% !important;
+  }
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_search) > [data-testid="stColumn"]:has(.st-key-sr_cohort_from) {
+    order: 2; flex: 1 1 100% !important;
+  }
+  /* From and To share their row */
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_cohort_from):not(:has(.st-key-sr_search)) { flex-wrap: nowrap !important; }
+  .st-key-sr_filters [data-testid="stHorizontalBlock"]:has(.st-key-sr_cohort_from):not(:has(.st-key-sr_search)) > [data-testid="stColumn"] {
+    flex: 1 1 0 !important; min-width: 0 !important;
+  }
 }
 </style>"""
  
@@ -910,6 +970,11 @@ try:
         if sort_col == "Cohort":
             df_filtered = df_filtered.sort_values(by="Cohort", key=lambda col: col.map(
                 lambda c: cohort_sort_key(c) if pd.notna(c) else (9999, 9, "")))
+        elif sort_col == "Student":
+            # A-Z by first name; ignores stray spaces / capitals in the data (e.g. " Mateo" was sorting first)
+            df_filtered = df_filtered.sort_values(
+                by="Student", key=lambda col: col.astype(str).str.strip().str.lower(), na_position="last"
+            )
         else:
             df_filtered = df_filtered.sort_values(
                 by=sort_col, ascending=(sort_col != "LastUpdate"), na_position="last"

@@ -408,20 +408,25 @@ def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
         print(f"Failed to fetch enrollment count: {e}")
         return 0
 def get_available_cohorts(program_id=None):
-    """Fetches distinct cohort values for the given program."""
-    if program_id is None:
-        return []
-
+    """Fetches distinct cohort values for the given program (program_id=None -> "All Programs": every cohort)."""
     try:
         conn = get_db_connection()
         try:
             cursor = conn.cursor()
-            query = (
-                "SELECT DISTINCT Cohort FROM Students "
-                "WHERE Cohort IS NOT NULL AND ProgramID = %s "
-                "ORDER BY Cohort DESC"
-            )
-            cursor.execute(query, (program_id,))
+            if program_id is None:
+                query = (
+                    "SELECT DISTINCT Cohort FROM Students "
+                    "WHERE Cohort IS NOT NULL "
+                    "ORDER BY Cohort DESC"
+                )
+                cursor.execute(query)
+            else:
+                query = (
+                    "SELECT DISTINCT Cohort FROM Students "
+                    "WHERE Cohort IS NOT NULL AND ProgramID = %s "
+                    "ORDER BY Cohort DESC"
+                )
+                cursor.execute(query, (program_id,))
             cohorts = [row[0] for row in cursor.fetchall()]
             cursor.close()
         finally:

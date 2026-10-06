@@ -407,10 +407,42 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
   .st-key-sp_top [data-testid="stColumn"],
   .st-key-sp_top [data-testid="stColumn"]:first-child,
   .st-key-sp_top [data-testid="stColumn"]:last-child { flex: 0 0 auto !important; }
-  /* student card: the Enrollment Status label sits right above its pill (like the other facts) */
+}
+
+/* Student card, every screen size: Current Cohort / Assigned Adviser are ONE block (label + value), but
+   Enrollment Status is two (label, then the pill widget), which made its cell taller, so when the cells are
+   centred its label sat higher and its pill lower than the others. Give it the same footprint:
+   label box = the label text, value 22px below the label's top, nothing extra below. */
+.st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] { gap: 5px !important; }
+.st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stElementContainer"]:has(.sp-fact-label) {
+  margin-top: -14px !important; margin-bottom: 0 !important;
+}
+/* the pill: a text block when read-only, a clickable popover (different wrapper) when the user can edit */
+.st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] > :not(:has(.sp-fact-label)) {
+  height: 11px !important; min-height: 0 !important; overflow: visible !important;   /* same footprint for both */
+}
+/* phones: the facts are stacked there (nothing to line up with), so the pill keeps its natural size inside the card */
+@media (max-width: 640px) {
   .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] { gap: 4px !important; }
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stElementContainer"]:has(.sp-fact-label) {
+    margin-top: 0 !important;
+  }
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] > :not(:has(.sp-fact-label)) {
+    height: auto !important; min-height: 36px !important;
+  }
+}
+/* tablets (portrait + landscape): the cells are narrow there, so "ENROLLMENT STATUS" can wrap to two lines and
+   the desktop footprint above put the pill on top of the label. Natural layout: label, small space, pill. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] { gap: 2px !important; }
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stElementContainer"]:has(.sp-fact-label) {
+    margin-top: 0 !important; height: auto !important; min-height: 0 !important;
+  }
   .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stMarkdownContainer"]:has(.sp-fact-label) {
-    margin-bottom: 0 !important;
+    margin-bottom: 0 !important; min-height: 0 !important;   /* label box = the label text (1 or 2 lines) */
+  }
+  .st-key-sp_head [data-testid="stColumn"]:last-child [data-testid="stVerticalBlock"] > :not(:has(.sp-fact-label)) {
+    height: auto !important; min-height: 32px !important;
   }
 }
 </style>

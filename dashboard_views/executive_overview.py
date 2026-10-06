@@ -516,12 +516,52 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 }
 
 /* Tablets (added): the three filters were a fixed 300px each, so only two fit per row. The three share the
-   first row now (shorter dropdowns), and both export buttons sit together on the right of the next row. */
+   first row now (shorter dropdowns), and both export buttons sit together on the LEFT of the next row
+   (portrait + landscape; only desktop keeps them on the right). */
 @media (min-width: 641px) and (max-width: 1150px) {
   .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+3) {
     flex: 1 1 calc(33.33% - 12px) !important; min-width: 150px !important; width: auto !important;
   }
-  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { margin-left: auto !important; }
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { margin-left: 0 !important; }
+}
+
+/* Tablets (added): with the sidebar open the two chart cards got very narrow (about 170px) and the trend card's
+   title + Completion % / Students at Risk switch ran past the card's right edge. Each chart card needs at least
+   320px: if both fit they stay side by side, otherwise they stack (one per row). The switch also never runs
+   past the card: it sits under the title on the left and wraps if there's still no room. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-eo_charts [data-testid="stHorizontalBlock"]:has(.st-key-eo_trend_head) { flex-wrap: wrap !important; }
+  .st-key-eo_charts [data-testid="stHorizontalBlock"]:has(.st-key-eo_trend_head) > [data-testid="stColumn"] {
+    flex: 1 1 320px !important; min-width: 320px !important;
+  }
+  .st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    flex: 1 1 100% !important; min-width: 0 !important;
+  }
+  .st-key-eo_trend_switch,
+  .st-key-eo_trend_switch [data-testid="stElementContainer"] { justify-content: flex-start !important; }
+  .st-key-eo_trend_switch [data-testid="stButtonGroup"],
+  .st-key-eo_trend_switch [role="radiogroup"] { justify-content: flex-start !important; flex-wrap: wrap !important;
+          margin-left: 0 !important; }
+}
+
+/* Students At Risk table, every screen size (added): header + rows were "as wide as their content" (880px), so on
+   a laptop / desktop the table stopped short of the card's right edge. Fill the card; below 880px it still
+   scrolls left-right like before. */
+.st-key-eo_table_head, .st-key-eo_table_rows { width: 100% !important; min-width: 880px !important; }
+/* header columns line up with the row columns: both rows fill their box (the 18px side padding sits on the
+   header box but on each data row), and the header leaves room for the rows' own scrollbar (--eo-scrollbar,
+   measured live in components.py) */
+.st-key-eo_table .st-key-eo_table_head { padding-right: calc(18px + var(--eo-scrollbar, 0px)) !important; }
+.st-key-eo_table .st-key-eo_table_head [data-testid="stHorizontalBlock"],
+.st-key-eo_table .st-key-eo_table_rows [data-testid="stHorizontalBlock"] { min-width: 0 !important; width: 100% !important; }
+.st-key-eo_table .st-key-eo_table_rows > div { min-width: 0 !important; }   /* inside the rows box, minus its scrollbar */
+
+/* Phones (added): the "i" on a KPI card sat on top of a long title ("ON-TIME GRADUATION RATE"). Keep the "i"
+   in the top-right corner (lined up with the card's smaller phone padding) and stop the title before it. */
+@media (max-width: 640px) {
+  .eo-kpi:has(.eo-info) .eo-kpi-label { padding-right: 26px !important; }
+  .eo-info { top: 9px !important; right: 10px !important; }
 }
 </style>
 """
