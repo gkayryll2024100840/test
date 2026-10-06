@@ -1,17 +1,20 @@
 # STUDENT PROFILE.PY 
-# UPDATED: 10-06-26 (speed-optimized + US-30 stage labels)
+# UPDATED: 10-06-26 (speed-optimized + US-30 stage labels + US-46 one-page summary)
 
 import html
 import pandas as pd
 import streamlit as st
 
 from db_connect import (
+    build_student_onepager_html,      # US-46
     can_edit,
     get_all_programs,
     get_lifecycle_status_options,
-    get_stage_labels,          # US-30: program-specific stage names
+    get_stage_labels,                 # US-30: program-specific stage names
+    get_student_at_risk_flag,         # US-46
     get_student_email,
     get_student_lifecycle_detail,
+    get_student_notes,                # US-46
     get_student_roster_data,
     get_user_program,
     update_enrollment_status,
@@ -247,6 +250,21 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
 .st-key-sp_discard button{background:var(--sp-surface) !important;}
 .st-key-sp_save button:disabled,.st-key-sp_discard button:disabled{opacity:.45;cursor:not-allowed;}
 
+/* ---- US-46 one-page summary row (between the pillar cards and the save bar) ---- */
+.st-key-sp_onepager{
+    background:var(--sp-surface);border:1px solid var(--sp-border);
+    border-radius:var(--sp-card-radius);padding:14px var(--sp-card-pad) !important;
+    margin-top:var(--sp-block-gap);
+    display:flex !important;flex-direction:row !important;
+    align-items:center !important;justify-content:space-between !important;gap:16px !important;
+}
+.st-key-sp_onepager [data-testid="stElementContainer"]{width:auto !important;flex:0 0 auto !important;}
+.sp-op-label{font-size:13px;font-weight:700;color:var(--sp-text);}
+.sp-op-hint{font-size:12px;color:var(--sp-muted);margin-top:2px;}
+.st-key-sp_op_btn button{background:#B31B21 !important;border-color:#B31B21 !important;color:#FFFFFF !important;
+    font-weight:700 !important;white-space:nowrap !important;}
+.st-key-sp_op_btn button *{color:#FFFFFF !important;}
+
 /* ============================================================
    RESPONSIVE DESIGN (Tablets & Phones: Portrait and Landscape)
    ============================================================ */
@@ -384,6 +402,22 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
     white-space: nowrap !important;
     font-size: 13.5px !important;
   }
+
+  /* US-46 one-page row: stack label above button on phone */
+  .st-key-sp_onepager {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 14px !important;
+  }
+  .st-key-sp_onepager [data-testid="stElementContainer"] {
+    width: 100% !important;
+  }
+  .st-key-sp_op_btn button {
+    width: 100% !important;
+    min-height: 42px !important;
+    font-size: 13.5px !important;
+  }
 }
 
 /* Landscape Phones (short viewport height <= 520px) */
@@ -399,6 +433,7 @@ html[data-eo-theme="dark"] .sp-note b{color:#FDE047;}
   [class*="st-key-sp_pillar_"] { padding: 12px 14px !important; }
   .sp-pillar-title { font-size: 16px !important; margin-top: 8px !important; }
   .st-key-sp_actions { margin-top: 10px !important; padding: 8px 12px !important; }
+  .st-key-sp_onepager { margin-top: 10px !important; padding: 8px 12px !important; }
 }
 
 /* Phones: the title and the student picker are stacked there, so each is only as tall as its content
@@ -665,6 +700,36 @@ elif selected_label:
     changes = {k: v for k, v in chosen.items() if v != current[k]}
     enrollment_changed = bool(current_enrollment) and chosen_enrollment != current_enrollment
     n_changes = len(changes) + (1 if enrollment_changed else 0)
+
+    # ----------------- US-46 One-page summary -----------------
+    # Sits between the pillar cards and the save bar. Single download button (no two-step
+    # "click Generate then a second button appears" flow, which shifted the layout on mobile).
+    # Pillar titles use the program's stage labels (US-30), not the default PILLARS titles.
+    _pillars_display = [
+        (stage_labels.get(PILLAR_LABEL_KEY[key], title), current[key] or "—", fmt_date(updated[key]))
+        for key, _tag, title, _pref in PILLARS
+    ]
+    _at_risk_row = get_student_at_risk_flag(selected_id, active_program_id)
+    _notes = get_student_notes(selected_id)
+    _onepager_html = build_student_onepager_html(
+        student_name, selected_id, cohort, adviser_text, _pillars_display, _at_risk_row, _notes
+    )
+
+    with st.container(key="sp_onepager"):
+        st.markdown(
+            '<div><div class="sp-op-label">🖨️ One-Page Advising Summary</div>'
+            '<div class="sp-op-hint">Lifecycle status, at-risk flags and adviser notes — '
+            'open the file and use your browser\'s Print (Ctrl+P) to save as PDF.</div></div>',
+            unsafe_allow_html=True,
+        )
+        with st.container(key="sp_op_btn"):
+            st.download_button(
+                "Download Summary (HTML)",
+                data=_onepager_html,
+                file_name=f"{selected_id}_summary.html",
+                mime="text/html",
+                key=f"sp_onepager_dl_{selected_id}",
+            )
 
     # ----------------- Save / discard bar -----------------
     with st.container(key="sp_actions"):
