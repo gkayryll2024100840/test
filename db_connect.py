@@ -1906,3 +1906,84 @@ def set_program_owner(program_id, user_id):
         return True, None
     except mysql.connector.Error as e:
         return False, str(e)
+
+def get_student_notes(student_number):
+    """Adviser notes for one student. Returns [] if the table doesn't exist yet (US-45 not built)."""
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
+                "SELECT NoteText, AuthorName, CreatedAt FROM Adviser_Notes "
+                "WHERE StudentNumber = %s ORDER BY CreatedAt DESC",
+                (str(student_number),),
+            )
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
+        return rows
+    except mysql.connector.Error:
+        return []
+
+def get_student_at_risk_flag(student_number, program_id):
+    """One student's row from v_student_stage_flags, or None if not flagged/not found."""
+    try:
+        df = get_flagged_students(program_id=program_id)
+        if df.empty:
+            return None
+        match = df[df["StudentNumber"].astype(str) == str(student_number)]
+        return match.iloc[0].to_dict() if not match.empty else None
+    except Exception as e:
+        print(f"Failed to fetch at-risk flag: {e}")
+        return None
+
+def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
+                                 pillars_display, at_risk_row, notes):
+    """pillars_display: [(title, status, last_audited_str), ...] in display order."""
+    stage_rows = "".join(
+        f"<tr><td>{title}</td><td>{status or '—'}</td><td>{last_audited}</td></tr>"
+        for title, status, last_audited in pillars_display
+    )
+
+    if at_risk_row and at_risk_row.get("is_flagged"):
+        at_risk_html = f'<p class="risk">AT RISK — {at_risk_row.get("flag_reason") or "see dashboard for details"}</p>'
+    else:
+        at_risk_html = '<p class="ok">No active at-risk flag.</p>'
+
+    if notes:
+        notes_html = "<ul>" + "".join(
+            f"<li><b>{n['AuthorName']}</b> ({n['CreatedAt']:%Y-%m-%d}): {n['NoteText']}</li>"
+            for n in notes
+        ) + "</ul>"
+    else:
+        notes_html = "<p>No notes on file.</p>"
+
+    return f"""
+    <html><head><style>
+        @page {{ size: letter; margin: 0.6in; }}
+        body {{ font-family: Arial, sans-serif; color: #1A1F36; }}
+        h1 {{ font-size: 20px; margin-bottom: 2px; }}
+        .meta {{ color: #6B7280; font-size: 13px; margin-bottom: 16px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 16px; }}
+        td, th {{ border: 1px solid #E5E7EB; padding: 6px 10px; font-size: 13px; text-align: left; }}
+        .risk {{ color: #B91C1C; font-weight: 700; }}
+        .ok {{ color: #15803D; font-weight: 600; }}
+        h2 {{ font-size: 14px; border-bottom: 1px solid #E5E7EB; padding-bottom: 4px; }}
+        ul {{ font-size: 13px; padding-left: 18px; }}
+    </style></head><body>
+        <h1>{student_name}</h1>
+        <div class="meta">Student No. {student_id} · Cohort {cohort} · Adviser: {adviser_text}</div>
+
+        <h2>Lifecycle Status</h2>
+        <table><tr><th>Stage</th><th>Status</th><th>Last Audited</th></tr>{stage_rows}</table>
+
+        <h2>At-Risk Status</h2>
+        {at_risk_html}
+
+        <h2>Adviser Notes</h2>
+        {notes_html}
+
+        <div class="meta" style="margin-top:20px;">Generated {_now_local():%Y-%m-%d}</div>
+    </body></html>
+    """
