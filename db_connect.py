@@ -1981,9 +1981,9 @@ def _ensure_notes_schema(cur):
 def get_student_notes(student_number):
     """Adviser or Program Chair notes for one student, newest first.
 
-    Columns returned: NoteID, NoteText, AdviserID (the author's ID), AuthorName, NoteDate.
-    AuthorName prefers Adviser.AdviserName (for adviser authors) and falls back to
-    Users.FirstName + LastName (for Program Chair authors) and finally the raw ID.
+    Columns returned: NoteID, NoteText, AdviserID, AuthorUserID, AuthorName, NoteDate.
+    AuthorName is resolved from Adviser (for adviser authors) or Users (for chair
+    authors), in that order, with a raw-ID fallback if both misses.
     Soft-deleted notes are hidden.
     """
     try:
@@ -1992,14 +1992,15 @@ def get_student_notes(student_number):
             cur = conn.cursor(dictionary=True)
             _ensure_notes_schema(cur)
             cur.execute(
-                "SELECT n.NoteID, n.NoteText, n.AdviserID, "
+                "SELECT n.NoteID, n.NoteText, n.AdviserID, n.AuthorUserID, "
                 "       COALESCE(a.AdviserName, "
                 "                NULLIF(TRIM(CONCAT(u.FirstName, ' ', u.LastName)), ''), "
-                "                n.AdviserID) AS AuthorName, "
+                "                n.AdviserID, n.AuthorUserID, "
+                "                'Unknown') AS AuthorName, "
                 "       n.NoteDate "
                 "FROM Adviser_Notes n "
-                "LEFT JOIN Adviser a ON a.AdviserID = n.AdviserID "
-                "LEFT JOIN Users   u ON u.UserID    = n.AdviserID "
+                "LEFT JOIN Adviser a ON a.AdviserID   = n.AdviserID "
+                "LEFT JOIN Users   u ON u.UserID      = n.AuthorUserID "
                 "WHERE n.StudentNumber = %s AND n.DeletedAt IS NULL "
                 "ORDER BY n.NoteDate DESC, n.NoteID DESC",
                 (str(student_number),),
@@ -2065,10 +2066,12 @@ def add_student_note(user_id, student_number, note_text):
 
     Returns (True, None) on success, (False, error_message) on failure.
 
-    Authorisation: the caller must be an Adviser (UserID == Adviser.AdviserID) or a
-    Program Chair. US-13's Edit / View Only permission does NOT apply here — adding
-    a handoff note is a communication action, not a config change, so View Only
-    advisers and View Only Chairs can also post.
+    Which column gets the author's ID:
+      - Advisers         -> Adviser_Notes.AdviserID      (FK to Adviser, NOT NULL-able here)
+      - Program Chairs   -> Adviser_Notes.AuthorUserID   (FK to Users)
+
+    Both columns exist; the read side COALESCEs them, so the UI and the one-pager
+    don't need to care who wrote what.
     """
     if user_id is None or str(user_id).strip() == "":
         return False, "You must be logged in to add a note."
@@ -2079,20 +2082,25 @@ def add_student_note(user_id, student_number, note_text):
     if len(text) > NOTES_MAX_LEN:
         return False, f"Notes are limited to {NOTES_MAX_LEN} characters."
 
-    adviser_id = get_my_adviser_id(user_id)
-    if not adviser_id:
+    identity = get_my_author_identity(user_id)
+    if not identity:
         return False, ("Only advisers and Program Chairs can post notes. "
                        "Ask IT/Admin to link your account to an Adviser record or assign "
                        "you the Program Chair role.")
+
+    adviser_id = identity["id"] if identity["kind"] == "adviser" else None
+    author_user_id = identity["id"] if identity["kind"] == "chair" else None
 
     try:
         conn = get_db_connection()
         try:
             cur = conn.cursor()
+            _ensure_notes_schema(cur)
             cur.execute(
-                "INSERT INTO Adviser_Notes (StudentNumber, AdviserID, NoteText, NoteDate) "
-                "VALUES (%s, %s, %s, %s)",
-                (str(student_number).strip(), adviser_id, text, _now_local()),
+                "INSERT INTO Adviser_Notes "
+                "(StudentNumber, AdviserID, AuthorUserID, NoteText, NoteDate) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (str(student_number).strip(), adviser_id, author_user_id, text, _now_local()),
             )
             conn.commit()
             cur.close()
