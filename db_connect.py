@@ -1919,15 +1919,38 @@ def get_student_at_risk_flag(student_number, program_id):
         print(f"Failed to fetch at-risk flag: {e}")
         return None
 
+# ===========================================================================
+# US-45: ADVISER NOTES (Program Chair / Adviser handoff notes on a student)
+#
+#   Existing table (no migration needed):
+#       Adviser_Notes(NoteID, StudentNumber, AdviserID, NoteText, NoteDate)
+#
+#   - AdviserID identifies the author. It is the caller's UserID (= their
+#     Adviser.AdviserID, the same convention get_my_adviser_name() uses).
+#   - The author's display name is JOINed from Adviser at read time.
+#   - Notes are append-only from the UI. No edit/delete endpoint, so the
+#     record stays tamper-evident (US-43).
+# ===========================================================================
+NOTES_MAX_LEN = 1000   # the NoteText column is likely VARCHAR(...); bump if yours is bigger
+
+
 def get_student_notes(student_number):
-    """Adviser notes for one student. Returns [] if the table doesn't exist yet (US-45 not built)."""
+    """Adviser notes for one student, newest first.
+
+    Columns returned: NoteID, NoteText, AdviserID, AuthorName, NoteDate.
+    Returns [] on any error (missing table, dropped connection, etc.).
+    """
     try:
         conn = get_db_connection()
         try:
             cur = conn.cursor(dictionary=True)
             cur.execute(
-                "SELECT NoteText, AuthorName, CreatedAt FROM Adviser_Notes "
-                "WHERE StudentNumber = %s ORDER BY CreatedAt DESC",
+                "SELECT n.NoteID, n.NoteText, n.AdviserID, "
+                "       a.AdviserName AS AuthorName, n.NoteDate "
+                "FROM Adviser_Notes n "
+                "LEFT JOIN Adviser a ON a.AdviserID = n.AdviserID "
+                "WHERE n.StudentNumber = %s "
+                "ORDER BY n.NoteDate DESC, n.NoteID DESC",
                 (str(student_number),),
             )
             rows = cur.fetchall()
@@ -1935,8 +1958,75 @@ def get_student_notes(student_number):
         finally:
             conn.close()
         return rows
-    except mysql.connector.Error:
+    except mysql.connector.Error as e:
+        print(f"Failed to fetch notes: {e}")
         return []
+
+
+def get_my_adviser_id(user_id):
+    """The AdviserID that belongs to this logged-in user, or None.
+
+    Convention (same as get_my_adviser_name): an adviser logs in with a UserID
+    that equals their Adviser.AdviserID. If you later link Adviser.UserID to
+    Users.UserID instead, change this to `SELECT AdviserID FROM Adviser WHERE UserID = %s`.
+    """
+    if user_id is None or str(user_id).strip() == "":
+        return None
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT AdviserID FROM Adviser WHERE AdviserID = %s", (str(user_id).strip(),))
+            row = cur.fetchone()
+            cur.close()
+        finally:
+            conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"Failed to fetch adviser id: {e}")
+        return None
+
+
+def add_student_note(user_id, student_number, note_text):
+    """Insert one adviser note for a student.
+
+    Returns (True, None) on success, (False, error_message) on failure.
+    Only an authenticated adviser can write (the caller's UserID must map to an
+    Adviser.AdviserID). Edit permission is required in addition to that.
+    """
+    if not can_edit(user_id):
+        log_permission_attempt(user_id)
+        return False, "You have View Only access, so you can't add notes."
+
+    text = str(note_text or "").strip()
+    if not text:
+        return False, "Note text can't be empty."
+    if len(text) > NOTES_MAX_LEN:
+        return False, f"Notes are limited to {NOTES_MAX_LEN} characters."
+
+    adviser_id = get_my_adviser_id(user_id)
+    if not adviser_id:
+        return False, ("Your account isn't linked to an adviser profile, so it can't author notes. "
+                       "Ask IT/Admin to link your UserID to an Adviser record.")
+
+    try:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO Adviser_Notes (StudentNumber, AdviserID, NoteText, NoteDate) "
+                "VALUES (%s, %s, %s, %s)",
+                (str(student_number).strip(), adviser_id, text, _now_local()),
+            )
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+        return True, None
+    except mysql.connector.Error as e:
+        return False, format_mysql_error(e)
+    except Exception as e:
+        return False, f"Unexpected error: {e}"
 
 def build_student_onepager_html(student_name, student_id, cohort, adviser_text,
                                  pillars_display, at_risk_row, notes):
