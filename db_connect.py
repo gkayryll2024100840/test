@@ -1,6 +1,7 @@
 # DB_CONNECT.PY 
 # 10/6/2026 (speed-optimized: connection pool, try/finally on hot reads, leaner roster query)
 import os
+import html
 import time
 import threading
 import mysql.connector
