@@ -803,6 +803,24 @@ THEME_DETECTOR_JS = """
     function apply() {
       var t = detect(), h = document.documentElement;
       if (h.getAttribute("data-eo-theme") !== t) h.setAttribute("data-eo-theme", t);
+      // phones: the red header scrolls away there, so tag the page while it is out of view
+      // (CSS then hides Deploy / the menu instead of leaving them floating over the content)
+      var red = document.querySelector(".ps-red");
+      var gone = red && red.getBoundingClientRect().bottom <= 0 ? "1" : "0";
+      if (h.getAttribute("data-ps-header-gone") !== gone) h.setAttribute("data-ps-header-gone", gone);
+      // Student Roster: the rows scroll inside their own box, whose scrollbar makes them a bit narrower than
+      // the header row. Share that scrollbar's width (it differs per OS) so the header can match the rows.
+      var rows = document.querySelector(".st-key-roster_scroll");
+      if (rows) {
+        var sb = (rows.offsetWidth - rows.clientWidth) + "px";
+        if (h.style.getPropertyValue("--sr-scrollbar") !== sb) h.style.setProperty("--sr-scrollbar", sb);
+      }
+      // Executive Overview, Students At Risk table: same idea (its rows scroll in their own box too)
+      var eoRows = document.querySelector(".st-key-eo_table_rows");
+      if (eoRows) {
+        var esb = (eoRows.offsetWidth - eoRows.clientWidth) + "px";
+        if (h.style.getPropertyValue("--eo-scrollbar") !== esb) h.style.setProperty("--eo-scrollbar", esb);
+      }
     }
     apply();
     setInterval(apply, 250);                                   // follows theme switches instantly
@@ -1316,6 +1334,14 @@ html[data-eo-theme="dark"] [data-testid="stExpandSidebarButton"]::after{border-c
   .ps-title { font-size: 22px !important; }
   .ps-yellow { padding: 8px 22px !important; gap: 12px !important; flex-wrap: wrap !important; }
   .ps-meta-value { font-size: 11px !important; }
+}
+
+/* Phones (portrait + landscape): the red header scrolls away there (see above), but Streamlit's Deploy / ⋮
+   toolbar is pinned and would float over the page. Hide it while the red header is out of view
+   (data-ps-header-gone is set by THEME_DETECTOR_JS); it comes back when you scroll up to the header. */
+@media (max-width: 640px), (max-height: 520px) and (orientation: landscape), (max-width: 950px) and (orientation: landscape) {
+  [data-testid="stToolbar"] { transition: opacity .15s ease; }
+  html[data-ps-header-gone="1"] [data-testid="stToolbar"] { opacity: 0 !important; pointer-events: none !important; }
 }
 </style>
 """

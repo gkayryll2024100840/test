@@ -371,6 +371,7 @@ def program_instances_section():
                             unsafe_allow_html=True,
                         )
                     with c_owner:
+                        st.markdown('<div class="ac-mlabel">Owner</div>', unsafe_allow_html=True)   # phones only
                         picked = st.selectbox(f"Owner for {pid}", options, index=options.index(cur_owner),
                                               key=f"owner_pick_{pid}", label_visibility="collapsed")
                         # Owner (Program.OwnerUserID): Save shows up when the pick changed (original logic)
@@ -388,6 +389,7 @@ def program_instances_section():
                                 st.rerun(scope="fragment")
                     with c_chair:
                         chair_uid = inst.get("ChairUserID")
+                        st.markdown('<div class="ac-mlabel">Program Chair</div>', unsafe_allow_html=True)   # phones only
                         chair_pick = st.selectbox(f"Chair for {pid}", options, index=options.index(cur_chair),
                                                   key=f"chair_pick_{pid}", label_visibility="collapsed")
                         # Chair (Users.CurrentProgramID): Assign shows up when the pick changed (original logic)
@@ -407,11 +409,13 @@ def program_instances_section():
                                 st.session_state["pi_flash"] = (False, err)
                                 st.rerun(scope="fragment")
                     with c_n:
-                        st.markdown(f'<span class="ac-num">{int(inst.get("StudentCount") or 0):,}</span>',
+                        st.markdown(f'<span class="ac-mlabel-in">Students</span>'   # label: phones only
+                                    f'<span class="ac-num">{int(inst.get("StudentCount") or 0):,}</span>',
                                     unsafe_allow_html=True)
                     with c_status:
-                        st.markdown('<span class="ac-pill ac-pill-ok">Active</span>' if inst.get("IsActive") else
-                                    '<span class="ac-pill ac-pill-warn">Inactive</span>', unsafe_allow_html=True)
+                        st.markdown('<span class="ac-mlabel-in">Status</span>'   # label: phones only
+                                    + ('<span class="ac-pill ac-pill-ok">Active</span>' if inst.get("IsActive") else
+                                       '<span class="ac-pill ac-pill-warn">Inactive</span>'), unsafe_allow_html=True)
                     with c_act:
                         st.page_link("dashboard_views/admin_config.py", label="⚙ Configure",
                                      query_params={"program": str(pid)})
@@ -560,6 +564,183 @@ html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,
   }
   /* User Permissions: hide the wide 4-column layout; show name+role stacked */
   .ac-table-wrap { font-size: 12px; }
+}
+
+/* Program Instances: small labels that only show on phones (their column headers are hidden there) */
+[data-testid="stElementContainer"]:has(.ac-mlabel){display:none;}
+.ac-mlabel-in{display:none;}
+
+/* ---- Phones (added): tables stay tables and scroll sideways; Program Instances become labelled cards ---- */
+@media (max-width: 640px) {
+  /* KPI Tiles / User Permissions / recent backups: keep the desktop columns, scroll left-right */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"],
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important; gap: 12px !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 560px !important; }
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stColumn"],
+  .st-key-ac_bktable [data-testid="stColumn"] {
+    width: auto !important; min-width: 0 !important;
+  }
+  /* same column proportions as on desktop (KPI_WIDTHS, perm_widths, BK_WIDTHS) */
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(1) { flex: 1.25 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(2) { flex: 3.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(3) { flex: 2.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(4) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(5) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(6) { flex: 0.55 1 0 !important; }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(1) { flex: 2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(2) { flex: 2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(3) { flex: 1.4 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(1) { flex: 0.7 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(2) { flex: 1.8 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(3) { flex: 1.2 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_permtable .ac-th-line { min-width: 560px; }
+
+  /* Permission Audit Log: full-width table that scrolls left-right instead of squeezing the columns */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
+
+  /* Program Instances: "2 programs · 2 active · 0 inactive" on the left */
+  .ac-stats { justify-content: flex-start !important; }
+
+  /* Restore box: same space above the "Replace the current settings" checkbox as between the lines above it
+     (Streamlit pulls the line under a text block up by 16px) */
+  .st-key-bkrestore [data-testid="stMarkdownContainer"]:has(.ac-hint) { margin-bottom: 0 !important; }
+
+  /* Field Mapping: "Mapped" switch on the left under the input */
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+
+  /* Program Instances: no column headers; Owner / Program Chair labels above the dropdowns,
+     Students / Status labels next to their values */
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"]:has(.ac-th2) { display: none !important; }
+  [data-testid="stElementContainer"]:has(.ac-mlabel) { display: block !important; }
+  .ac-mlabel { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6B7280;
+          margin-bottom: -6px; }
+  .ac-mlabel-in { display: inline-block; min-width: 92px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
+          text-transform: uppercase; color: #6B7280; }
+  html[data-eo-theme="dark"] .ac-mlabel, html[data-eo-theme="dark"] .ac-mlabel-in { color: #94A3B8; }
+}
+
+/* ---- Tablets (added) ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Program Instances: keep the table, scroll left-right (columns were too narrow: "STUDEN TS",
+     cut-off dropdowns, and "Configure" running into the "Created ..." line) */
+  .st-key-acbody_programs { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 1000px !important; }
+  .st-key-acbody_programs .ac-th2 { white-space: nowrap; }
+
+  /* At-Risk Threshold and Data Refresh Schedule: one card per row instead of side by side */
+  .st-key-ac_pair [data-testid="stHorizontalBlock"]:not([class*="st-key-acbody_"] *) {
+    flex-direction: column !important; gap: 16px !important;
+  }
+  .st-key-ac_pair [data-testid="stColumn"]:not([class*="st-key-acbody_"] *) {
+    width: 100% !important; min-width: 100% !important; flex: 0 0 auto !important;
+  }
+
+  /* Add a Tile: "Visible" above its switch (like "Accent" above its colour), so the word fits */
+  [class*="st-key-kpi_new_visible_"] label { flex-direction: column-reverse !important; align-items: flex-start !important;
+          gap: 6px !important; }
+  /* ... and the "+ Add" button keeps room for its label */
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6) {
+    flex: 0 0 84px !important; min-width: 84px !important;
+  }
+}
+
+/* ---- Tablets, portrait + landscape (added): with the sidebar open the page is only about 500px wide ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Field Mapping: the "Mapped" switch had about 60px and its word broke ("Map / ped"). It moves under the
+     input, on the left; the field name stays on the left of the input. */
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) {
+    flex-wrap: wrap !important; row-gap: 6px !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(1) {
+    flex: 0 0 30% !important; width: 30% !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 0 !important; width: auto !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(3) {
+    flex: 0 0 100% !important; width: 100% !important; min-width: 0 !important;
+    padding-left: calc(30% + 1rem) !important; box-sizing: border-box !important;   /* lines up with the input */
+  }
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+  [class*="st-key-fmtog_"] label { white-space: nowrap !important; }
+
+  /* KPI Tiles / User Permissions / recent backups: same as phones - keep the columns, scroll left-right
+     when there isn't room (nothing changes when there is) */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 640px !important; }   /* roles don't break mid-word */
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+
+  /* Stage Labels: the three label boxes keep a usable width and scroll left-right instead of squishing */
+  .st-key-acbody_labels { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 600px !important; }
+  /* ... its Program dropdown (and the KPI Tiles one) drops under the title when both don't fit on one line */
+  .st-key-achead_labels [data-testid="stHorizontalBlock"],
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 260px !important; min-width: 0 !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 1 1 220px !important; min-width: 0 !important; }
+  /* ... and "Save Labels" keeps room for its words (still on the right) */
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: 140px !important; }
+
+  /* Add a Tile: the six fields scroll left-right inside the dashed box instead of squishing */
+  [class*="st-key-kpiadd_"] { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 640px !important; }
+
+  /* KPI Tiles + Configuration Backup footers: the buttons keep their full words ("Reset to Defaults",
+     "Download latest", "Back up now"); the note in the middle takes what's left, or its own line */
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"],
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)) {
+    flex: 0 0 auto !important; width: auto !important; min-width: max-content !important;
+  }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 140px !important; width: auto !important; min-width: 0 !important;
+  }
+
+  /* Restore box: "Use a backup file" keeps its words, and the "Replace the current settings ..." checkbox
+     gets its own full line (its text wraps) with the Restore button under it */
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: max-content !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"]:has(.st-key-cfg_restore_go) > [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+  }
+  .st-key-bkrestore [data-testid="stCheckbox"] p { white-space: normal !important; overflow: visible !important;
+          text-overflow: clip !important; }
+
+  /* Permission Audit Log / sync log tables: same as phones - one line per cell, scroll left-right
+     (words like "SCHEDULED" were breaking in the middle) */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
 }
 </style>"""
 st.markdown(CARD_CSS, unsafe_allow_html=True)
@@ -876,41 +1057,43 @@ def kpi_tiles_section():
                 _kpi_load_draft(pid)
             draft = st.session_state[_kpi_draft_key(pid)]
 
-            # header row
-            for col, label in zip(st.columns(KPI_WIDTHS, vertical_alignment="bottom"),
-                                  ["Order", "Label", "Source", "Visible", "Accent", ""]):
-                col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+            # the table (header + one row per tile) - on phones it scrolls sideways instead of stacking
+            with st.container(key="ac_kpitable"):
+                # header row
+                for col, label in zip(st.columns(KPI_WIDTHS, vertical_alignment="bottom"),
+                                      ["Order", "Label", "Source", "Visible", "Accent", ""]):
+                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
 
-            move, delete = None, None
-            for i, t in enumerate(draft):
-                tkey = t.get("key") or f"tile{i}"
-                with st.container(key=f"kpirow_{pid}_{tkey}"):
-                    c_ord, c_lbl, c_src, c_vis, c_col, c_del = st.columns(KPI_WIDTHS, vertical_alignment="center")
-                    with c_ord:
-                        with st.container(key=f"kpiord_{pid}_{tkey}"):
-                            o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
-                            o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
-                            if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
-                                move = (i, i - 1)
-                            if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
-                                             disabled=i == len(draft) - 1):
-                                move = (i, i + 1)
-                    with c_lbl:
-                        t["label"] = st.text_input("Label", value=t.get("label", ""),
-                                                   key=f"kpi_l_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_src:
-                        st.markdown(f'<span class="ac-chip">{html.escape(str(t.get("source", "")))}</span>',
-                                    unsafe_allow_html=True)
-                    with c_vis:
-                        t["visible"] = st.toggle("Visible", value=bool(t.get("visible", True)),
-                                                 key=f"kpi_v_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_col:
-                        t["color"] = st.color_picker("Accent", value=t.get("color", "#1F3864"),
-                                                     key=f"kpi_c_{pid}_{tkey}", label_visibility="collapsed")
-                    with c_del:
-                        with st.container(key=f"kpidel_{pid}_{tkey}"):
-                            if st.button("✕", key=f"kpi_d_{pid}_{tkey}", help="Remove this tile"):
-                                delete = i
+                move, delete = None, None
+                for i, t in enumerate(draft):
+                    tkey = t.get("key") or f"tile{i}"
+                    with st.container(key=f"kpirow_{pid}_{tkey}"):
+                        c_ord, c_lbl, c_src, c_vis, c_col, c_del = st.columns(KPI_WIDTHS, vertical_alignment="center")
+                        with c_ord:
+                            with st.container(key=f"kpiord_{pid}_{tkey}"):
+                                o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
+                                o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
+                                if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
+                                    move = (i, i - 1)
+                                if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
+                                                 disabled=i == len(draft) - 1):
+                                    move = (i, i + 1)
+                        with c_lbl:
+                            t["label"] = st.text_input("Label", value=t.get("label", ""),
+                                                       key=f"kpi_l_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_src:
+                            st.markdown(f'<span class="ac-chip">{html.escape(str(t.get("source", "")))}</span>',
+                                        unsafe_allow_html=True)
+                        with c_vis:
+                            t["visible"] = st.toggle("Visible", value=bool(t.get("visible", True)),
+                                                     key=f"kpi_v_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_col:
+                            t["color"] = st.color_picker("Accent", value=t.get("color", "#1F3864"),
+                                                         key=f"kpi_c_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_del:
+                            with st.container(key=f"kpidel_{pid}_{tkey}"):
+                                if st.button("✕", key=f"kpi_d_{pid}_{tkey}", help="Remove this tile"):
+                                    delete = i
 
             if move is not None:
                 a, b = move
@@ -993,7 +1176,7 @@ section_header(
 def user_permissions_section():
     search_query = st.text_input(
         "Search User by Name or UserID",
-        placeholder="e.g. Juan, dela Cruz, or 2024-10012",
+        placeholder="e.g. Juan, dela Cruz, or ADV0000001",
         key="perm_search",
     )
 
@@ -1013,43 +1196,45 @@ def user_permissions_section():
                                    step=1, key=f"perm_page_{search_query}")
     page_users = users[(page - 1) * USERS_PER_PAGE: page * USERS_PER_PAGE]
 
-    # column headers (same look as the Student Roster / Executive Overview table headers)
-    perm_widths = [2, 2, 1.4, 1.6]
-    for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
-                          ["UserID", "Name", "Role", "Permission"]):
-        col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+    # the table (header + one row per user) - on phones it scrolls sideways instead of stacking
+    with st.container(key="ac_permtable"):
+        # column headers (same look as the Student Roster / Executive Overview table headers)
+        perm_widths = [2, 2, 1.4, 1.6]
+        for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
+                              ["UserID", "Name", "Role", "Permission"]):
+            col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
 
-    for u in page_users:
-        cols = st.columns(perm_widths)
+        for u in page_users:
+            cols = st.columns(perm_widths)
 
-        with cols[0]:
-            st.write(f"**{u['UserID']}**")
-        with cols[1]:
-            st.write(f"{u['FirstName']} {u['LastName']}")
-        with cols[2]:
-            st.write(f"{u['Role']}")
-        with cols[3]:
-            current = u.get("RolePermission") or "View Only"
-            idx = 0 if current == "View Only" else 1
-            new_perm = st.selectbox(
-                f"Permission for {u['UserID']}",
-                ["View Only", "Edit"],
-                index=idx,
-                key=f"perm_{u['UserID']}",
-                label_visibility="collapsed",
-            )
+            with cols[0]:
+                st.write(f"**{u['UserID']}**")
+            with cols[1]:
+                st.write(f"{u['FirstName']} {u['LastName']}")
+            with cols[2]:
+                st.write(f"{u['Role']}")
+            with cols[3]:
+                current = u.get("RolePermission") or "View Only"
+                idx = 0 if current == "View Only" else 1
+                new_perm = st.selectbox(
+                    f"Permission for {u['UserID']}",
+                    ["View Only", "Edit"],
+                    index=idx,
+                    key=f"perm_{u['UserID']}",
+                    label_visibility="collapsed",
+                )
 
-            if new_perm != current:
-                if st.button("Save", key=f"save_{u['UserID']}"):
-                    require_edit()   # only IT/Admin has Edit
-                    ok, err = set_user_permission(u["UserID"], new_perm)
-                    if ok:
-                        st.success(f"{u['UserID']} → {new_perm}")
-                        st.cache_data.clear()   # other pages cache each user's permission for a short time
-                        st.rerun(scope="fragment")
-                    else:
-                        st.error(f"Failed: {err}")
+                if new_perm != current:
+                    if st.button("Save", key=f"save_{u['UserID']}"):
+                        require_edit()   # only IT/Admin has Edit
+                        ok, err = set_user_permission(u["UserID"], new_perm)
+                        if ok:
+                            st.success(f"{u['UserID']} → {new_perm}")
+                            st.cache_data.clear()   # other pages cache each user's permission for a short time
+                            st.rerun(scope="fragment")
+                        else:
+                            st.error(f"Failed: {err}")
 
     if n_pages > 1:
         st.caption(f"Showing {len(page_users)} of {len(users)} users.")
@@ -1198,18 +1383,20 @@ def config_backup_section():
         with st.container(key="acbody_backup"):
             # ---- recent backups ----
             if backups:
-                for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
-                                      ["Backup", "Created", "Type", "By"]):
-                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
-                for b in backups[:BK_SHOWN]:
-                    kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
-                    with st.container(key=f"bkrow_{b['BackupID']}"):
-                        c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
-                        c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
-                        c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
-                        c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
-                        c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
-                                      unsafe_allow_html=True)
+                # the list as a table - on phones it scrolls sideways instead of stacking
+                with st.container(key="ac_bktable"):
+                    for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
+                                          ["Backup", "Created", "Type", "By"]):
+                        col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+                    for b in backups[:BK_SHOWN]:
+                        kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
+                        with st.container(key=f"bkrow_{b['BackupID']}"):
+                            c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
+                            c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
+                            c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
+                            c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
+                            c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
+                                          unsafe_allow_html=True)
             else:
                 st.markdown('<div class="ac-hint">No backups yet. Click <b>Back up now</b> to make the first one.</div>',
                             unsafe_allow_html=True)
@@ -1289,3 +1476,149 @@ def config_backup_section():
 
 
 config_backup_section()
+
+# ============================================================
+# KPI EMAIL ALERTS (US-36)  -  logic lives in kpi_alerts.py, thresholds in kpi_thresholds.json
+# ============================================================
+from kpi_alerts import (
+    ALERT_KPIS, check_kpi_alerts, kpi_status, thresholds_for, email_is_configured,
+)
+
+# Styles for this card only (new class names, so nothing else on the page changes)
+ALERT_CARD_CSS = """<style>
+.st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:1px solid var(--ac-h-border);padding-left:20px;}
+.al-name{font-size:16px;font-weight:700;color:var(--ac-h-text);margin-top:8px;line-height:1.35;}
+.al-email{font-size:14px;color:var(--ac-h-label);display:flex;align-items:center;gap:8px;margin-top:4px;
+        word-break:break-all;}
+.al-account{font-size:12px;color:var(--ac-h-label);margin-top:10px;line-height:1.5;}
+.al-wrap{overflow-x:auto;margin-top:6px;}
+.al-table{width:100%;border-collapse:collapse;}
+.al-table th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;
+        text-align:center;padding:4px 8px 8px 8px;border-bottom:1px solid var(--ac-h-border);}
+html[data-eo-theme="dark"] .al-table th{color:#94A3B8;}
+.al-table td{font-size:14px;color:var(--ac-h-text);padding:10px 8px;border-bottom:1px solid var(--ac-h-border);
+        vertical-align:middle;text-align:center;}
+.al-table .ac-pill{white-space:normal;line-height:1.35;}
+.al-table tr:last-child td{border-bottom:none;}
+.al-val{font-weight:700;}
+.al-line{font-size:12px;color:var(--ac-h-label);margin-top:2px;white-space:nowrap;}
+.ac-pill-bad{color:#B91B21;background:#FEF2F2;border-color:#FECACA;}
+html[data-eo-theme="dark"] .ac-pill-bad{color:#FCA5A5;background:rgba(185,27,33,.18);border-color:rgba(185,27,33,.4);}
+/* this card only: on phones the two sides stack, so the divider goes on top instead of the left */
+@media (max-width: 640px) {
+  .st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:none;padding-left:0;
+          border-top:1px solid var(--ac-h-border);padding-top:16px;}
+}
+</style>"""
+GOOD_COLOR, BAD_COLOR = "#55AB22", "#B91B21"   # same green / red as the Executive Overview KPI numbers
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_kpi_status():
+    return kpi_status()
+
+
+def _status_pill(row):
+    """What happened for this KPI: OK, or (when it's below the red line) whether the Dean was emailed."""
+    if not row["is_red"]:
+        return '<span class="ac-pill ac-pill-ok">OK</span>'
+    if row["email"] == "sent":
+        sent = row["sent_at"]
+        return (f'<span class="ac-pill ac-pill-bad">Emailed {sent:%b %d}, '
+                f'{sent.hour % 12 or 12}:{sent:%M %p}</span>')
+    if row["email"] == "failed":
+        return '<span class="ac-pill ac-pill-warn">Failed · will retry</span>'
+    return '<span class="ac-pill ac-pill-warn">Not emailed yet</span>'
+
+
+def _value_color(row):
+    if row["is_red"]:
+        return BAD_COLOR
+    return GOOD_COLOR if row["value"] >= row["green_at"] else "var(--ac-h-text)"
+
+
+@st.fragment
+def kpi_alerts_section():
+    try:
+        recipients, status_rows = cached_kpi_status()
+    except Exception as e:
+        st.error(f"Could not load KPI alerts: {e}")
+        return
+    limits = thresholds_for()
+    st.markdown(ALERT_CARD_CSS, unsafe_allow_html=True)
+
+    with st.container(key="accard_alerts"):
+        with st.container(key="achead_alerts"):
+            st.markdown(
+                '<div class="ac-card-title">KPI Email Alerts</div>'
+                '<div class="ac-card-desc">Emails the Dean once when a program\'s '
+                + " or ".join(f"{name} drops below {limits[k][1]:g}%" for k, (name, _) in ALERT_KPIS.items())
+                + '. Checked every night after the data refresh. Thresholds are set in '
+                '<span class="ac-chip">kpi_thresholds.json</span>.</div>',
+                unsafe_allow_html=True,
+            )
+
+        with st.container(key="acbody_alerts"):
+            with st.container(key="alertcols"):
+                c_to, c_status = st.columns([1, 3])
+                with c_to:   # ---- who gets the emails ----
+                    dot = "ac-dot-ok" if email_is_configured() else "ac-dot-fail"
+                    people = "".join(
+                        f'<div class="al-name">{html.escape(r["Name"])}</div>'
+                        f'<div class="al-email"><span class="ac-dot {dot}"></span>{html.escape(r["Email"])}</div>'
+                        for r in recipients
+                    ) or '<div class="al-name">No Dean found</div>'
+                    account = ("" if email_is_configured() else
+                               '<div class="al-account">Email account not set up: add ALERT_SMTP_PASSWORD '
+                               '(the Gmail app password) to .env</div>')
+                    st.markdown(f'<div class="ac-th2">Sends to</div>{people}{account}', unsafe_allow_html=True)
+
+                with c_status:   # ---- every program's KPIs right now ----
+                    if status_rows:
+                        body = "".join(
+                            f'<tr><td><b>{html.escape(str(r["ProgramCode"]))}</b></td>'
+                            f'<td>{html.escape(r["kpi"])}</td>'
+                            f'<td><span class="al-val" style="color:{_value_color(r)};">{r["value"]:.1f}%</span>'
+                            f'<div class="al-line">red below {r["red_below"]:g}%</div></td>'
+                            f'<td>{_status_pill(r)}</td></tr>'
+                            for r in status_rows
+                        )
+                        st.markdown(
+                            '<div class="ac-th2">KPI status</div>'
+                            '<div class="al-wrap"><table class="al-table"><thead><tr><th>Program</th><th>KPI</th>'
+                            f'<th>Now</th><th>Dean email</th></tr></thead><tbody>{body}</tbody></table></div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown('<div class="ac-th2">KPI status</div>'
+                                    '<div class="ac-hint">No programs with students yet.</div>', unsafe_allow_html=True)
+
+            flash = st.session_state.pop("alert_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_alerts"):
+            email_clicked = st.button("Check KPI Status", type="primary", key="alert_check", use_container_width=True)
+
+    if email_clicked:
+        require_edit()   # US-13 gate
+        with st.spinner("Checking KPIs..."):
+            r = check_kpi_alerts()   # same check as the nightly one: new drops only, all in ONE email
+        cached_kpi_status.clear()
+        emails = r.get("emails", 1 if r.get("sent") else 0)
+        if r.get("errors"):
+            msg = f"Couldn't send the email: {r['errors'][0]}"
+        elif emails:
+            msg = (f"1 email sent to {', '.join(r['recipients'])} about {r['sent']} KPI(s) below their threshold."
+                   if emails == 1 else f"{emails} emails sent about {r['sent']} KPI(s).")
+        elif r["red"]:
+            msg = (f"Nothing new to email: the Dean was already emailed about the {r['red']} KPI(s) "
+                   "below their threshold.")
+        else:
+            msg = f"Nothing to email: all {r['checked']} KPIs are above their threshold."
+        st.session_state["alert_flash"] = (not r["errors"], msg)
+        st.rerun(scope="fragment")
+
+section_divider()
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+kpi_alerts_section()

@@ -408,20 +408,25 @@ def get_enrollment_count(status_filter="All", cohort=None, program_id=None):
         print(f"Failed to fetch enrollment count: {e}")
         return 0
 def get_available_cohorts(program_id=None):
-    """Fetches distinct cohort values for the given program."""
-    if program_id is None:
-        return []
-
+    """Fetches distinct cohort values for the given program (program_id=None -> "All Programs": every cohort)."""
     try:
         conn = get_db_connection()
         try:
             cursor = conn.cursor()
-            query = (
-                "SELECT DISTINCT Cohort FROM Students "
-                "WHERE Cohort IS NOT NULL AND ProgramID = %s "
-                "ORDER BY Cohort DESC"
-            )
-            cursor.execute(query, (program_id,))
+            if program_id is None:
+                query = (
+                    "SELECT DISTINCT Cohort FROM Students "
+                    "WHERE Cohort IS NOT NULL "
+                    "ORDER BY Cohort DESC"
+                )
+                cursor.execute(query)
+            else:
+                query = (
+                    "SELECT DISTINCT Cohort FROM Students "
+                    "WHERE Cohort IS NOT NULL AND ProgramID = %s "
+                    "ORDER BY Cohort DESC"
+                )
+                cursor.execute(query, (program_id,))
             cohorts = [row[0] for row in cursor.fetchall()]
             cursor.close()
         finally:
@@ -875,11 +880,8 @@ def get_my_adviser_name(user_id):
     """Resolves the AdviserName linked to a given UserID, for US-23's
     auto-scoped "my advisees" roster filter.
 
-    Schema assumption: Adviser.UserID (int, NULLABLE, FK to Users.UserID)
-    links an Adviser row to the login that IS that adviser. If this column
-    doesn't exist yet on your live table, add it first:
-        ALTER TABLE Adviser ADD COLUMN UserID INT NULL;
-        ALTER TABLE Adviser ADD FOREIGN KEY (UserID) REFERENCES Users(UserID);
+    An adviser's login uses their AdviserID as the UserID (e.g. Users.UserID 'ADV0000001'
+    = Adviser.AdviserID 'ADV0000001'), so the link needs no extra column.
 
     Args:
         user_id: The UserID of the logged-in user.
@@ -898,7 +900,7 @@ def get_my_adviser_name(user_id):
         try:
             cursor = conn.cursor(dictionary=True)
             cursor.execute(
-                "SELECT AdviserName FROM Adviser WHERE UserID = %s",
+                "SELECT AdviserName FROM Adviser WHERE AdviserID = %s",
                 (user_id,)
             )
             row = cursor.fetchone()
@@ -1078,6 +1080,15 @@ def get_student_lifecycle_detail(student_number):
         return None
 
 
+def _alert_advisers(student_number):
+    """US-37: after a status is saved, alert the student's adviser if it moved to a bad status."""
+    try:
+        from advisee_alerts import scan_status_changes   # imported here: advisee_alerts imports this module
+        scan_status_changes(student_number)
+    except Exception as e:
+        print(f"US-37 advisee alert check failed: {e}")
+
+
 def update_lifecycle_statuses(student_number, changes):
     """Save one or more pillar changes for a student.
 
@@ -1161,6 +1172,7 @@ def update_lifecycle_statuses(student_number, changes):
                 )
         conn.commit()
         cur.close()
+        _alert_advisers(sn)   # US-37
         return True, f"Saved {len(changes)} change(s)."
     except Exception as e:
         conn.rollback()
@@ -1226,6 +1238,7 @@ def update_enrollment_status(student_number, new_status):
         cur.execute(f"UPDATE Students SET {', '.join(sets)} WHERE StudentNumber = %s", params + [sn])
         conn.commit()
         cur.close()
+        _alert_advisers(sn)   # US-37
         return True, "Enrollment status saved."
     except Exception as e:
         try:
@@ -1561,6 +1574,23 @@ def run_scheduled_refresh_if_due(now=None):
                                    login_id="SCHEDULED")
     except Exception as e:
         print(f"Scheduled config backup failed: {e}")
+
+    # US-36: email the Dean about any KPI that just went below its threshold (a failure shows in System Sync Logs)
+    try:
+        from kpi_alerts import check_kpi_alerts   # imported here: kpi_alerts imports this module
+        alerts = check_kpi_alerts()
+        if alerts["failed"] or (alerts["errors"] and not alerts["sent"]):
+            log_sync_attempt_local("FAILED", error_message=f"KPI alert email: {alerts['errors'][0]}",
+                                   login_id="SCHEDULED")
+    except Exception as e:
+        print(f"Scheduled KPI alert check failed: {e}")
+
+    # US-37: advisee status alerts (catches status changes saved outside the dashboard too)
+    try:
+        from advisee_alerts import scan_status_changes   # imported here: advisee_alerts imports this module
+        scan_status_changes()
+    except Exception as e:
+        print(f"Scheduled advisee alert check failed: {e}")
     return True
 
 

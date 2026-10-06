@@ -30,6 +30,7 @@ from dashboard_views.components import DARK_MODE_CSS, set_header_context
 from field_mapping import load_mappings
 from prefetch import prefetch
 from perf import timed   # US-49: [TIMING] lines
+from kpi_alerts import thresholds_for   # US-36: KPI thresholds live in kpi_thresholds.json
 
 st.set_page_config(page_title="Executive Overview", layout="wide")
 st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
@@ -68,12 +69,10 @@ STAGE_STATUS_COL = {
 AT_RISK_STATUSES = {"Incomplete", "Cancelled"}
 
 # KPI value colours: green = on track, normal text colour = in between, red = needs attention.
-# (green_at, red_below) in %. Same green / red as the Cohort by Lifecycle Stage chart.
-KPI_THRESHOLDS = {
-    "overall_completion": (50.0, 40.0),
-    "completion_rate": (50.0, 40.0),
-    "on_time_rate": (40.0, 30.0),
-}
+# {kpi: (green_at, red_below)} in %, read from kpi_thresholds.json (US-36: configurable, not hardcoded;
+# the Dean's alert emails use the same file). render_executive_overview() swaps in the selected program's values.
+# Same green / red as the Cohort by Lifecycle Stage chart.
+KPI_THRESHOLDS = thresholds_for()
 KPI_GOOD_COLOR = STAGE_COLORS["Capstone"]     # #55AB22
 KPI_BAD_COLOR = STAGE_COLORS["Coursework"]    # #B91B21
 ON_TIME_TRUE = {"yes", "y", "true", "1", "on time", "on-time"}
@@ -494,6 +493,76 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
     width: auto !important;
   }
 }
+
+/* Phones: Streamlit wraps each export button in a box that only fits the button, so the full-width
+   rule above had nothing to fill. Stretch that box too -> two equal buttons side by side. */
+@media (max-width: 640px) {
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) [data-testid="stElementContainer"],
+  .st-key-eo_filters [data-testid="stColumn"]:nth-last-child(-n+2) [data-testid="stDownloadButton"] {
+    width: 100% !important;
+  }
+}
+
+/* Charts on phones + tablets: Plotly tilts the names under the bars when the chart is narrow and they ran
+   past the bottom of the chart, where they were cut off. Let them show below it and keep room there. */
+@media (max-width: 1150px) {
+  .st-key-eo_charts .js-plotly-plot,
+  .st-key-eo_charts .js-plotly-plot .plot-container,
+  .st-key-eo_charts .js-plotly-plot .svg-container,
+  .st-key-eo_charts .js-plotly-plot svg.main-svg {
+    overflow: visible !important;
+  }
+  .st-key-eo_charts [data-testid="stPlotlyChart"] { margin-bottom: 26px !important; }
+}
+
+/* Tablets (added): the three filters were a fixed 300px each, so only two fit per row. The three share the
+   first row now (shorter dropdowns), and both export buttons sit together on the LEFT of the next row
+   (portrait + landscape; only desktop keeps them on the right). */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+3) {
+    flex: 1 1 calc(33.33% - 12px) !important; min-width: 150px !important; width: auto !important;
+  }
+  .st-key-eo_filters [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(4) { margin-left: 0 !important; }
+}
+
+/* Tablets (added): with the sidebar open the two chart cards got very narrow (about 170px) and the trend card's
+   title + Completion % / Students at Risk switch ran past the card's right edge. Each chart card needs at least
+   320px: if both fit they stay side by side, otherwise they stack (one per row). The switch also never runs
+   past the card: it sits under the title on the left and wraps if there's still no room. */
+@media (min-width: 641px) and (max-width: 1150px) {
+  .st-key-eo_charts [data-testid="stHorizontalBlock"]:has(.st-key-eo_trend_head) { flex-wrap: wrap !important; }
+  .st-key-eo_charts [data-testid="stHorizontalBlock"]:has(.st-key-eo_trend_head) > [data-testid="stColumn"] {
+    flex: 1 1 320px !important; min-width: 320px !important;
+  }
+  .st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-eo_trend_head [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child {
+    flex: 1 1 100% !important; min-width: 0 !important;
+  }
+  .st-key-eo_trend_switch,
+  .st-key-eo_trend_switch [data-testid="stElementContainer"] { justify-content: flex-start !important; }
+  .st-key-eo_trend_switch [data-testid="stButtonGroup"],
+  .st-key-eo_trend_switch [role="radiogroup"] { justify-content: flex-start !important; flex-wrap: wrap !important;
+          margin-left: 0 !important; }
+}
+
+/* Students At Risk table, every screen size (added): header + rows were "as wide as their content" (880px), so on
+   a laptop / desktop the table stopped short of the card's right edge. Fill the card; below 880px it still
+   scrolls left-right like before. */
+.st-key-eo_table_head, .st-key-eo_table_rows { width: 100% !important; min-width: 880px !important; }
+/* header columns line up with the row columns: both rows fill their box (the 18px side padding sits on the
+   header box but on each data row), and the header leaves room for the rows' own scrollbar (--eo-scrollbar,
+   measured live in components.py) */
+.st-key-eo_table .st-key-eo_table_head { padding-right: calc(18px + var(--eo-scrollbar, 0px)) !important; }
+.st-key-eo_table .st-key-eo_table_head [data-testid="stHorizontalBlock"],
+.st-key-eo_table .st-key-eo_table_rows [data-testid="stHorizontalBlock"] { min-width: 0 !important; width: 100% !important; }
+.st-key-eo_table .st-key-eo_table_rows > div { min-width: 0 !important; }   /* inside the rows box, minus its scrollbar */
+
+/* Phones (added): the "i" on a KPI card sat on top of a long title ("ON-TIME GRADUATION RATE"). Keep the "i"
+   in the top-right corner (lined up with the card's smaller phone padding) and stop the title before it. */
+@media (max-width: 640px) {
+  .eo-kpi:has(.eo-info) .eo-kpi-label { padding-right: 26px !important; }
+  .eo-info { top: 9px !important; right: 10px !important; }
+}
 </style>
 """
 
@@ -909,10 +978,21 @@ BASE_LAYOUT = dict(
 )
 
 
+def _two_line_label(label):
+    """Long stage names on two lines (e.g. 'Coursework<br>Completion'), so they still fit under the bars on a
+    phone. Plotly tilts one-line names there and the tilted text ran past the bottom of the chart."""
+    words = str(label).split()
+    if len(label) <= 12 or len(words) < 2:
+        return label
+    best = min(range(1, len(words)),
+               key=lambda i: abs(len(" ".join(words[:i])) - len(" ".join(words[i:]))))
+    return " ".join(words[:best]) + "<br>" + " ".join(words[best:])
+
+
 def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
     fig = go.Figure(
         go.Bar(
-            x=[stage_name(s) for s in counts["Stage"]],   # US-30 labels (customdata keeps the stage key)
+            x=[_two_line_label(stage_name(s)) for s in counts["Stage"]],   # US-30 labels (customdata keeps the stage key)
             y=counts["Count"],
             marker_color=[STAGE_COLORS[s] for s in counts["Stage"]],
             text=counts["Count"],
@@ -924,6 +1004,7 @@ def lifecycle_bar(counts: pd.DataFrame) -> go.Figure:
         )
     )
     fig.update_layout(**BASE_LAYOUT, bargap=0.3)
+    fig.update_layout(margin=dict(l=10, r=10, t=30, b=52))   # room for two-line stage names under the bars
     fig.update_yaxes(visible=False, range=[0, max(int(counts["Count"].max()), 1) * 1.2])
     fig.update_xaxes(showgrid=False, showline=True, linecolor="#D1D5DB",
                      tickfont=dict(size=11, color="#6B7280"))
@@ -1949,6 +2030,7 @@ def render_executive_overview():
         else (selected_program["ProgramCode"] or selected_program["ProgramName"])
     )
     tiles = cached_kpi_tiles(selected_program["ProgramID"])
+    KPI_THRESHOLDS.update(thresholds_for(selected_program["ProgramCode"] if selected_program["ProgramID"] else None))
     cards_data = []   # (label, value, sub_html, accent, info, value_color) for each tile, in order
     for t in tiles or []:
         src = (t.get("source") or "").strip().lower()
