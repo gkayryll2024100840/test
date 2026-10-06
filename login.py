@@ -1,4 +1,5 @@
 import os
+import base64
 import hashlib
 import uuid
 import streamlit as st
@@ -10,6 +11,12 @@ from system_log import log_sync_attempt_local
 from dashboard_views.components import render_app_shell
 
 load_dotenv()
+
+
+def get_base64_of_file(path):
+    """Reads a local image file and returns it as a base64 string for embedding in CSS/HTML."""
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
 
 # Creates session ID
 if "session_id" not in st.session_state:
@@ -92,30 +99,124 @@ def verify_login(user_id, password):
 # -------------------------------------Streamlit UI-----------------------------------------------------
 
 if not st.session_state.get('user'):
+    logo_base64 = get_base64_of_file(r"C:\Users\jmdfl\Downloads\test\mapua-university-logo-png_seeklogo-498432.png")
+    background_base64 = get_base64_of_file(r"C:\Users\jmdfl\Downloads\test\dashboardbackground.png")
+
     # ----- Hide sidebar + its toggle buttons while on the login screen -----
     st.markdown(
-        """
-        <style>
+        f"""
+                <style>
         [data-testid="stSidebar"],
         [data-testid="stSidebarCollapseButton"],
-        [data-testid="stExpandSidebarButton"] {
+        [data-testid="stExpandSidebarButton"] {{
             display: none !important;
-        }
-        /* Give the login content a bit more breathing room without the sidebar */
-        section.main > div.block-container {
-            padding-top: 3rem !important;
-            max-width: 900px;
+        }}
+
+        [data-testid="stAppViewContainer"] {{
+            background:
+                linear-gradient(160deg, rgba(185,28,44,0.75) 0%, rgba(217,98,43,0.75) 45%, rgba(240,169,58,0.75) 100%),
+                url("data:image/jpg;base64,{background_base64}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }}
+        [data-testid="stHeader"] {{
+            background: rgba(0,0,0,0);
+        }}
+
+        section.main > div.block-container {{
+            padding-top: 2.5rem !important;
+            max-width: 460px;
             margin: 0 auto;
-        }
+        }}
+
+        .st-key-login_card {{
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 18px;
+            padding: 36px 32px 28px 32px;
+            backdrop-filter: blur(8px);
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }}
+
+        .login-logo {{
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: #FFFFFF;
+            margin: 0 auto 18px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }}
+
+        .login-logo img {{
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }}
+
+        .login-title {{
+            font-size: 28px;
+            font-weight: 700;
+            color: #1A1F36;
+            margin-bottom: 24px;
+            text-align: center;
+            width: 100%;
+        }}
+
+        .st-key-login_card [data-testid="stTextInput"] label {{
+            color: #1A1F36 !important;
+            font-weight: 500;
+            text-align: left;
+            width: 100%;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] input {{
+            background: #FFFFFF !important;
+            border-radius: 8px !important;
+            border: none !important;
+            padding: 10px 14px !important;
+        }}
+        .st-key-login_card [data-testid="stTextInput"] div[data-baseweb="input"] {{
+            background: #FFFFFF !important;
+            border-radius: 8px !important;
+        }}
+        .st-key-login_card [data-testid="stTextInputField"]::-ms-reveal,
+        .st-key-login_card [data-testid="stTextInputField"]::-ms-clear {{
+            display: none;
+        }}
+
+        .st-key-login_card button[kind="primary"],
+        .st-key-login_card button {{
+        
+            background: #12172B !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            width: 100% !important;
+            padding: 10px 0 !important;
+            margin-top: 10px !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    st.title("Project PULSE Login Page")
-    input_id = st.text_input("User ID")
-    input_pass = st.text_input("Password", type="password")
-    button_login = st.button("Log in")
+    # ----- Card content -----
+    with st.container(key="login_card"):
+        st.markdown(
+            f'<div class="login-logo"><img src="data:image/png;base64,{logo_base64}"></div>'
+            '<div class="login-title">Welcome Back!</div>',
+            unsafe_allow_html=True,
+        )
+
+        input_id = st.text_input("UserID", key="login_userid")
+        input_pass = st.text_input("Password", type="password", key="login_password")
+        button_login = st.button("Login", key="login_button", use_container_width=True)
+
 
     if button_login:
         if not input_id or not input_pass:
@@ -134,6 +235,7 @@ if not st.session_state.get('user'):
                 st.error(result)
 
 else:
+
     # ------------------ AUTHENTICATED DASHBOARD NAVIGATION ------------------
     user = st.session_state.user
     role = user.get('role')

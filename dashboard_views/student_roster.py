@@ -1,4 +1,8 @@
+# STUDENT ROSTER.PY 9-30-26 (speed-optimized)
+
 import html
+from functools import lru_cache
+
 import streamlit as st
 from permissions import require_edit
 import re
@@ -15,6 +19,8 @@ from db_connect import (
     set_user_program,
     get_user_program,
     get_my_adviser_name,   # NEW -- see db_connect_addition.py, needs to be added to db_connect.py
+    get_stage_labels,      # US-30: program-specific stage names
+    get_flagged_students,  # US-26/27: time in stage + At-Risk flag (v_student_stage_flags view)
 )
  
 # Only import these if dashboard_views/components.py actually exists.
@@ -31,6 +37,111 @@ st.set_page_config(page_title="Student Roster", layout="wide")
 # and the height of one row in px (raise/lower it if 10 rows show a bit more or less than 10).
 ROWS_VISIBLE = 10
 ROW_HEIGHT_PX = 58
+
+# SPEED: only this many students are drawn per page. Every row is ~10 Streamlit widgets, so drawing
+# hundreds of rows at once was the main reason the page felt slow. The first option is the default.
+PAGE_SIZE_OPTIONS = [25, 50, 100]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_stage_labels(program_id):
+    """US-30: this program's stage names (set in Admin Config)."""
+    return get_stage_labels(program_id)
+
+
+# SPEED: these wrap the database calls so a normal rerun (typing in search, changing a filter, etc.)
+# doesn't hit the database again. Saving on Student Profile calls st.cache_data.clear(), which empties all of these.
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_roster(program_id):
+    return get_student_roster_data(program_id=program_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_programs():
+    return get_all_programs()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_cohorts(program_id):
+    return get_available_cohorts(program_id=program_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_adviser_name(user_id):
+    return get_my_adviser_name(user_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_retry_count(session_id):
+    return get_max_retry_count(session_id)
+
+
+TERM_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3, "autumn": 3}
+
+
+@lru_cache(maxsize=None)
+def cohort_sort_key(cohort):
+    """'1Q2425' -> (2024, 1, ...) so cohorts sort by time. Falls back to the old '2025 - Fall' style."""
+    s = str(cohort).strip().upper()
+    m = re.fullmatch(r"(\d)Q(\d{2})(\d{2})", s)
+    if m:
+        return (2000 + int(m.group(2)), int(m.group(1)), s)
+    low = s.lower()
+    year = re.search(r"(19|20)\d{2}", low)
+    term = next((v for k, v in TERM_ORDER.items() if k in low), 0)
+    return (int(year.group()) if year else 0, term, low)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_risk_flags(program_id):
+    """{StudentNumber: flag reason} for students past their program's At-Risk threshold.
+
+    Comes from the v_student_stage_flags view (threshold set in Admin Configuration).
+    Completed and Cancelled students are never in here. Saving a new threshold clears this cache.
+    """
+    flags = get_flagged_students(program_id)
+    if flags is None or flags.empty:
+        return {}
+    flags = flags[flags["is_flagged"].fillna(0).astype(int) == 1]
+    return {str(sn): (reason or "") for sn, reason in zip(flags["StudentNumber"], flags["flag_reason"])}
+
+
+# filter row + refresh button styling
+st.markdown(
+    """<style>
+/* space between the filters (stops the dropdowns from touching / overlapping) */
+.st-key-sr_filters [data-testid="stHorizontalBlock"]{gap:16px !important;column-gap:16px !important;}
+.st-key-sr_filters [data-testid="stColumn"]{min-width:0 !important;}
+.st-key-sr_filters [data-testid="stSelectbox"], .st-key-sr_filters [data-baseweb="select"]{width:100% !important;
+    max-width:none !important;min-width:0 !important;}
+/* search box fills its (wider) column instead of stopping at a fixed width */
+.st-key-sr_search, .st-key-sr_search [data-testid="stTextInput"], .st-key-sr_search [data-testid="stTextInputRootElement"],
+.st-key-sr_search [data-baseweb="input"], .st-key-sr_search [data-baseweb="base-input"]{width:100% !important;max-width:none !important;}
+/* "Filter by Cohort" label sitting above the From / To boxes (same look as the other filter labels) */
+/* all filter labels + "Filter by Cohort" use the same size so they match */
+.st-key-sr_filters [data-testid="stWidgetLabel"] p, .sr-group-label{font-size:15px !important;line-height:1.4 !important;}
+.sr-group-label{color:inherit;margin:0 !important;padding:0 !important;font-weight:600;}
+/* "Filter by Cohort" sits right on top of From / To (no big Streamlit gap in between) */
+.st-key-sr_cohort{gap:2px !important;}
+.st-key-sr_cohort [data-testid="stElementContainer"]:has(.sr-group-label),
+.st-key-sr_cohort [data-testid="stMarkdown"]:has(.sr-group-label),
+.st-key-sr_cohort [data-testid="stMarkdownContainer"]:has(.sr-group-label){margin:0 !important;padding:0 !important;
+    min-height:0 !important;}
+/* Refresh Now button pushed to the right edge of the page */
+.st-key-sr_refresh{display:flex !important;flex-direction:row !important;justify-content:flex-end !important;
+    align-items:center;width:100% !important;}
+.st-key-sr_refresh [data-testid="stElementContainer"]{width:auto !important;}
+/* long text (e.g. 2 advisers) wraps onto more lines inside its column instead of running past it */
+.st-key-roster_scroll .roster-cell-text{display:block;white-space:normal !important;overflow-wrap:anywhere;
+    word-break:break-word;line-height:1.35;}
+/* RISK column pill */
+.sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
+    letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
+html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#FCA5A5;border-color:rgba(239,68,68,.3);}
+.sr-risk-none{color:#9CA3AF;}
+</style>""",
+    unsafe_allow_html=True,
+)
 
 HEADER_CSS = """<style>
 /* ---- page header: copied from the Executive Overview header ---- */
@@ -68,7 +179,7 @@ user = st.session_state.get("user", {})
 role = user.get("role")
  
 with st.expander("Active Program", expanded=not st.session_state.get("active_program_id")):
-    programs = get_all_programs()
+    programs = cached_programs()
     options = {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in programs}
  
     if options:
@@ -107,6 +218,7 @@ with st.expander("Active Program", expanded=not st.session_state.get("active_pro
             else:
                 ok, result = create_program(code.strip().upper(), name.strip())
                 if ok:
+                    st.cache_data.clear()   # Admin Config / header program lists must see the new program too
                     st.session_state["active_program_id"] = result
                     st.session_state["active_program_code"] = code.strip().upper()
                     set_user_program(user.get("UserID"), result)
@@ -136,7 +248,7 @@ active_code = st.session_state.get("active_program_code", "")
 active_login_id = st.session_state.get("session_id", None)
  
 if active_login_id:
-    retry_count = get_max_retry_count(active_login_id)
+    retry_count = cached_retry_count(active_login_id)
     if retry_count > 1:
         st.warning(
             f"Warning: Repeated sync failures detected for your session "
@@ -146,7 +258,8 @@ if active_login_id:
 # Header & Sync Controls (title + caption styled like the Executive Overview header)
 st.markdown(HEADER_CSS, unsafe_allow_html=True)
 with st.container(key="sr_top"):
-    col_title, col_action = st.columns([2.5, 1.5], vertical_alignment="top")
+    # (Refresh Now moved to the sidebar "Data" block, so it's available on every page)
+    col_title = st.container()
 
     with col_title:
         st.markdown(
@@ -156,17 +269,6 @@ with st.container(key="sr_top"):
             unsafe_allow_html=True,
         )
 
-    with col_action:
-        last_sync = get_last_updated_time()
-        st.caption(f"Last Refreshed: {last_sync}")
-        if st.button("Refresh Now", use_container_width=False):
-            success = trigger_data_sync(login_id=active_login_id)
-            if success:
-                st.success("Synced successfully.")
-                st.rerun()
-            else:
-                st.error("Sync failed. Check admin logs.")
-                st.rerun()
  
 # ---------------------------------------------------------------
 # US-23: Faculty/Program Advisor sees ONLY their own advisees.
@@ -179,13 +281,26 @@ my_adviser_name = None
 is_advisor_view = (role == "FacultyAdvisor")
  
 if is_advisor_view:
-    my_adviser_name = get_my_adviser_name(user.get("UserID"))
+    my_adviser_name = cached_adviser_name(user.get("UserID"))
  
 cohort_choice = "All Cohorts"   # reported to the yellow header bar at the end of the page
 
+
+def _sync_cohort_range(changed_key, other_key):
+    """Keeps the From / To cohort boxes consistent (runs when either one changes):
+    - "All Cohorts" picked in one box -> the other box also goes back to "All Cohorts"
+    - a cohort picked while the other box is on "All Cohorts" -> the other box gets the same cohort
+    """
+    new_value = st.session_state.get(changed_key, "All Cohorts")
+    other_value = st.session_state.get(other_key, "All Cohorts")
+    if new_value == "All Cohorts":
+        st.session_state[other_key] = "All Cohorts"
+    elif other_value == "All Cohorts":
+        st.session_state[other_key] = new_value
+
 # Displays student roster in table format
 try:
-    df = get_student_roster_data(program_id=active_program_id)
+    df = cached_roster(active_program_id)
  
     if is_advisor_view:
         if my_adviser_name is None:
@@ -200,75 +315,143 @@ try:
  
     if not df.empty:
         # ----------------- Clean Filter & Search Rhythm -----------------
+        # Order: Search | Filter by Adviser | Filter by Cohort (From / To) | Sort by
+        filters_box = st.container(key="sr_filters")
         if is_advisor_view:
-            col_search, col_cohort, col_sort = st.columns([3.5, 2, 2])
+            col_search, col_cohort, col_sort = filters_box.columns([3.5, 3, 1.8], vertical_alignment="bottom")
             adviser_choice = None  # already scoped above, nothing to pick
         else:
-            col_search, col_cohort, col_adviser, col_sort = st.columns([3, 1.8, 1.8, 1.8])
- 
+            col_search, col_adviser, col_cohort, col_sort = filters_box.columns([3, 1.8, 3, 1.8],
+                                                                              vertical_alignment="bottom")
+
         with col_search:
             search_query = st.text_input(
-                "SEARCH:",
+                "Search Student",
                 placeholder="Student name or ID...",
-                label_visibility="visible"
+                label_visibility="visible",
+                key="sr_search",
             )
- 
-        with col_cohort:
-            available_cohorts = ["All Cohorts"] + get_available_cohorts(program_id=active_program_id)
-            cohort_choice = st.selectbox("FILTER BY COHORT:", available_cohorts)
- 
+
         if not is_advisor_view:
             with col_adviser:
                 # US-23 AC1 (for non-advisor roles browsing by adviser) + AC3 (combinable with cohort)
                 adviser_names = {n for v in df["Adviser"].dropna() for n in str(v).split(", ") if n}
                 available_advisers = ["All Advisers"] + sorted(adviser_names)
-                adviser_choice = st.selectbox("FILTER BY ADVISER:", available_advisers)
- 
+                adviser_choice = st.selectbox("Filter by Adviser", available_advisers)
+
+        with col_cohort:
+            # Cohort range: pick a From and/or To cohort. Both on "All Cohorts" = no cohort filter.
+            cohort_list = sorted(cached_cohorts(active_program_id), key=cohort_sort_key)
+            cohort_options = ["All Cohorts"] + cohort_list
+            # after switching programs, a previously picked cohort may not exist here -> reset it
+            for _k in ("sr_cohort_from", "sr_cohort_to"):
+                if st.session_state.get(_k) not in cohort_options:
+                    st.session_state[_k] = "All Cohorts"
+            c_from, c_to = st.columns(2)
+            with c_from:
+                cohort_from = st.selectbox("Filter by Cohort -- From", cohort_options, key="sr_cohort_from",
+                                           on_change=_sync_cohort_range, args=("sr_cohort_from", "sr_cohort_to"))
+            with c_to:
+                cohort_to = st.selectbox("Filter by Cohort -- To", cohort_options, key="sr_cohort_to",
+                                         on_change=_sync_cohort_range, args=("sr_cohort_to", "sr_cohort_from"))
+
         with col_sort:
-            sort_map = {
+            sort_map = {                     # first one = default
+                "Student Number": "StudentNumber",
                 "Student Name": "Student",
-                "Student ID": "StudentNumber",
                 "Cohort": "Cohort",
-                "Last Update (newest)": "LastUpdate",
+                "Last Update": "LastUpdate",   # newest first
             }
-            sort_choice = st.selectbox("SORT BY:", list(sort_map.keys()))
- 
+            sort_choice = st.selectbox("Sort by", list(sort_map.keys()))
+
         # Apply Filters
-        df_filtered = df.copy()
- 
+        df_filtered = df   # no copy needed: every step below returns a new frame
+
         if search_query and search_query.strip():
             q = search_query.strip().lower()
             df_filtered = df_filtered[
-                df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False) |
-                df_filtered["StudentNumber"].astype(str).str.contains(q, na=False)
+                df_filtered["Student"].astype(str).str.lower().str.contains(q, na=False, regex=False) |
+                df_filtered["StudentNumber"].astype(str).str.contains(q, na=False, regex=False)
             ]
- 
-        if cohort_choice != "All Cohorts":
-            df_filtered = df_filtered[df_filtered["Cohort"] == cohort_choice]
- 
+
+        # cohort range (inclusive). From later than To is not a valid range -> no results + a message
+        lo = cohort_sort_key(cohort_from) if cohort_from != "All Cohorts" else None
+        hi = cohort_sort_key(cohort_to) if cohort_to != "All Cohorts" else None
+        cohort_range_invalid = bool(lo and hi and lo > hi)
+        if cohort_range_invalid:
+            df_filtered = df_filtered.iloc[0:0]
+        elif lo or hi:
+            keys = df_filtered["Cohort"].map(cohort_sort_key)
+            keep = pd.Series(True, index=df_filtered.index)
+            if lo:
+                keep &= keys >= lo
+            if hi:
+                keep &= keys <= hi
+            df_filtered = df_filtered[keep & df_filtered["Cohort"].notna()]
+
+        # what the yellow header bar shows for the cohort
+        if cohort_from == "All Cohorts" and cohort_to == "All Cohorts":
+            cohort_choice = "All Cohorts"
+        elif cohort_to == "All Cohorts":
+            cohort_choice = f"{cohort_from} onward"
+        elif cohort_from == "All Cohorts":
+            cohort_choice = f"Up to {cohort_to}"
+        elif cohort_from == cohort_to:
+            cohort_choice = cohort_from
+        else:
+            cohort_choice = f"{cohort_from} – {cohort_to}"
+
         if not is_advisor_view and adviser_choice and adviser_choice != "All Advisers":
             df_filtered = df_filtered[
                 df_filtered["Adviser"].fillna("").str.split(", ").apply(lambda names: adviser_choice in names)
             ]
- 
+
         sort_col = sort_map[sort_choice]
-        df_filtered = df_filtered.sort_values(
-            by=sort_col, ascending=(sort_col != "LastUpdate"), na_position="last"
-        )
+        if sort_col == "Cohort":   # chronological (1Q2425, 2Q2425, ...), not alphabetical
+            df_filtered = df_filtered.sort_values(by="Cohort", key=lambda col: col.map(
+                lambda c: cohort_sort_key(c) if pd.notna(c) else (9999, 9, "")))   # blanks go last
+        else:
+            df_filtered = df_filtered.sort_values(
+                by=sort_col, ascending=(sort_col != "LastUpdate"), na_position="last"
+            )
+
  
-        # Total Count Bar
-        st.caption(
-            f"Showing {len(df_filtered)} of {len(df)} students. "
-            f"Click any student name to view their profile."
-        )
- 
+        if cohort_range_invalid:
+            st.warning(
+                f"Invalid cohort range: 'From' ({cohort_from}) comes after 'To' ({cohort_to}). "
+                "Pick a From cohort that is the same as or earlier than the To cohort."
+            )
+        elif df_filtered.empty:
+            st.info("No students match these filters.")
+
         # ----------------- Enterprise Roster Grid -----------------
-        col_widths = [1.2, 2.2, 0.9, 1.9, 1.2, 1.2, 1.6, 1.2]
+        col_widths = [1.1, 2.0, 0.8, 1.9, 1.2, 1.2, 1.6, 1.1, 0.9]
+        try:
+            risk_flags = get_risk_flags(active_program_id)
+        except Exception:
+            risk_flags = {}   # view missing / DB hiccup -> RISK column just shows "—"
  
+        # ---- paging (only the current page of rows is drawn) ----
+        total_rows = len(df_filtered)
+        page_size = st.session_state.get("sr_page_size", PAGE_SIZE_OPTIONS[0])
+        if page_size not in PAGE_SIZE_OPTIONS:
+            page_size = PAGE_SIZE_OPTIONS[0]
+        total_pages = max(1, -(-total_rows // page_size))
+        filter_sig = (active_program_id, search_query, cohort_from, cohort_to, adviser_choice, sort_choice, page_size)
+        if st.session_state.get("sr_filter_sig") != filter_sig:   # any filter/sort change -> back to page 1
+            st.session_state["sr_filter_sig"] = filter_sig
+            st.session_state["sr_page"] = 1
+        page_no = min(max(int(st.session_state.get("sr_page", 1)), 1), total_pages)
+        st.session_state["sr_page"] = page_no
+        page_start = (page_no - 1) * page_size
+        page_df = df_filtered.iloc[page_start:page_start + page_size]
+
+        stage_labels = cached_stage_labels(active_program_id)
         header_cols = st.columns(col_widths, vertical_alignment="center")
         header_labels = [
             "STUDENT ID", "STUDENT", "COHORT", "ADVISER",
-            "COURSEWORK", "COMP EXAM", "CAPSTONE", "LAST UPDATE"
+            stage_labels["Coursework"].upper(), stage_labels["CompExam"].upper(),
+            stage_labels["Capstone"].upper(), "LAST UPDATE", "RISK"
         ]
         for col, label in zip(header_cols, header_labels):
             col.markdown(f'<div class="roster-th">{label}</div>', unsafe_allow_html=True)
@@ -279,13 +462,18 @@ try:
         else:
             # Scrollable list: shows about ROWS_VISIBLE students, scroll for the rest.
             # The column headers above stay put while the rows scroll.
-            scroll_height = ROW_HEIGHT_PX * ROWS_VISIBLE if len(df_filtered) > ROWS_VISIBLE else None
-            with st.container(height=scroll_height, border=False, key="roster_scroll"):
-                for _, row in df_filtered.iterrows():
+            # (height is only passed when the list needs to scroll: this Streamlit version rejects height=None,
+            #  which is what broke the page when a search left 10 or fewer students)
+            scroll_kwargs = {"height": ROW_HEIGHT_PX * ROWS_VISIBLE} if len(page_df) > ROWS_VISIBLE else {}
+            with st.container(border=False, key="roster_scroll", **scroll_kwargs):
+                for row in page_df.to_dict("records"):
                     s_id = str(row.get("StudentNumber", ""))
                     s_name = str(row.get("Student", "Unknown"))
                     cohort = str(row.get("Cohort", "N/A"))
-                    adviser = str(row.get("Adviser", "None Assigned"))
+                    adviser_raw = row.get("Adviser")
+                    # 2+ advisers -> one per line (and each line can wrap if it's long)
+                    adviser = ("<br>".join(html.escape(a) for a in str(adviser_raw).split(", ") if a)
+                               if pd.notna(adviser_raw) and str(adviser_raw).strip() else "None Assigned")
  
                     cw_status = row.get("CourseworkStatus")
                     ce_status = row.get("CompExamStatus")
@@ -295,7 +483,7 @@ try:
                     ce_pill = render_status_pill(ce_status)
                     cp_pill = render_status_pill(cp_status)
  
-                    r_cols = st.columns(col_widths)
+                    r_cols = st.columns(col_widths, vertical_alignment="center")
                     r_cols[0].markdown(
                         f'<span class="roster-cell-id">{s_id}</span>',
                         unsafe_allow_html=True
@@ -322,10 +510,31 @@ try:
                         f'<span class="roster-cell-text">{last_txt}</span>',
                         unsafe_allow_html=True
                     )
+                    reason = risk_flags.get(s_id)
+                    r_cols[8].markdown(
+                        f'<span class="sr-risk-pill" title="{html.escape(reason)}">AT RISK</span>'
+                        if reason is not None else '<span class="sr-risk-none">—</span>',
+                        unsafe_allow_html=True
+                    )
                     st.markdown(
                         '<div class="roster-row-divider"></div>',
                         unsafe_allow_html=True
                     )
+
+        # Total Count Bar + pager (under the table)
+        if total_rows > PAGE_SIZE_OPTIONS[0]:
+            c_ps, c_pg, c_cap = st.columns([1, 1, 4], vertical_alignment="center")
+            c_ps.selectbox("Rows per page", PAGE_SIZE_OPTIONS, key="sr_page_size")
+            c_pg.number_input(f"Page (of {total_pages})", min_value=1, max_value=total_pages, step=1, key="sr_page")
+            c_cap.caption(
+                f"Showing {page_start + 1}-{min(page_start + page_size, total_rows)} of {total_rows} matching students "
+                f"({len(df)} in this program). Click any student name to view their profile."
+            )
+        else:
+            st.caption(
+                f"Showing {total_rows} of {len(df)} students. "
+                f"Click any student name to view their profile."
+            )
     else:
         # US-23 AC2: advisor exists but has zero assigned students right now
         if is_advisor_view and my_adviser_name is not None:
@@ -337,7 +546,12 @@ try:
             st.info(f"No students are currently tagged under the {active_code} program.")
  
 except Exception as e:
-    st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. Please check the Admin Configuration page. ({e})")
+    # only blame the field mappings when it really is a mapping problem
+    if "mapping" in str(e).lower():
+        st.error(f"Configuration Error: The Student Roster cannot load because field mappings are invalid. "
+                 f"Please check the Admin Configuration page. ({e})")
+    else:
+        st.error(f"The Student Roster couldn't load: {e}")
 
 # Yellow header bar: show this page's program + selected cohort
 # (kept outside the try/except above so it can't be swallowed by it)
