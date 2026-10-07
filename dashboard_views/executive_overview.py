@@ -145,7 +145,9 @@ PAGE_CSS = """
 .stApp{
   --eo-surface:#FFFFFF; --eo-surface-2:#F9FAFB; --eo-border:#E5E7EB; --eo-border-soft:#F1F2F4; --eo-line:#D1D5DB;
   --eo-text:#0F172A; --eo-text-2:#111827; --eo-body:#374151; --eo-label:#4B5563; --eo-muted:#6B7280; --eo-faint:#9CA3AF;
-  --eo-shadow:0 1px 2px rgba(16,24,40,.05); --eo-tip-shadow:0 8px 24px rgba(16,24,40,.14);
+  --eo-shadow:0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
+  --eo-shadow-hover:0 10px 25px -4px rgba(16,24,40,.08), 0 4px 10px -2px rgba(16,24,40,.04);
+  --eo-tip-shadow:0 8px 24px rgba(16,24,40,.14);
   --eo-up:#2E9E3E; --eo-down:#C62828; --eo-chart-line:#111827; --eo-chart-text:#4B5563; --eo-chart-grid:#E5E7EB;
   --pg-bg:#ECFDF3; --pg-fg:#15803D; --pg-bd:#BBF7D0;   --pr-bg:#FEF2F2; --pr-fg:#B91C1C; --pr-bd:#FECACA;
   --pb-bg:#EFF6FF; --pb-fg:#1D4ED8; --pb-bd:#BFDBFE;   --pa-bg:#FFFBEB; --pa-fg:#B45309; --pa-bd:#FDE68A;
@@ -156,7 +158,9 @@ PAGE_CSS = """
 html[data-eo-theme="dark"] .stApp{
   --eo-surface:#161D2B; --eo-surface-2:#1B2333; --eo-border:#263044; --eo-border-soft:#1E293B; --eo-line:#334155;
   --eo-text:#F1F5F9; --eo-text-2:#E2E8F0; --eo-body:#CBD5E1; --eo-label:#94A3B8; --eo-muted:#94A3B8; --eo-faint:#64748B;
-  --eo-shadow:none; --eo-tip-shadow:0 8px 24px rgba(0,0,0,.55);
+  --eo-shadow:0 4px 16px -2px rgba(0,0,0,.4);
+  --eo-shadow-hover:0 8px 24px -2px rgba(0,0,0,.6);
+  --eo-tip-shadow:0 8px 24px rgba(0,0,0,.55);
   --eo-up:#34D399; --eo-down:#F87171; --eo-chart-line:#E2E8F0; --eo-chart-text:#CBD5E1; --eo-chart-grid:#263044;
   --pg-bg:rgba(16,185,129,.15); --pg-fg:#34D399; --pg-bd:rgba(16,185,129,.3);
   --pr-bg:rgba(239,68,68,.14);  --pr-fg:#FCA5A5; --pr-bd:rgba(239,68,68,.3);
@@ -291,18 +295,24 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
   .eo-kpi-sub{font-size:10px !important;}
 }
 
-.eo-kpi{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;padding:18px 20px;
-        box-shadow:var(--eo-shadow);min-height:122px;display:flex;flex-direction:column;}
-.eo-kpi-label{font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--eo-label);}
-.eo-kpi-value{font-size:34px;font-weight:700;color:var(--eo-text);line-height:1.1;margin:12px 0 8px 0;}
+.eo-kpi{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:14px;padding:18px 20px;
+        box-shadow:var(--eo-shadow);min-height:122px;display:flex;flex-direction:column;position:relative;
+        transition:transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms ease;}
+.eo-kpi:hover{transform:translateY(-2px);box-shadow:var(--eo-shadow-hover);border-color:rgba(37,99,235,.25);}
+html[data-eo-theme="dark"] .eo-kpi:hover{border-color:rgba(96,165,250,.3);}
+@media (hover: none){
+  .eo-kpi:hover{transform:none !important;box-shadow:var(--eo-shadow) !important;}
+}
+.eo-kpi-label{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--eo-label);font-weight:700;}
+.eo-kpi-value{font-size:32px;font-weight:800;letter-spacing:-.025em;color:var(--eo-text);line-height:1.1;margin:10px 0 8px 0;font-variant-numeric:tabular-nums;}
 .eo-kpi-sub{font-size:12px;color:var(--eo-muted);margin-top:auto;}
-.eo-kpi{position:relative;}
 .eo-info{position:absolute;top:14px;right:14px;width:20px;height:20px;border-radius:50%;
         border:1.5px solid var(--eo-muted);color:var(--eo-muted);font-family:inherit;font-size:12px;font-weight:600;
-        line-height:17px;font-style:normal;text-align:center;cursor:help;outline:none;}
-.eo-info:hover,.eo-info:focus{border-color:var(--eo-text);color:var(--eo-text);}
-.eo-tip{visibility:hidden;opacity:0;transition:opacity .15s;position:absolute;top:28px;right:-8px;z-index:1000;
-        width:390px;max-width:90vw;background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:10px;padding:14px 16px;
+        line-height:17px;font-style:normal;text-align:center;cursor:help;outline:none;
+        transition:border-color 150ms ease, color 150ms ease, background 150ms ease;}
+.eo-info:hover,.eo-info:focus{border-color:var(--eo-text);color:var(--eo-text);background:rgba(148,163,184,.12);}
+.eo-tip{visibility:hidden;opacity:0;transition:opacity .15s cubic-bezier(0.16, 1, 0.3, 1);position:absolute;top:28px;right:-8px;z-index:1000;
+        width:390px;max-width:90vw;background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;padding:14px 16px;
         box-shadow:var(--eo-tip-shadow);font-family:inherit;font-size:13px;line-height:1.6;
         font-weight:400;letter-spacing:0;text-transform:none;color:var(--eo-body);text-align:left;cursor:default;
         white-space:normal;}
@@ -319,6 +329,12 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 .eo-placeholder{color:var(--eo-faint);font-style:italic;}
 .eo-flat{color:var(--eo-muted);}
 .eo-up{color:var(--eo-up);} .eo-down{color:var(--eo-down);} .eo-risk{color:var(--eo-down);}
+
+/* Comparison & Trend Chips */
+.eo-delta-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700;line-height:1;letter-spacing:.01em;vertical-align:middle;}
+.eo-delta-up{background:var(--pg-bg);color:var(--pg-fg);border:1px solid var(--pg-bd);}
+.eo-delta-down{background:var(--pr-bg);color:var(--pr-fg);border:1px solid var(--pr-bd);}
+.eo-delta-context{font-size:11.5px;color:var(--eo-muted);margin-left:3px;}
 
 /* ---- Responsive Charts Layout (stack to 100% width on tablet & mobile <= 1150px) ---- */
 @media (max-width: 1150px) {
@@ -338,7 +354,7 @@ html[data-eo-theme="dark"] .st-key-eo_trend_switch [data-testid="stBaseButton-se
 }
 
 div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);border:1px solid var(--eo-border) !important;
-        border-radius:12px !important;box-shadow:var(--eo-shadow);}
+        border-radius:14px !important;box-shadow:var(--eo-shadow);transition:box-shadow 200ms ease;}
 .eo-card-head{display:flex;flex-direction:column;align-items:flex-start;}
 .eo-card-title{display:block;font-size:20px;font-weight:700;color:var(--eo-text);margin:4px 0 2px 4px;}
 .eo-card-sub{display:block;font-size:12px;color:var(--eo-muted);margin:0 0 4px 4px;}
@@ -359,15 +375,16 @@ div[data-testid="stVerticalBlockBorderWrapper"]{background:var(--eo-surface);bor
 .eo-muted{color:var(--eo-muted);}
 
 /* ---- student table: unified smooth horizontal scrolling without broken words ---- */
-.st-key-eo_table{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:12px;
+.st-key-eo_table{background:var(--eo-surface);border:1px solid var(--eo-border);border-radius:14px;
         box-shadow:var(--eo-shadow);margin-top:18px;gap:0 !important;overflow-x:auto !important;
         -webkit-overflow-scrolling:touch !important;width:100% !important;display:block !important;}
 .st-key-eo_table_head{background:var(--eo-surface-2);border-bottom:1px solid var(--eo-border);padding:12px 18px;
-        min-width:880px !important;width:max-content !important;}
+        border-top-left-radius:14px;border-top-right-radius:14px;min-width:880px !important;width:max-content !important;}
 .st-key-eo_table_rows{gap:0 !important;min-width:880px !important;overflow-x:hidden !important;width:max-content !important;}
 .st-key-eo_table_rows > div{min-width:880px !important;}
 .st-key-eo_table_rows [data-testid="stHorizontalBlock"]{padding:10px 18px;border-bottom:1px solid var(--eo-border-soft);
-        align-items:center;min-width:880px !important;}
+        align-items:center;min-width:880px !important;transition:background 120ms ease;}
+.st-key-eo_table_rows [data-testid="stHorizontalBlock"]:hover{background:rgba(148,163,184,.08);}
 .st-key-eo_table [data-testid="stHorizontalBlock"]{gap:12px !important;column-gap:12px !important;
         display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;min-width:880px !important;}
 .st-key-eo_table_head [data-testid="stHorizontalBlock"]{min-width:880px !important;align-items:flex-end !important;}
@@ -875,8 +892,8 @@ def delta_html(hist, metric, cohort, kind="pct", higher_is_better=True):
     if delta == 0:
         return f'<span class="eo-flat">&#9679; No change vs {prev_c} ({prev_txt})</span>'
     arrow = "▲" if delta > 0 else "▼"
-    cls = "eo-up" if (delta > 0) == higher_is_better else "eo-down"
-    return f'<span class="{cls}">{arrow} {amount} vs {prev_c} ({prev_txt})</span>'
+    chip_cls = "eo-delta-up" if (delta > 0) == higher_is_better else "eo-delta-down"
+    return f'<span class="eo-delta-chip {chip_cls}">{arrow} {amount}</span><span class="eo-delta-context">vs {prev_c} ({prev_txt})</span>'
 
 
 _HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -887,7 +904,7 @@ def kpi_card(label, value, sub_html="&nbsp;", info_html=None, accent=None, value
     drawn as a thin bar along the top edge of the card."""
     info = (f'<div class="eo-info" tabindex="0">i<div class="eo-tip">{info_html}</div></div>'
             if info_html else "")
-    style = (f' style="border-top:4px solid {accent};"'
+    style = (f' style="border-top:3.5px solid {accent};"'
              if accent and _HEX_COLOR.match(str(accent)) else "")
     return (
         f'<div class="eo-kpi"{style}>{info}<div class="eo-kpi-label">{label}</div>'

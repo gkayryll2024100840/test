@@ -149,8 +149,30 @@ st.markdown(
     white-space:nowrap !important;line-height:1 !important;
     word-break:keep-all !important;
     height:26px !important;min-height:26px !important;
-    padding:0 11px !important;width:auto !important;max-width:none !important;
-    text-align:center;display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;justify-content:center !important;box-sizing:border-box;}
+    padding:0 12px !important;width:auto !important;max-width:none !important;
+    text-align:center;display:inline-flex !important;flex-wrap:nowrap !important;align-items:center !important;justify-content:center !important;box-sizing:border-box;
+    border-radius:9999px !important;
+    font-size:11.5px !important;font-weight:600 !important;letter-spacing:0.015em !important;
+    transition:transform 150ms cubic-bezier(0.16, 1, 0.3, 1), filter 150ms ease !important;
+}
+.st-key-roster_scroll .status-pill:hover,
+.st-key-roster_table .status-pill:hover{
+    filter:brightness(1.06) !important;
+}
+@media (hover: none){
+    .st-key-roster_scroll .status-pill:hover,
+    .st-key-roster_table .status-pill:hover{
+        filter:none !important;
+    }
+}
+/* Row hover in scroll area */
+.st-key-roster_scroll [data-testid="stHorizontalBlock"]{
+    transition:background 120ms ease;
+}
+.st-key-roster_scroll [data-testid="stHorizontalBlock"]:hover{
+    background:rgba(148,163,184,.08);
+    border-radius:6px;
+}
 /* RISK column pill */
 .sr-risk-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;
     letter-spacing:.03em;border:1px solid #FECACA;background:#FEF2F2;color:#B91C1C;white-space:nowrap;cursor:help;}
@@ -162,13 +184,19 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
 .sr-mc {
   background: var(--roster-cell-bg, transparent);
   border: 1px solid var(--roster-th-border, #E5E7EB);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 16px 18px;
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(16,24,40,0.06), 0 1px 2px rgba(16,24,40,0.04);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+html[data-eo-theme="dark"] .sr-mc {
+  background: #161D2B;
+  border-color: #263044;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 .sr-mc-head {
   display: flex;

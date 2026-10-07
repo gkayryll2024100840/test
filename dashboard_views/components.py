@@ -195,6 +195,8 @@ def get_theme_css() -> str:
 """
 
     return f"""<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
 /* ============================================================
    DUAL-THEME ENTERPRISE STYLING (LIGHT & DARK MODE)
    ============================================================ */
@@ -205,7 +207,9 @@ def get_theme_css() -> str:
     --app-text: #0F172A;
     --card-bg: #FFFFFF;
     --card-border: #E2E8F0;
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --card-radius: 14px;
+    --card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --card-shadow-hover: 0 10px 25px -4px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.04);
     
     --text-primary: #0F172A;
     --text-secondary: #64748B;
@@ -288,7 +292,9 @@ html[data-eo-theme="dark"] .stApp {{
     --app-text: #F1F5F9;
     --card-bg: #161D2B;
     --card-border: #263044;
-    --card-shadow: none;
+    --card-radius: 14px;
+    --card-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.25);
+    --card-shadow-hover: 0 8px 24px -2px rgba(0, 0, 0, 0.6), 0 4px 12px -2px rgba(0, 0, 0, 0.35);
     
     --text-primary: #F1F5F9;
     --text-secondary: #94A3B8;
@@ -380,7 +386,10 @@ html[data-eo-theme="dark"] .stApp {{
 /* Base typography for content elements without overriding icon fonts */
 .stApp, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp label,
 .lifecycle-card, .profile-meta-card {{
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Geist", sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }}
 
 /* Explicitly preserve Streamlit's Material Symbols Icon fonts */
@@ -398,8 +407,10 @@ button[data-testid="stSidebarCollapseButton"] span {{
 /* Metric / Card overrides */
 div[data-testid="stMetricValue"] {{
     color: var(--metric-val-color) !important;
-    font-size: 24px !important;
-    font-weight: 600 !important;
+    font-size: 26px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.025em !important;
+    font-variant-numeric: tabular-nums !important;
 }}
 
 div[data-testid="stMetricLabel"] {{
@@ -407,54 +418,72 @@ div[data-testid="stMetricLabel"] {{
     font-size: 11px !important;
     font-weight: 600 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.05em !important;
+    letter-spacing: 0.04em !important;
 }}
 
 /* Form Inputs & Selectboxes */
+.stSelectbox > div[data-baseweb="select"] > div,
+.stTextInput > div[data-baseweb="input"] > div,
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div {{
     background-color: var(--input-bg) !important;
     border: 1px solid var(--input-border) !important;
-    border-radius: 6px !important;
+    border-radius: 10px !important;
+    min-height: 40px !important;
     color: var(--input-text) !important;
+    transition: border-color 150ms ease, box-shadow 150ms ease !important;
 }}
 
+.stSelectbox > div[data-baseweb="select"] > div:focus-within,
+.stTextInput > div[data-baseweb="input"] > div:focus-within,
 div[data-baseweb="select"] > div:focus-within,
 div[data-baseweb="input"] > div:focus-within {{
     border-color: var(--input-focus-border) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
 }}
 
-/* Button overrides - clean enterprise outline */
+/* Button overrides - modern enterprise styling with click feedback */
 .stButton > button {{
     background-color: var(--btn-bg) !important;
     color: var(--btn-text) !important;
     border: 1px solid var(--btn-border) !important;
-    border-radius: 6px !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    padding: 6px 14px !important;
-    transition: all 150ms ease !important;
+    border-radius: 10px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    padding: 7px 16px !important;
+    transition: transform 120ms ease, box-shadow 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
 }}
 
 .stButton > button:hover {{
     background-color: var(--btn-hover-bg) !important;
     border-color: var(--btn-hover-border) !important;
     color: var(--btn-hover-text) !important;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
 }}
 
-/* Roster Table Grid Styling & Vertical Alignment */
-div[data-testid="stHorizontalBlock"] {{
+.stButton > button:active {{
+    transform: scale(0.98) !important;
+}}
+
+@media (hover: none) {{
+    .stButton > button:hover {{
+        box-shadow: none !important;
+    }}
+}}
+
+/* Roster Table Grid Styling & Vertical Alignment (strictly scoped to the roster table) */
+.st-key-roster_table div[data-testid="stHorizontalBlock"] {{
     align-items: center !important;
 }}
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
 }}
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stElementContainer"],
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stElementContainer"] {{
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div[data-testid="stElementContainer"],
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stElementContainer"] {{
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     display: flex !important;
@@ -462,14 +491,14 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-test
     min-height: 32px !important;
 }}
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stMarkdownContainer"] {{
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stMarkdownContainer"] {{
     display: flex !important;
     align-items: center !important;
     min-height: 32px !important;
     width: 100% !important;
 }}
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stMarkdownContainer"] > p {{
+.st-key-roster_table div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] div[data-testid="stMarkdownContainer"] > p {{
     margin: 0 !important;
     padding: 0 !important;
     display: flex !important;
@@ -598,13 +627,25 @@ div[data-testid="stPageLink"] a:focus {{
     background-color: var(--card-bg) !important;
     border: 1px solid var(--card-border) !important;
     box-shadow: var(--card-shadow) !important;
-    border-radius: 8px !important;
+    border-radius: 14px !important;
     padding: 20px 24px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
     justify-content: center !important;
     gap: 10px !important;
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}}
+
+.lifecycle-card:hover {{
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow-hover) !important;
+}}
+
+@media (hover: none) {{
+    .lifecycle-card:hover {{
+        transform: none !important;
+    }}
 }}
 
 .lifecycle-card-title {{
@@ -620,12 +661,13 @@ div[data-testid="stPageLink"] a:focus {{
 
 .lifecycle-card .status-pill {{
     height: 26px !important;
-    padding: 0 11px !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
+    min-height: 26px !important;
+    padding: 0 12px !important;
+    font-size: 11.5px !important;
+    font-weight: 600 !important;
     border-radius: 9999px !important;
     line-height: 1 !important;
-    letter-spacing: 0.01em !important;
+    letter-spacing: 0.015em !important;
     width: fit-content !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -666,17 +708,18 @@ div[data-testid="stPageLink"] a:focus {{
     background-color: var(--card-bg);
     border: 1px solid var(--card-border);
     box-shadow: var(--card-shadow);
-    border-radius: 8px;
+    border-radius: 14px;
     padding: 20px 24px;
     margin-bottom: 24px;
+    transition: box-shadow 200ms ease;
 }}
 
 .profile-name {{
     margin: 0;
     color: var(--text-primary);
     font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    letter-spacing: -0.015em;
 }}
 
 .profile-id-badge {{
@@ -686,7 +729,7 @@ div[data-testid="stPageLink"] a:focus {{
     background: var(--id-badge-bg);
     border: 1px solid var(--id-badge-border);
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 6px;
 }}
 
 .profile-meta-row {{
@@ -714,8 +757,9 @@ div[data-testid="stPageLink"] a:focus {{
 h3.section-title,
 div[data-testid="stMarkdownContainer"] h3.section-title {{
     font-size: 20px !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     color: var(--text-primary) !important;
+    letter-spacing: -0.015em !important;
     margin-top: 24px !important;
     margin-bottom: 14px !important;
     line-height: 1.3 !important;
@@ -728,20 +772,30 @@ div[data-testid="stMarkdownContainer"] h3.section-title {{
     justify-content: center !important;
     height: 26px !important;
     min-height: 26px !important;
-    padding: 0 11px !important;
+    padding: 0 12px !important;
     border-radius: 9999px !important;
-    font-size: 12px !important;
+    font-size: 11.5px !important;
     font-weight: 600 !important;
+    letter-spacing: 0.015em !important;
     line-height: 1 !important;
     white-space: nowrap !important;
     word-break: keep-all !important;
     flex-wrap: nowrap !important;
     width: fit-content !important;
     box-sizing: border-box !important;
+    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), filter 150ms ease !important;
 }}
 .status-pill * {{
     white-space: nowrap !important;
     word-break: keep-all !important;
+}}
+.status-pill:hover {{
+    filter: brightness(1.06) !important;
+}}
+@media (hover: none) {{
+    .status-pill:hover {{
+        filter: none !important;
+    }}
 }}
 
 .pill-success {{
@@ -1109,6 +1163,43 @@ def _initials(user, role_label):
 # ---------------------------------------------------------------------------
 SHELL_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+/* Typography for App Shell, Sidebar, Navigation, and Headers */
+.stApp,
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] *,
+[data-testid="stSidebarNavLink"],
+[data-testid="stSidebarNavLink"] *,
+[data-testid="stSidebarNavLink"] span,
+[data-testid="stSidebarNavLink"] p,
+[data-testid="stSidebarHeader"],
+[data-testid="stSidebarHeader"]::before,
+[data-testid="stSidebarHeader"]::after,
+.ps-header,
+.ps-header * {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Explicitly preserve Streamlit's Material Symbols and Icon fonts */
+[data-testid="stSidebar"] [data-testid*="Icon"],
+[data-testid="stSidebar"] [data-testid="stIconMaterial"],
+[data-testid="stSidebar"] [class*="material-symbols"],
+[data-testid="stSidebar"] [class*="material-icons"],
+[data-testid="stSidebar"] i.material-icons,
+[data-testid="stSidebarCollapseButton"] span,
+button[data-testid="stSidebarCollapseButton"] span,
+[data-testid*="Icon"],
+[data-testid="stIconMaterial"],
+span[data-testid="stIconMaterial"],
+[class*="material-symbols"],
+[class*="material-icons"],
+i.material-icons {
+  font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+}
+
 /* ---- colours (light, and dark when the theme detector marks the page dark) ---- */
 .stApp{
   --ps-red:#B31B21; --ps-yellow:#F2E230; --ps-yellow-text:#1F2937;
@@ -1164,9 +1255,11 @@ html[data-eo-theme="dark"] .stApp{
 [data-testid="stSidebarHeader"]{position:relative;min-height:64px;padding:18px 14px 10px 20px !important;
     border-bottom:1px solid var(--ps-side-border);margin:0 0 10px 0;}
 [data-testid="stSidebarHeader"]::before{content:"DASHBOARD";position:absolute;left:20px;top:16px;
-    font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--ps-muted);}
+    font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--ps-muted);
+    font-family:'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;}
 [data-testid="stSidebarHeader"]::after{content:"Navigation";position:absolute;left:20px;top:31px;
-    font-size:16px;font-weight:700;color:var(--ps-text);}
+    font-size:16px;font-weight:700;color:var(--ps-text);
+    font-family:'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;}
 [data-testid="stSidebarCollapseButton"]{display:flex !important;visibility:visible !important;opacity:1 !important;
     position:static !important;transform:none !important;margin-left:auto;}
 [data-testid="stSidebarCollapseButton"] button{background:var(--ps-card) !important;border:1px solid var(--ps-btn-border) !important;
@@ -1174,12 +1267,17 @@ html[data-eo-theme="dark"] .stApp{
 [data-testid="stSidebarCollapseButton"] *{visibility:visible !important;opacity:1 !important;color:var(--ps-nav) !important;}
 [data-testid="stSidebarNavSeparator"]{display:none;}
 [data-testid="stSidebarNav"]{padding:0 10px;}
-[data-testid="stSidebarNavLink"]{border-radius:8px;padding:9px 14px !important;margin:2px 0;border-left:3px solid transparent;}
-[data-testid="stSidebarNavLink"] span{color:var(--ps-nav) !important;font-size:14px;}
+[data-testid="stSidebarNavLink"]{border-radius:8px;padding:9px 14px !important;margin:2px 0;border-left:3px solid transparent;transition:all 150ms ease !important;
+    font-family:'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;}
+[data-testid="stSidebarNavLink"] span{color:var(--ps-nav) !important;font-size:14px;
+    font-family:'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;}
 [data-testid="stSidebarNavLink"]:hover{background:rgba(148,163,184,.12) !important;}
+[data-testid="stSidebarNavLink"]:active{background:rgba(148,163,184,.18) !important;}
+[data-testid="stSidebarNavLink"]:focus, [data-testid="stSidebarNavLink"]:focus-visible{outline:none !important;box-shadow:none !important;}
 [data-testid="stSidebarNavLink"][aria-current="page"]{background:var(--ps-card) !important;border-left-color:var(--ps-red);
-    box-shadow:var(--ps-shadow);}
-[data-testid="stSidebarNavLink"][aria-current="page"] span{color:var(--ps-red) !important;font-weight:600;}
+    box-shadow:0 1px 3px rgba(16,24,40,.08);}
+[data-testid="stSidebarNavLink"][aria-current="page"] span{color:var(--ps-red) !important;font-weight:600;
+    font-family:'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;}
 
 /* sidebar content fills the height: "Data" block right under the nav links,
    user card (Log Out) pinned to the bottom */
@@ -1199,14 +1297,15 @@ html[data-eo-theme="dark"] .stApp{
 .st-key-ps_data_card [data-testid="stMarkdownContainer"]:has(.ps-data-line){justify-content:center !important;}
 .st-key-ps_data_card [data-testid="stMarkdown"],
 .st-key-ps_data_card [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
-.st-key-ps_data_card button{border-radius:8px !important;}
+.st-key-ps_data_card button{border-radius:10px !important;}
 .ps-refresh-note{font-size:12px;font-weight:600;text-align:center;width:100%;line-height:1.4;}
 .ps-refresh-note.ok{color:#15803D;}
 .ps-refresh-note.err{color:#B91C1C;}
 html[data-eo-theme="dark"] .ps-refresh-note.ok{color:#34D399;}
 html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
-.st-key-ps_user_card{background:var(--ps-card);border:1px solid var(--ps-card-border);border-radius:12px;
-    padding:14px 14px 12px 14px;box-shadow:var(--ps-shadow);gap:10px;}
+.st-key-ps_user_card{background:var(--ps-card);border:1px solid var(--ps-card-border);border-radius:14px;
+    padding:14px 14px 12px 14px;box-shadow:0 2px 8px rgba(16,24,40,.06);gap:10px;}
+html[data-eo-theme="dark"] .st-key-ps_user_card{box-shadow:0 4px 12px rgba(0,0,0,0.3);}
 .ps-user{display:flex;align-items:center;gap:10px;}
 .ps-avatar{width:34px;height:34px;border-radius:50%;background:#1F2937;color:#FFFFFF;font-size:12px;font-weight:700;
     display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;}
@@ -1215,12 +1314,14 @@ html[data-eo-theme="dark"] .ps-refresh-note.err{color:#FCA5A5;}
 .ps-user-mode b{color:var(--ps-text);}
 .ps-sync{display:flex;align-items:flex-start;gap:8px;margin:12px 0 4px 0;font-size:12px;
     color:var(--ps-muted);line-height:1.45;}
-.ps-dot{width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0;margin-top:5px;}
+@keyframes ps-pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.92);}}
+.ps-dot{width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0;margin-top:5px;
+    animation:ps-pulse 2.5s infinite ease-in-out;}
 /* Streamlit pulls the element after a markdown block up by 1rem; undo that inside the card
    so the sync text never sits on top of the Log Out button */
 .st-key-ps_user_card [data-testid="stMarkdown"],
 .st-key-ps_user_card [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
-.st-key-ps_user_card button{border-radius:8px !important;}
+.st-key-ps_user_card button{border-radius:10px !important;}
 .st-key-ps_legacy_badge{display:none !important;}
 
 /* ---- collapsed sidebar: slim rail with the open button (top) and avatar (bottom) ---- */
