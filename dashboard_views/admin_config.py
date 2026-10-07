@@ -501,21 +501,21 @@ html[data-eo-theme="dark"] [class*="st-key-accard_"]{box-shadow:0 4px 16px -2px 
 html[data-eo-theme="dark"] .ac-th2{color:#94A3B8;}
 .st-key-ac_permtable [data-testid="stColumn"]{white-space:nowrap !important;}
 [class*="st-key-kpirow_"]{border-bottom:1px solid var(--ac-h-border);padding:6px 0;}
-[class*="st-key-kpiord_"]{border:1px solid var(--ac-h-border);border-radius:8px;background:var(--ac-soft-bg);
-        padding:2px 4px;max-width:96px !important;width:96px !important;}
-[class*="st-key-kpiord_"] [data-testid="stHorizontalBlock"]{gap:2px !important;align-items:center !important;min-height:30px !important;}
+[class*="st-key-kpiord_"]{border:none !important;background:transparent !important;box-shadow:none !important;
+        padding:0 !important;max-width:76px !important;width:76px !important;}
+[class*="st-key-kpiord_"] [data-testid="stHorizontalBlock"]{gap:2px !important;align-items:center !important;min-height:28px !important;}
 [class*="st-key-kpiord_"] [data-testid="stColumn"]{display:flex !important;align-items:center !important;justify-content:center !important;min-width:0 !important;padding:0 !important;}
 [class*="st-key-kpiord_"] [data-testid="stElementContainer"]{margin:0 !important;padding:0 !important;width:100% !important;display:flex !important;justify-content:center !important;}
 [class*="st-key-kpiord_"] button{background:transparent !important;border:none !important;box-shadow:none !important;
-        border-radius:6px !important;min-height:28px !important;height:28px !important;width:28px !important;
-        min-width:28px !important;max-width:28px !important;padding:0 !important;margin:0 auto !important;
+        border-radius:6px !important;min-height:26px !important;height:26px !important;width:24px !important;
+        min-width:24px !important;max-width:24px !important;padding:0 !important;margin:0 auto !important;
         display:flex !important;align-items:center !important;justify-content:center !important;
         color:var(--ac-h-label) !important;transition:background 120ms ease, color 120ms ease, transform 120ms ease !important;}
 [class*="st-key-kpiord_"] button p{font-size:11px !important;line-height:1 !important;margin:0 !important;padding:0 !important;color:inherit !important;display:flex !important;align-items:center !important;justify-content:center !important;}
-[class*="st-key-kpiord_"] button:hover:not(:disabled){background:rgba(148,163,184,.22) !important;color:var(--ac-h-text) !important;box-shadow:none !important;}
-[class*="st-key-kpiord_"] button:active:not(:disabled){transform:scale(0.90) !important;}
-[class*="st-key-kpiord_"] button:disabled{opacity:0.22 !important;cursor:not-allowed !important;pointer-events:none !important;background:transparent !important;border:none !important;box-shadow:none !important;}
-.ac-ord-num{font-weight:700;color:var(--ac-h-text);text-align:center;font-size:13.5px;font-variant-numeric:tabular-nums;line-height:28px;width:100%;}
+[class*="st-key-kpiord_"] button:hover:not(:disabled){background:rgba(148,163,184,.20) !important;color:var(--ac-h-text) !important;box-shadow:none !important;}
+[class*="st-key-kpiord_"] button:active:not(:disabled){transform:scale(0.88) !important;}
+[class*="st-key-kpiord_"] button:disabled{opacity:0.18 !important;cursor:not-allowed !important;pointer-events:none !important;background:transparent !important;border:none !important;box-shadow:none !important;}
+.ac-ord-num{font-weight:700;color:var(--ac-h-text);text-align:center;font-size:14px;font-variant-numeric:tabular-nums;line-height:26px;width:100%;}
 .ac-chip{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
         background:var(--ac-chip-bg);border:1px solid var(--ac-h-border);border-radius:6px;padding:3px 8px;
         color:var(--ac-h-label);}
@@ -1098,10 +1098,10 @@ def kpi_tiles_section():
                             with st.container(key=f"kpiord_{pid}_{tkey}"):
                                 o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
                                 o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
-                                if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
+                                if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0, help="Move up"):
                                     move = (i, i - 1)
                                 if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
-                                                 disabled=i == len(draft) - 1):
+                                                 disabled=i == len(draft) - 1, help="Move down"):
                                     move = (i, i + 1)
                         with c_lbl:
                             t["label"] = st.text_input("Label", value=t.get("label", ""),
