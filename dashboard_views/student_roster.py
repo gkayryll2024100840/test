@@ -181,7 +181,8 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
 
 /* ---- MOBILE card list (shown only at <= 640px) ---- */
 .st-key-sr_mobile_cards { display: none; }
-.sr-mc {
+.sr-mc,
+[class*="st-key-sr_card_"] {
   background: var(--roster-cell-bg, transparent);
   border: 1px solid var(--roster-th-border, #E5E7EB);
   border-radius: 14px;
@@ -193,10 +194,91 @@ html[data-eo-theme="dark"] .sr-risk-pill{background:rgba(239,68,68,.14);color:#F
   box-shadow: 0 1px 3px rgba(16,24,40,0.06), 0 1px 2px rgba(16,24,40,0.04);
   transition: transform 200ms ease, box-shadow 200ms ease;
 }
-html[data-eo-theme="dark"] .sr-mc {
+html[data-eo-theme="dark"] .sr-mc,
+html[data-eo-theme="dark"] [class*="st-key-sr_card_"] {
   background: #161D2B;
   border-color: #263044;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+[class*="st-key-sr_card_"] > div > [data-testid="stVerticalBlock"] {
+  gap: 10px !important;
+}
+[class*="st-key-sr_card_"] [data-testid="stElementContainer"] {
+  margin-bottom: 0 !important;
+}
+[class*="st-key-sr_card_"] [data-testid="stMarkdownContainer"] {
+  margin-bottom: 0 !important;
+}
+[class*="st-key-sr_card_"] [data-testid="stMarkdownContainer"] p {
+  margin: 0 !important;
+}
+[class*="st-key-sr_head_"] {
+  padding-bottom: 8px !important;
+  border-bottom: 1px solid var(--roster-th-border, #E5E7EB) !important;
+  width: 100% !important;
+}
+html[data-eo-theme="dark"] [class*="st-key-sr_head_"] {
+  border-bottom-color: #263044 !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stHorizontalBlock"] {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100% !important;
+  flex-wrap: nowrap !important;
+  min-width: 0 !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stLayoutWrapper"] {
+  min-width: 0 !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stPageLink"] {
+  width: auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stPageLink"] a {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #2563EB !important;
+  text-decoration: none !important;
+  line-height: 1.3 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  word-break: keep-all !important;
+  white-space: normal !important;
+  background: transparent !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stPageLink"] a:hover {
+  text-decoration: underline !important;
+  color: #1D4ED8 !important;
+}
+html[data-eo-theme="dark"] [class*="st-key-sr_head_"] [data-testid="stPageLink"] a {
+  color: #60A5FA !important;
+}
+html[data-eo-theme="dark"] [class*="st-key-sr_head_"] [data-testid="stPageLink"] a:hover {
+  color: #93C5FD !important;
+}
+[class*="st-key-sr_head_"] [data-testid="stElementContainer"]:has(.sr-mc-id),
+[class*="st-key-sr_head_"] [data-testid="stLayoutWrapper"]:has(.sr-mc-id) {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
 }
 .sr-mc-head {
   display: flex;
@@ -217,6 +299,12 @@ html[data-eo-theme="dark"] .sr-mc {
 .sr-mc-name:hover { text-decoration: underline !important; }
 html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
 .sr-mc-id   { font-family: monospace; font-size: 12px; color: var(--roster-cell-id, #64748B); white-space: nowrap; }
+.sr-mc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
 .sr-mc-row  { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 1.4; }
 .sr-mc-label { color: var(--roster-th-color, #64748B); font-weight: 600; text-transform: uppercase;
                letter-spacing: .05em; font-size: 11px; }
@@ -227,6 +315,9 @@ html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
   gap: 8px;
   padding: 8px 0 4px 0;
   border-top: 1px solid var(--roster-th-border, #E5E7EB);
+}
+html[data-eo-theme="dark"] .sr-mc-pills {
+  border-top-color: #263044;
 }
 .sr-mc-pill-block {
   display: flex;
@@ -247,6 +338,9 @@ html[data-eo-theme="dark"] .sr-mc-name { color: #60A5FA !important; }
   gap: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--roster-th-border, #E5E7EB);
+}
+html[data-eo-theme="dark"] .sr-mc-foot {
+  border-top-color: #263044;
 }
 
 /* Turn mobile cards ON and desktop table OFF on mobile phones <= 640px */
@@ -776,6 +870,23 @@ html[data-eo-theme="dark"] .ma-count{color:#FCA5A5;background:rgba(185,27,33,.18
 .ma-name{font-size:15px;font-weight:600;color:var(--sr-h-text) !important;line-height:1.35;
         text-decoration:none !important;}
 .ma-name:hover{text-decoration:underline !important;}
+[class*="st-key-ma_who_"] [data-testid="stPageLink"] { min-height: 22px !important; height: auto !important; margin: 0 !important; padding: 0 !important; }
+[class*="st-key-ma_who_"] [data-testid="stPageLink"] a {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: var(--sr-h-text) !important;
+    line-height: 1.35 !important;
+    min-height: 22px !important;
+    text-decoration: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}
+[class*="st-key-ma_who_"] [data-testid="stPageLink"] a:hover {
+    text-decoration: underline !important;
+}
+[class*="st-key-ma_who_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
 /* inside the panel: no extra space under text blocks, so everything centres exactly */
 [data-testid="stPopoverBody"]:has(.ma-head) [data-testid="stMarkdownContainer"]{margin-bottom:0 !important;}
 .st-key-ma_toprow{flex-wrap:nowrap !important;}
@@ -867,10 +978,12 @@ def my_alerts_bell():
             # one box: Name + ID | what changed + when | Acknowledge (on phones the change moves under the name)
             with st.container(key=f"ma_row_{aid}", horizontal=True, vertical_alignment="center", gap="medium"):
                 with st.container(key=f"ma_who_{aid}"):
-                    st.markdown(
-                        f'<div class="ma-mid"><a class="ma-name" href="student_profile?student_id={html.escape(sn)}" '
-                        f'target="_self">{html.escape(name)}</a><div class="ma-sn">{html.escape(sn)}</div></div>',
-                        unsafe_allow_html=True)
+                    st.page_link(
+                        "dashboard_views/student_profile.py",
+                        label=name,
+                        query_params={"student_id": sn}
+                    )
+                    st.markdown(f'<div class="ma-sn">{html.escape(sn)}</div>', unsafe_allow_html=True)
                 with st.container(key=f"ma_what_{aid}"):
                     st.markdown(f'<div class="ma-mid"><div class="ma-change">{_ma_change_html(a["Change"])}</div>'
                                 f'<div class="ma-when">{_ma_when(a["CreatedAt"])}</div></div>',
@@ -1137,7 +1250,7 @@ try:
         # ---- MOBILE VIEW (<= 640px): one card per student ----
         # Rendered always; the CSS above hides it on wider screens and hides the desktop grid on phones.
         with st.container(key="sr_mobile_cards"):
-            for row in page_df.to_dict("records"):
+            for i, row in enumerate(page_df.to_dict("records")):
                 s_id = str(row.get("StudentNumber", ""))
                 s_name = str(row.get("Student", "Unknown"))
                 p_code = str(row.get("ProgramCode") or "—")
@@ -1160,13 +1273,18 @@ try:
                                 f'<span class="sr-mc-value">{html.escape(p_code)}</span></div>'
                                 if show_program_col else "")
 
-                st.markdown(
-                    f"""
-<div class="sr-mc">
-  <div class="sr-mc-head">
-    <a class="sr-mc-name" href="student_profile?student_id={html.escape(s_id)}" target="_self">{html.escape(s_name)}</a>
-    <div class="sr-mc-id">{html.escape(s_id)}</div>
-  </div>
+                safe_key = f"{i}_{re.sub(r'[^a-zA-Z0-9_]', '_', s_id)}"
+                with st.container(key=f"sr_card_{safe_key}"):
+                    with st.container(key=f"sr_head_{safe_key}", horizontal=True, vertical_alignment="center"):
+                        st.page_link(
+                            "dashboard_views/student_profile.py",
+                            label=s_name,
+                            query_params={"student_id": s_id}
+                        )
+                        st.markdown(f'<div class="sr-mc-id">{html.escape(s_id)}</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+<div class="sr-mc-body">
   {program_html}
   <div class="sr-mc-row"><span class="sr-mc-label">Cohort</span><span class="sr-mc-value">{html.escape(cohort)}</span></div>
   <div class="sr-mc-row"><span class="sr-mc-label">Adviser</span><span class="sr-mc-value">{html.escape(adviser)}</span></div>
@@ -1182,8 +1300,8 @@ try:
   </div>
 </div>
 """,
-                    unsafe_allow_html=True,
-                )
+                        unsafe_allow_html=True,
+                    )
         st.caption(
             f"Showing {len(df_filtered)} of {len(df)} students. "
             f"Click any student name to view their profile."

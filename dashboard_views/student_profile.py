@@ -277,15 +277,38 @@ html[data-eo-theme="dark"] [class*="st-key-sp_pillar_"]:hover{border-color:rgba(
     background:var(--sp-surface);border:1px solid var(--sp-border);
     border-radius:var(--sp-card-radius);padding:14px var(--sp-card-pad) !important;
     margin-top:var(--sp-block-gap);
-    display:flex !important;flex-direction:row !important;
-    align-items:center !important;justify-content:space-between !important;gap:16px !important;
 }
-.st-key-sp_onepager [data-testid="stElementContainer"]{width:auto !important;flex:0 0 auto !important;}
+.st-key-sp_onepager [data-testid="stHorizontalBlock"]{
+    align-items:center !important;
+}
+.st-key-sp_onepager [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child{
+    display:flex !important;
+    justify-content:flex-end !important;
+    align-items:center !important;
+}
+.st-key-sp_onepager [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child [data-testid="stElementContainer"]{
+    width:auto !important;
+}
 .sp-op-label{font-size:13px;font-weight:700;color:var(--sp-text);}
 .sp-op-hint{font-size:12px;color:var(--sp-muted);margin-top:2px;}
-.st-key-sp_op_btn button{background:#B31B21 !important;border-color:#B31B21 !important;color:#FFFFFF !important;
-    font-weight:700 !important;white-space:nowrap !important;}
-.st-key-sp_op_btn button *{color:#FFFFFF !important;}
+.st-key-sp_onepager [data-testid="stDownloadButton"]{
+    display:flex !important;
+    justify-content:flex-end !important;
+    width:auto !important;
+}
+.st-key-sp_onepager [data-testid="stDownloadButton"] button{
+    background:#B31B21 !important;border-color:#B31B21 !important;color:#FFFFFF !important;
+    font-weight:700 !important;white-space:nowrap !important;border-radius:10px !important;
+    min-height:38px !important;padding:0 18px !important;box-shadow:none !important;
+    transition:background 120ms ease, transform 120ms ease !important;
+}
+.st-key-sp_onepager [data-testid="stDownloadButton"] button:hover{
+    background:#99151A !important;border-color:#99151A !important;
+}
+.st-key-sp_onepager [data-testid="stDownloadButton"] button:active{
+    transform:scale(0.98) !important;
+}
+.st-key-sp_onepager [data-testid="stDownloadButton"] button *{color:#FFFFFF !important;}
 
 /* ---- US-45 adviser notes ---- */
 .sp-notes-title{font-size:18px;font-weight:700;color:var(--sp-text);line-height:1.3;}
@@ -475,15 +498,22 @@ html[data-eo-theme="dark"] .sp-note-body{color:#CBD5E1;}
 
   /* US-46 one-page row: stack label above button on phone */
   .st-key-sp_onepager {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 10px !important;
-    padding: 14px !important;
+    padding: 18px 16px !important;
   }
-  .st-key-sp_onepager [data-testid="stElementContainer"] {
+  .st-key-sp_onepager [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+    align-items: stretch !important;
+  }
+  .st-key-sp_onepager [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+  .st-key-sp_onepager [data-testid="stDownloadButton"] {
     width: 100% !important;
   }
-  .st-key-sp_op_btn button {
+  .st-key-sp_onepager [data-testid="stDownloadButton"] button {
     width: 100% !important;
     min-height: 42px !important;
     font-size: 13.5px !important;
@@ -900,13 +930,15 @@ elif selected_label:
     )
 
     with st.container(key="sp_onepager"):
-        st.markdown(
-            '<div><div class="sp-op-label">🖨️ One-Page Advising Summary</div>'
-            '<div class="sp-op-hint">Lifecycle status, at-risk flags and adviser notes — '
-            'downloaded as a print-ready PDF.</div></div>',
-            unsafe_allow_html=True,
-        )
-        with st.container(key="sp_op_btn"):
+        c_op_info, c_op_btn = st.columns([3.2, 1.4], vertical_alignment="center")
+        with c_op_info:
+            st.markdown(
+                '<div><div class="sp-op-label">🖨️ One-Page Advising Summary</div>'
+                '<div class="sp-op-hint">Lifecycle status, at-risk flags and adviser notes — '
+                'downloaded as a print-ready PDF.</div></div>',
+                unsafe_allow_html=True,
+            )
+        with c_op_btn:
             st.download_button(
                 "Download Summary (PDF)",
                 data=_onepager_pdf_bytes,
