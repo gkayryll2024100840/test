@@ -1,5 +1,5 @@
 # ADMIN CONFIG.
-# UPDATED: PY 10/6/26
+# UPDATED: PY 10/4/26
 #
 # SPEED NOTES
 #  - Each section is an @st.fragment: clicking/typing in one section only re-runs THAT section,
@@ -555,4 +555,1079 @@ html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,
   /* KPI tiles editor: switch to stacked rows */
   [class*="st-key-kpirow_"] [data-testid="stHorizontalBlock"] {
     flex-wrap: wrap !important;
-    gap:
+    gap: 8px !important;
+  }
+  [class*="st-key-kpirow_"] [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-width: 140px !important;
+  }
+  /* The Add-a-Tile row: stack the fields */
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+  [class*="st-key-kpiadd_"] [data-testid="stColumn"] {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  /* User Permissions: hide the wide 4-column layout; show name+role stacked */
+  .ac-table-wrap { font-size: 12px; }
+}
+
+/* Program Instances: small labels that only show on phones (their column headers are hidden there) */
+[data-testid="stElementContainer"]:has(.ac-mlabel){display:none;}
+.ac-mlabel-in{display:none;}
+
+/* ---- Phones (added): tables stay tables and scroll sideways; Program Instances become labelled cards ---- */
+@media (max-width: 640px) {
+  /* KPI Tiles / User Permissions / recent backups: keep the desktop columns, scroll left-right */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"],
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important; gap: 12px !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stHorizontalBlock"] {
+    flex-direction: row !important; flex-wrap: nowrap !important;
+  }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 560px !important; }
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *),
+  .st-key-ac_permtable [data-testid="stColumn"],
+  .st-key-ac_bktable [data-testid="stColumn"] {
+    width: auto !important; min-width: 0 !important;
+  }
+  /* same column proportions as on desktop (KPI_WIDTHS, perm_widths, BK_WIDTHS) */
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(1) { flex: 1.25 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(2) { flex: 3.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(3) { flex: 2.3 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(4) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(5) { flex: 0.9 1 0 !important; }
+  .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(6) { flex: 0.55 1 0 !important; }
+  .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(1) { flex: 1.7 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(2) { flex: 2.2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(3) { flex: 1.8 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(4) { flex: 1.3 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(1) { flex: 0.7 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(2) { flex: 1.8 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(3) { flex: 1.2 1 0 !important; }
+  .st-key-ac_bktable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_permtable .ac-th-line { min-width: 560px; }
+
+  /* Permission Audit Log: full-width table that scrolls left-right instead of squeezing the columns */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
+
+  /* Program Instances: "2 programs · 2 active · 0 inactive" on the left */
+  .ac-stats { justify-content: flex-start !important; }
+
+  /* Restore box: same space above the "Replace the current settings" checkbox as between the lines above it
+     (Streamlit pulls the line under a text block up by 16px) */
+  .st-key-bkrestore [data-testid="stMarkdownContainer"]:has(.ac-hint) { margin-bottom: 0 !important; }
+
+  /* Field Mapping: "Mapped" switch on the left under the input */
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+
+  /* Program Instances: no column headers; Owner / Program Chair labels above the dropdowns,
+     Students / Status labels next to their values */
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"]:has(.ac-th2) { display: none !important; }
+  [data-testid="stElementContainer"]:has(.ac-mlabel) { display: block !important; }
+  .ac-mlabel { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #6B7280;
+          margin-bottom: -6px; }
+  .ac-mlabel-in { display: inline-block; min-width: 92px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
+          text-transform: uppercase; color: #6B7280; }
+  html[data-eo-theme="dark"] .ac-mlabel, html[data-eo-theme="dark"] .ac-mlabel-in { color: #94A3B8; }
+}
+
+/* ---- Tablets (added) ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Program Instances: keep the table, scroll left-right (columns were too narrow: "STUDEN TS",
+     cut-off dropdowns, and "Configure" running into the "Created ..." line) */
+  .st-key-acbody_programs { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_programs [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 1000px !important; }
+  .st-key-acbody_programs .ac-th2 { white-space: nowrap; }
+
+  /* At-Risk Threshold and Data Refresh Schedule: one card per row instead of side by side */
+  .st-key-ac_pair [data-testid="stHorizontalBlock"]:not([class*="st-key-acbody_"] *) {
+    flex-direction: column !important; gap: 16px !important;
+  }
+  .st-key-ac_pair [data-testid="stColumn"]:not([class*="st-key-acbody_"] *) {
+    width: 100% !important; min-width: 100% !important; flex: 0 0 auto !important;
+  }
+
+  /* Add a Tile: "Visible" above its switch (like "Accent" above its colour), so the word fits */
+  [class*="st-key-kpi_new_visible_"] label { flex-direction: column-reverse !important; align-items: flex-start !important;
+          gap: 6px !important; }
+  /* ... and the "+ Add" button keeps room for its label */
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(6) {
+    flex: 0 0 84px !important; min-width: 84px !important;
+  }
+}
+
+/* ---- Tablets, portrait + landscape (added): with the sidebar open the page is only about 500px wide ---- */
+@media (min-width: 641px) and (max-width: 1150px) {
+  /* Field Mapping: the "Mapped" switch had about 60px and its word broke ("Map / ped"). It moves under the
+     input, on the left; the field name stays on the left of the input. */
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) {
+    flex-wrap: wrap !important; row-gap: 6px !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(1) {
+    flex: 0 0 30% !important; width: 30% !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 0 !important; width: auto !important; min-width: 0 !important;
+  }
+  [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-fmtog_"]) > [data-testid="stColumn"]:nth-child(3) {
+    flex: 0 0 100% !important; width: 100% !important; min-width: 0 !important;
+    padding-left: calc(30% + 1rem) !important; box-sizing: border-box !important;   /* lines up with the input */
+  }
+  [class*="st-key-fmtog_"] { align-items: flex-start !important; }
+  [class*="st-key-fmtog_"] label { white-space: nowrap !important; }
+
+  /* KPI Tiles / User Permissions / recent backups: same as phones - keep the columns, scroll left-right
+     when there isn't room (nothing changes when there is) */
+  .st-key-ac_kpitable, .st-key-ac_permtable, .st-key-ac_bktable {
+    overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 6px;
+  }
+  .st-key-ac_kpitable [data-testid="stHorizontalBlock"]:not([class*="st-key-kpiord_"] *) { min-width: 720px !important; }
+  .st-key-ac_permtable [data-testid="stHorizontalBlock"] { min-width: 640px !important; }   /* roles don't break mid-word */
+  .st-key-ac_bktable [data-testid="stHorizontalBlock"] { min-width: 480px !important; }
+
+  /* Stage Labels: the three label boxes keep a usable width and scroll left-right instead of squishing */
+  .st-key-acbody_labels { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .st-key-acbody_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 600px !important; }
+  /* ... its Program dropdown (and the KPI Tiles one) drops under the title when both don't fit on one line */
+  .st-key-achead_labels [data-testid="stHorizontalBlock"],
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 260px !important; min-width: 0 !important; }
+  .st-key-achead_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child,
+  .st-key-achead_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 1 1 220px !important; min-width: 0 !important; }
+  /* ... and "Save Labels" keeps room for its words (still on the right) */
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-acfoot_labels [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: 140px !important; }
+
+  /* Add a Tile: the six fields scroll left-right inside the dashed box instead of squishing */
+  [class*="st-key-kpiadd_"] { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  [class*="st-key-kpiadd_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; min-width: 640px !important; }
+
+  /* KPI Tiles + Configuration Backup footers: the buttons keep their full words ("Reset to Defaults",
+     "Download latest", "Back up now"); the note in the middle takes what's left, or its own line */
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"],
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:not(:nth-child(2)) {
+    flex: 0 0 auto !important; width: auto !important; min-width: max-content !important;
+  }
+  .st-key-acfoot_kpi [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2),
+  .st-key-acfoot_backup [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) {
+    flex: 1 1 140px !important; width: auto !important; min-width: 0 !important;
+  }
+
+  /* Restore box: "Use a backup file" keeps its words, and the "Replace the current settings ..." checkbox
+     gets its own full line (its text wraps) with the Restore button under it */
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; row-gap: 10px !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child { flex: 1 1 0 !important;
+          width: auto !important; min-width: 0 !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child { flex: 0 0 auto !important;
+          width: auto !important; min-width: max-content !important; }
+  .st-key-bkrestore [data-testid="stHorizontalBlock"]:has(.st-key-cfg_restore_go) > [data-testid="stColumn"]:first-child {
+    flex: 1 1 100% !important;
+  }
+  .st-key-bkrestore [data-testid="stCheckbox"] p { white-space: normal !important; overflow: visible !important;
+          text-overflow: clip !important; }
+
+  /* Permission Audit Log / sync log tables: same as phones - one line per cell, scroll left-right
+     (words like "SCHEDULED" were breaking in the middle) */
+  .ac-table { min-width: 560px; }
+  .ac-table th, .ac-table td { white-space: nowrap; }
+}
+</style>"""
+st.markdown(CARD_CSS, unsafe_allow_html=True)
+
+
+def card_head(name, title, desc):
+    """Card title + description (with the line under it)."""
+    with st.container(key=f"achead_{name}"):
+        st.markdown(f'<div class="ac-card-title">{title}</div><div class="ac-card-desc">{desc}</div>',
+                    unsafe_allow_html=True)
+
+
+def program_options():
+    """{"BIA — BS Business Intelligence and Analytics": ProgramID, ...} for the program dropdowns."""
+    return {f"{p['ProgramCode']} — {p['ProgramName']}": p["ProgramID"] for p in cached_programs()}
+
+
+st.markdown('<div class="ac-eyebrow">Program-specific thresholds and terminologies</div>', unsafe_allow_html=True)
+
+
+# ------------------------------------------------------------
+# 1) At-Risk Threshold  (compact card: inputs + Save on one row)
+# ------------------------------------------------------------
+@st.fragment
+def threshold_section():
+    with st.container(key="accard_threshold"):
+        with st.container(key="acbody_threshold"):
+            st.markdown('<div class="ac-card-title">At-Risk Threshold</div>'
+                        '<div class="ac-card-desc">Flag students after this many days in one stage.</div>',
+                        unsafe_allow_html=True)
+            prog_by_label = program_options()
+            if not prog_by_label:
+                st.info("No programs found.")
+                return
+
+            c_prog, c_days, c_btn = st.columns([2.3, 1.1, 0.6], vertical_alignment="bottom")
+            with c_prog:
+                th_label = st.selectbox("Program", list(prog_by_label), key="th_program")
+            th_program_id = prog_by_label[th_label]
+            th_current = cached_threshold(th_program_id)
+            with c_days:
+                th_days = st.number_input("Days", min_value=1, step=1,
+                                          value=int(th_current) if th_current else 180,
+                                          key=f"th_days_{th_program_id}")
+            with c_btn:
+                th_save = st.button("Save", type="primary", key="th_save", use_container_width=True)
+
+            st.markdown(f'<div class="ac-note">Currently {th_current} days</div>' if th_current else
+                        '<div class="ac-note">No threshold yet, so nobody is flagged</div>',
+                        unsafe_allow_html=True)
+
+    if th_save:
+        require_edit()   # US-13 gate: View Only users are stopped and the attempt is logged
+        ok, msg = set_program_threshold(current_user_id(), th_program_id, int(th_days))
+        if ok:
+            st.cache_data.clear()   # dashboards (roster / overview) pick up the new flags right away
+            st.session_state["th_flash"] = msg
+            st.rerun(scope="fragment")
+        else:
+            st.error(msg)
+
+    th_flash = st.session_state.pop("th_flash", None)
+    if th_flash:
+        st.toast(th_flash)
+
+
+# ------------------------------------------------------------
+# 2) Data Refresh Schedule  (compact card: inputs + Save on one row)
+# ------------------------------------------------------------
+@st.fragment
+def refresh_schedule_section():
+    schedule = cached_schedule()
+    cur_h, cur_m = (int(x) for x in schedule["time"].split(":"))
+
+    with st.container(key="accard_refresh"):
+        with st.container(key="acbody_refresh"):
+            st.markdown('<div class="ac-card-title">Data Refresh Schedule</div>'
+                        '<div class="ac-card-desc">When dashboard data refreshes automatically.</div>',
+                        unsafe_allow_html=True)
+
+            c_freq, c_time, c_btn = st.columns([2.3, 1.1, 0.6], vertical_alignment="bottom")
+            with c_freq:
+                st.selectbox("Frequency", ["Nightly (every day)"], disabled=True, key="rf_freq")
+            with c_time:
+                rf_time = st.time_input(f"Time ({schedule['timezone']})", value=dtime(cur_h, cur_m),
+                                        step=900, key="rf_time")
+            with c_btn:
+                rf_save = st.button("Save", type="primary", key="rf_save", use_container_width=True)
+
+            if schedule["last_run"]:
+                try:
+                    last_txt = datetime.strptime(schedule["last_run"], "%Y-%m-%d %H:%M:%S") \
+                        .strftime("%b %d, %Y · %I:%M %p")
+                except ValueError:
+                    last_txt = html.escape(str(schedule["last_run"]))
+                failed = schedule["last_status"] == "Failed"
+                dot = "ac-dot-fail" if failed else "ac-dot-ok"
+                extra = " (failed, see System Sync Logs)" if failed else ""
+                st.markdown(f'<div class="ac-note"><span class="ac-dot {dot}"></span>'
+                            f'Last refresh {last_txt}{extra}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ac-note">Not run yet</div>', unsafe_allow_html=True)
+
+    if rf_save:
+        require_edit()   # US-13 gate
+        ok, msg = set_refresh_time(current_user_id(), rf_time.strftime("%H:%M"))
+        if ok:
+            cached_schedule.clear()
+            st.session_state["rf_flash"] = msg
+            st.rerun(scope="fragment")
+        else:
+            st.error(msg)
+
+    rf_flash = st.session_state.pop("rf_flash", None)
+    if rf_flash:
+        st.toast(rf_flash)
+
+
+# ------------------------------------------------------------
+# 3) Stage Labels (US-30)
+# ------------------------------------------------------------
+STAGE_LABEL_FIELDS = [      # (stage key in the database, short tag, name shown in Admin Config)
+    ("Coursework", "CW", "Coursework Label"),
+    ("CompExam",   "CE", "Comprehensive Exam Label"),
+    ("Capstone",   "CP", "Capstone Label"),
+]
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_stage_labels(program_id):
+    return get_stage_labels(program_id)
+
+
+@st.fragment
+def stage_labels_section():
+    prog_by_label = program_options()
+    with st.container(key="accard_labels"):
+        with st.container(key="achead_labels"):
+            c_title, c_prog = st.columns([2.6, 1.1], vertical_alignment="top")
+            with c_title:
+                st.markdown(
+                    '<div class="ac-card-title">Stage Labels</div>'
+                    '<div class="ac-card-desc">Rename each stage for a program (e.g. “Capstone Paper” → “Thesis”). '
+                    "The new name shows on Student Profile, Student Roster, Executive Overview and the "
+                    "Excel export.</div>",
+                    unsafe_allow_html=True,
+                )
+            with c_prog:
+                if prog_by_label:
+                    # US-42: pre-select the program the console linked to (if any)
+                    target_pid = st.session_state.get("pi_target_program")
+                    labels_list = list(prog_by_label)
+                    default_idx = 0
+                    if target_pid is not None:
+                        for i, lbl in enumerate(labels_list):
+                            if prog_by_label[lbl] == target_pid:
+                                default_idx = i
+                                break
+                    lbl_program = st.selectbox("Program", labels_list, index=default_idx, key="lbl_program")
+
+        with st.container(key="acbody_labels"):
+            if not prog_by_label:
+                st.info("No programs found.")
+                return
+            program_id = prog_by_label[lbl_program]
+            current = cached_stage_labels(program_id)
+
+            new_values = {}
+            for col, (pillar, tag, field_name) in zip(st.columns(3, gap="small"), STAGE_LABEL_FIELDS):
+                with col:
+                    st.markdown(f'<div class="ac-field-label"><span class="ac-tag">{tag}</span>{field_name}</div>',
+                                unsafe_allow_html=True)
+                    new_values[pillar] = st.text_input(field_name, value=current[pillar],
+                                                       key=f"lbl_{program_id}_{pillar}",
+                                                       label_visibility="collapsed")
+                    st.markdown(f'<div class="ac-note-sm">Default: {html.escape(DEFAULT_STAGE_LABELS[pillar])}</div>',
+                                unsafe_allow_html=True)
+
+        with st.container(key="acfoot_labels"):
+            _, c_btn = st.columns([4, 1], vertical_alignment="center")
+            with c_btn:
+                lbl_save = st.button("Save Labels", type="primary", key="lbl_save", use_container_width=True)
+
+    if lbl_save:
+        require_edit()   # US-13 gate
+        changed = {p: v.strip() for p, v in new_values.items() if v.strip() != current[p]}
+        if not changed:
+            st.toast("Nothing changed.")
+            return
+        errors = []
+        for pillar, label in changed.items():
+            ok, msg = set_stage_label(current_user_id(), program_id, pillar, label)
+            if not ok:
+                errors.append(msg)
+        if errors:
+            st.error(" ".join(dict.fromkeys(errors)))   # same message only once
+        else:
+            st.cache_data.clear()   # every page picks up the new names right away
+            st.session_state["lbl_flash"] = f"Saved {len(changed)} stage label(s) for {lbl_program}."
+            st.rerun(scope="fragment")
+
+    lbl_flash = st.session_state.pop("lbl_flash", None)
+    if lbl_flash:
+        st.toast(lbl_flash)
+
+
+with st.container(key="ac_pair"):
+    col_left, col_right = st.columns(2, gap="medium")
+    with col_left:
+        threshold_section()
+    with col_right:
+        refresh_schedule_section()
+
+st.markdown('<div style="height:16px;"></div>', unsafe_allow_html=True)
+stage_labels_section()
+
+
+# ------------------------------------------------------------
+# 4) KPI Tiles (US-29) — stored as JSON on Program.KpiTiles
+#   Changes (label, order, visible, colour, delete, add) are made on a draft
+#   and only written to the database when "Save Tiles" is clicked.
+# ------------------------------------------------------------
+KPI_SOURCES = [
+    "total_enrolled", "remaining", "at_risk",
+    "on_time_rate", "overall_completion", "completion_rate",
+    "cohort_count", "program_label", "student_count",
+]
+KPI_WIDTHS = [1.25, 3.3, 2.3, 0.9, 0.9, 0.55]   # order | label | source | visible | accent | delete
+
+
+def _kpi_draft_key(pid):
+    return f"kpi_draft_{pid}"
+
+
+def _kpi_load_draft(pid):
+    """(Re)load the tiles from the database into the draft and forget old widget values."""
+    tiles = [dict(t) for t in get_all_kpi_tiles(program_id=pid)]
+    st.session_state[_kpi_draft_key(pid)] = tiles
+    st.session_state[f"kpi_saved_{pid}"] = [dict(t) for t in tiles]
+    prefixes = (f"kpi_l_{pid}_", f"kpi_v_{pid}_", f"kpi_c_{pid}_")
+    for k in [k for k in st.session_state if str(k).startswith(prefixes)]:
+        del st.session_state[k]
+
+
+def _kpi_norm(tiles):
+    """For the "unsaved changes" check: colour case doesn't matter (#FFCA06 == #ffca06)."""
+    return [{**t, "color": str(t.get("color", "")).lower()} for t in tiles]
+
+
+def _kpi_add_tile(pid):
+    """on_click for "+ Add": validates, appends to the draft, clears the inputs."""
+    key = st.session_state.get(f"kpi_new_key_{pid}", "").strip().lower().replace(" ", "_")
+    label = st.session_state.get(f"kpi_new_label_{pid}", "").strip()
+    draft = st.session_state[_kpi_draft_key(pid)]
+    if not key or not label:
+        st.session_state["kpi_flash"] = (False, "Both Key and Label are required to add a tile.")
+        return
+    if any(t.get("key") == key for t in draft):
+        st.session_state["kpi_flash"] = (False, f"A tile with key '{key}' already exists.")
+        return
+    draft.append({
+        "key": key, "label": label,
+        "source": st.session_state.get(f"kpi_new_source_{pid}", KPI_SOURCES[0]),
+        "order": len(draft) + 1,
+        "visible": st.session_state.get(f"kpi_new_visible_{pid}", True),
+        "color": st.session_state.get(f"kpi_new_color_{pid}", "#1F3864"),
+    })
+    st.session_state[f"kpi_new_key_{pid}"] = ""
+    st.session_state[f"kpi_new_label_{pid}"] = ""
+    st.session_state["kpi_flash"] = (True, f"Added '{label}'. Click Save Tiles to keep it.")
+
+
+st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
+
+
+@st.fragment
+def kpi_tiles_section():
+    programs = cached_programs()
+    with st.container(key="accard_kpi"):
+        with st.container(key="achead_kpi"):
+            c_title, c_prog = st.columns([2.6, 1.1], vertical_alignment="top")
+            with c_title:
+                st.markdown(
+                    '<div class="ac-card-title">KPI Tiles</div>'
+                    '<div class="ac-card-desc">The cards at the top of the Executive Overview, saved per program. '
+                    "To see them, pick that program in the Executive Overview's Program filter "
+                    "(All Programs always shows the built-in defaults). Accent = the coloured bar on top of the card."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+            with c_prog:
+                if programs:
+                    # US-42: pre-select the program the console linked to (if any)
+                    target_pid = st.session_state.get("pi_target_program")
+                    default_idx = 0
+                    if target_pid is not None:
+                        for i, p in enumerate(programs):
+                            if p["ProgramID"] == target_pid:
+                                default_idx = i
+                                break
+                    prog_choice = st.selectbox(
+                        "Program", programs,
+                        index=default_idx,
+                        format_func=lambda p: f"{p['ProgramCode']} — {p['ProgramName']}",
+                        key="kpi_program",
+                    )
+
+        with st.container(key="acbody_kpi"):
+            if not programs:
+                st.info("No programs available yet.")
+                return
+            pid = prog_choice["ProgramID"]
+            if _kpi_draft_key(pid) not in st.session_state:
+                _kpi_load_draft(pid)
+            draft = st.session_state[_kpi_draft_key(pid)]
+
+            # the table (header + one row per tile) - on phones it scrolls sideways instead of stacking
+            with st.container(key="ac_kpitable"):
+                # header row
+                for col, label in zip(st.columns(KPI_WIDTHS, vertical_alignment="bottom"),
+                                      ["Order", "Label", "Source", "Visible", "Accent", ""]):
+                    col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+
+                move, delete = None, None
+                for i, t in enumerate(draft):
+                    tkey = t.get("key") or f"tile{i}"
+                    with st.container(key=f"kpirow_{pid}_{tkey}"):
+                        c_ord, c_lbl, c_src, c_vis, c_col, c_del = st.columns(KPI_WIDTHS, vertical_alignment="center")
+                        with c_ord:
+                            with st.container(key=f"kpiord_{pid}_{tkey}"):
+                                o_num, o_up, o_down = st.columns([1, 1, 1], vertical_alignment="center")
+                                o_num.markdown(f'<div class="ac-ord-num">{i + 1}</div>', unsafe_allow_html=True)
+                                if o_up.button("▲", key=f"kpi_up_{pid}_{tkey}", type="tertiary", disabled=i == 0):
+                                    move = (i, i - 1)
+                                if o_down.button("▼", key=f"kpi_dn_{pid}_{tkey}", type="tertiary",
+                                                 disabled=i == len(draft) - 1):
+                                    move = (i, i + 1)
+                        with c_lbl:
+                            t["label"] = st.text_input("Label", value=t.get("label", ""),
+                                                       key=f"kpi_l_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_src:
+                            st.markdown(f'<span class="ac-chip">{html.escape(str(t.get("source", "")))}</span>',
+                                        unsafe_allow_html=True)
+                        with c_vis:
+                            t["visible"] = st.toggle("Visible", value=bool(t.get("visible", True)),
+                                                     key=f"kpi_v_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_col:
+                            t["color"] = st.color_picker("Accent", value=t.get("color", "#1F3864"),
+                                                         key=f"kpi_c_{pid}_{tkey}", label_visibility="collapsed")
+                        with c_del:
+                            with st.container(key=f"kpidel_{pid}_{tkey}"):
+                                if st.button("✕", key=f"kpi_d_{pid}_{tkey}", help="Remove this tile"):
+                                    delete = i
+
+            if move is not None:
+                a, b = move
+                draft[a], draft[b] = draft[b], draft[a]
+                st.rerun(scope="fragment")
+            if delete is not None:
+                removed = draft.pop(delete)
+                st.session_state["kpi_flash"] = (True, f"Removed '{removed.get('label')}'. "
+                                                       "Click Save Tiles to confirm.")
+                st.rerun(scope="fragment")
+
+            # ----- Add a tile -----
+            with st.container(key=f"kpiadd_{pid}"):
+                st.markdown('<div class="ac-add-title">Add a Tile</div>', unsafe_allow_html=True)
+                a_key, a_lbl, a_src, a_col, a_vis, a_btn = st.columns([1.4, 1.7, 1.4, 0.85, 0.85, 0.8],
+                                                                       vertical_alignment="bottom")
+                a_key.text_input("Key (unique)", placeholder="retention_rate", key=f"kpi_new_key_{pid}")
+                a_lbl.text_input("Label", placeholder="Retention Rate", key=f"kpi_new_label_{pid}")
+                a_src.selectbox("Source", KPI_SOURCES, key=f"kpi_new_source_{pid}")
+                a_col.color_picker("Accent", "#1F3864", key=f"kpi_new_color_{pid}")
+                a_vis.toggle("Visible", value=True, key=f"kpi_new_visible_{pid}")
+                a_btn.button("+ Add", key=f"kpi_add_{pid}", on_click=_kpi_add_tile, args=(pid,),
+                             use_container_width=True)
+
+            flash = st.session_state.pop("kpi_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_kpi"):
+            c_reset, c_note, c_save = st.columns([1, 2, 1], vertical_alignment="center")
+            with c_reset:
+                reset_clicked = st.button("Reset to Defaults", key="kpi_reset")
+            with c_note:
+                unsaved = _kpi_norm(draft) != _kpi_norm(st.session_state.get(f"kpi_saved_{pid}", []))
+                if unsaved:
+                    st.markdown('<span class="ac-foot-note">You have unsaved changes</span>',
+                                unsafe_allow_html=True)
+            with c_save:
+                save_clicked = st.button("Save Tiles", type="primary", key="kpi_save_all",
+                                         use_container_width=True)
+
+    if save_clicked:
+        require_edit()   # US-13 gate
+        for n, t in enumerate(draft, start=1):   # order = position in the list
+            t["order"] = n
+        ok, err = save_kpi_tiles(pid, draft)
+        if ok:
+            _kpi_load_draft(pid)
+            st.cache_data.clear()   # Executive Overview shows the new tiles right away
+            st.session_state["kpi_flash"] = (True, "KPI tiles saved.")
+        else:
+            st.session_state["kpi_flash"] = (False, err)
+        st.rerun(scope="fragment")
+
+    if reset_clicked:
+        require_edit()   # US-13 gate
+        ok, err = reset_kpi_tiles(pid)
+        if ok:
+            _kpi_load_draft(pid)
+            st.cache_data.clear()
+            st.session_state["kpi_flash"] = (True, "Reset to built-in defaults.")
+        else:
+            st.session_state["kpi_flash"] = (False, err)
+        st.rerun(scope="fragment")
+
+
+kpi_tiles_section()
+# ============================================================
+# USER PERMISSIONS SECTION (US-13)
+# ============================================================
+section_divider()
+section_header(
+    "User Permissions",
+    "Set a user's permission level to <b>Edit</b> (can make changes) or <b>View Only</b> "
+    "(read-only; write attempts are blocked and logged).",
+)
+
+
+@st.fragment
+def user_permissions_section():
+    search_query = st.text_input(
+        "Search User by Name or UserID",
+        placeholder="e.g. Juan, dela Cruz, or ADV0000001",
+        key="perm_search",
+    )
+
+    users = cached_users(search_query.strip())
+
+    if not users:
+        st.info("No users match this search.")
+        return
+
+    # show USERS_PER_PAGE at a time (building 200 rows of widgets on every click was the slowest part)
+    n_pages = max(1, -(-len(users) // USERS_PER_PAGE))
+    page = 1
+    if n_pages > 1:
+        pg_col, _ = st.columns([1, 5])
+        with pg_col:
+            page = st.number_input(f"Page (of {n_pages})", min_value=1, max_value=n_pages, value=1,
+                                   step=1, key=f"perm_page_{search_query}")
+    page_users = users[(page - 1) * USERS_PER_PAGE: page * USERS_PER_PAGE]
+
+    # the table (header + one row per user) - on phones it scrolls sideways instead of stacking
+    with st.container(key="ac_permtable"):
+        # column headers (same look as the Student Roster / Executive Overview table headers)
+        perm_widths = [1.7, 2.2, 1.8, 1.3]
+        for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
+                              ["UserID", "Name", "Role", "Permission"]):
+            col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="ac-th-line"></div>', unsafe_allow_html=True)
+
+        for u in page_users:
+            cols = st.columns(perm_widths)
+
+            with cols[0]:
+                st.write(f"**{u['UserID']}**")
+            with cols[1]:
+                st.write(f"{u['FirstName']} {u['LastName']}")
+            with cols[2]:
+                st.write(f"{u['Role']}")
+            with cols[3]:
+                current = u.get("RolePermission") or "View Only"
+                idx = 0 if current == "View Only" else 1
+                new_perm = st.selectbox(
+                    f"Permission for {u['UserID']}",
+                    ["View Only", "Edit"],
+                    index=idx,
+                    key=f"perm_{u['UserID']}",
+                    label_visibility="collapsed",
+                )
+
+                if new_perm != current:
+                    if st.button("Save", key=f"save_{u['UserID']}"):
+                        require_edit()   # only IT/Admin has Edit
+                        ok, err = set_user_permission(u["UserID"], new_perm)
+                        if ok:
+                            st.success(f"{u['UserID']} → {new_perm}")
+                            st.cache_data.clear()   # other pages cache each user's permission for a short time
+                            st.rerun(scope="fragment")
+                        else:
+                            st.error(f"Failed: {err}")
+
+    if n_pages > 1:
+        st.caption(f"Showing {len(page_users)} of {len(users)} users.")
+
+
+user_permissions_section()
+
+
+# ============================================================
+# PERMISSION AUDIT LOG SECTION (US-13)
+# ============================================================
+section_divider()
+section_header(
+    "Permission Audit Log",
+    "Every blocked write attempt by a <b>View Only</b> user is recorded here.",
+)
+
+try:
+    audit_rows = cached_audit_rows()
+    if audit_rows:
+        show_table(audit_rows)
+    else:
+        st.caption("No blocked attempts recorded yet.")
+except Exception as e:
+    st.warning(f"Could not load audit log: {e}")
+
+
+# ============================================================
+# SYSTEM SYNC LOGS SECTION
+# ============================================================
+section_divider()
+section_header(
+    "System Sync Logs",
+    "Run a test sync and review past sync attempts, including any errors, for troubleshooting.",
+)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_sync_logs():
+    return get_system_logs_local()
+
+
+@st.fragment
+def sync_logs_section():
+    active_login_id = st.session_state.get("session_id", "default_admin")
+    st.info(f"Active Session ID for this browser: **{active_login_id}**")
+
+    if st.button("Run Sync Attempt", key="sync_run"):
+        # Sync is a read-only operation — no permission gate needed
+        with st.spinner("Running sync attempt..."):
+            success = trigger_data_sync(login_id=active_login_id)
+        cached_sync_logs.clear()      # show the new attempt in the table
+        _last_sync_time.clear()       # sidebar's Live Sync Status shows the new time right away
+        # Keep the result in session_state: the full-page rerun below used to wipe the message
+        # before it could be read ("too fast", or never visible).
+        now = datetime.now()
+        st.session_state["sync_result"] = {
+            "ok": success,
+            "ts": now.timestamp(),
+            "at": now.strftime("%b %d, %Y · %I:%M:%S %p"),
+        }
+        st.rerun()   # full page rerun so the sidebar's Live Sync Status updates too
+
+    # Show the result of the last attempt right under the button for 2 minutes
+    # (the timestamp stops an old message from looking current when you come back later).
+    result = st.session_state.get("sync_result")
+    if result and (datetime.now().timestamp() - result["ts"]) < 120:
+        if result["ok"]:
+            st.success(f"Sync executed successfully! ({result['at']})")
+        else:
+            st.error(f"Sync failed! The error was logged in the table below. ({result['at']})")
+
+    logs = cached_sync_logs()
+
+    if logs:
+        show_table(logs)
+    else:
+        st.info("No system logs found in the local_logs.db")
+
+
+sync_logs_section()
+
+# ============================================================
+# CONFIGURATION BACKUP & RESTORE (US-48)  -  logic lives in config_backup.py
+# ============================================================
+from config_backup import (
+    create_backup, list_backups, get_backup, backup_file_bytes, parse_backup_file, restore_backup,
+)
+
+section_divider()
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+
+BACKUP_TYPES = {   # Reason column -> (label, pill style)
+    "manual": ("Manual", "ac-pill-info"),
+    "scheduled": ("Nightly", "ac-pill-ok"),
+    "before restore": ("Before restore", "ac-pill-warn"),
+}
+BK_WIDTHS = [0.7, 1.8, 1.2, 1.6]   # Backup | Created | Type | By
+BK_SHOWN = 5                        # rows in the list (older ones are still in the Restore dropdown)
+
+
+def _when(value):
+    """datetime -> 'Oct 04, 2026 · 10:21 PM'."""
+    try:
+        return f"{value:%b %d, %Y} · {value.hour % 12 or 12}:{value:%M %p}"
+    except Exception:
+        return str(value)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_backups():
+    return list_backups(limit=20)
+
+
+def _restore_facts(payload):
+    """One short line about a backup, shown before restoring it."""
+    programs = ", ".join(p["ProgramCode"] for p in payload.get("programs", [])) or "no programs"
+    refresh = (payload.get("app_settings") or {}).get("refresh_time", "not set")
+    try:
+        saved = _when(datetime.strptime(str(payload.get("created_at")), "%Y-%m-%d %H:%M:%S"))
+    except ValueError:
+        saved = str(payload.get("created_at", "?"))
+    return (f"Saved {html.escape(saved)} · {html.escape(programs)} · "
+            f"{len(payload.get('field_mappings', {}))} field mappings · refresh time {html.escape(str(refresh))}")
+
+
+@st.fragment
+def config_backup_section():
+    try:
+        backups = cached_backups()
+    except Exception as e:
+        st.error(f"Could not load backups: {e}")
+        return
+    latest = backups[0] if backups else None
+
+    with st.container(key="accard_backup"):
+        with st.container(key="achead_backup"):
+            st.markdown(
+                '<div class="ac-card-title">Configuration Backup</div>'
+                '<div class="ac-card-desc">Saves field mappings, KPI tiles, at-risk thresholds, stage labels, the '
+                'refresh time and the database connection (never the password). Runs every night with the data '
+                'refresh. Back up before any big change.</div>',
+                unsafe_allow_html=True,
+            )
+
+        with st.container(key="acbody_backup"):
+            # ---- recent backups ----
+            if backups:
+                # the list as a table - on phones it scrolls sideways instead of stacking
+                with st.container(key="ac_bktable"):
+                    for col, label in zip(st.columns(BK_WIDTHS, vertical_alignment="bottom"),
+                                          ["Backup", "Created", "Type", "By"]):
+                        col.markdown(f'<div class="ac-th2">{label}</div>', unsafe_allow_html=True)
+                    for b in backups[:BK_SHOWN]:
+                        kind, pill = BACKUP_TYPES.get(b["Reason"], (str(b["Reason"]).title(), "ac-pill-muted"))
+                        with st.container(key=f"bkrow_{b['BackupID']}"):
+                            c_id, c_when, c_type, c_by = st.columns(BK_WIDTHS, vertical_alignment="center")
+                            c_id.markdown(f'<span class="ac-tag">#{b["BackupID"]}</span>', unsafe_allow_html=True)
+                            c_when.markdown(f'<span class="ac-cell">{_when(b["CreatedAt"])}</span>', unsafe_allow_html=True)
+                            c_type.markdown(f'<span class="ac-pill {pill}">{kind}</span>', unsafe_allow_html=True)
+                            c_by.markdown(f'<span class="ac-cell-muted">{html.escape(str(b["CreatedBy"] or "—"))}</span>',
+                                          unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="ac-hint">No backups yet. Click <b>Back up now</b> to make the first one.</div>',
+                            unsafe_allow_html=True)
+
+            # ---- restore ----
+            with st.container(key="bkrestore"):
+                c_title, c_toggle = st.columns([2, 1], vertical_alignment="center")
+                c_title.markdown('<div class="ac-add-title">Restore</div>', unsafe_allow_html=True)
+                from_file = c_toggle.toggle("Use a backup file", key="cfg_restore_from_file")
+
+                payload, problem = None, None
+                if from_file:
+                    upload = st.file_uploader("Backup file (.json)", type=["json"], key="cfg_restore_file")
+                    if upload is not None:
+                        payload, problem = parse_backup_file(upload.getvalue())
+                elif backups:
+                    labels = {f"#{b['BackupID']} · {_when(b['CreatedAt'])} · "
+                              f"{BACKUP_TYPES.get(b['Reason'], (b['Reason'],))[0]}": b["BackupID"] for b in backups}
+                    chosen = st.selectbox("Backup to restore", list(labels), key="cfg_restore_pick")
+                    try:
+                        payload = get_backup(labels[chosen])
+                    except Exception as e:
+                        problem = f"Could not read that backup: {e}"
+                else:
+                    st.markdown('<div class="ac-hint">Nothing to restore yet.</div>', unsafe_allow_html=True)
+
+                if problem:
+                    st.error(problem)
+                restore_clicked = False
+                if payload:
+                    st.markdown(f'<div class="ac-hint">{_restore_facts(payload)}</div>', unsafe_allow_html=True)
+                    c_ok, c_btn = st.columns([3, 1], vertical_alignment="center")
+                    confirm = c_ok.checkbox("Replace the current settings (they're backed up first, "
+                                            "so this can be undone)", key="cfg_restore_confirm")
+                    restore_clicked = c_btn.button("Restore", type="primary", disabled=not confirm,
+                                                   key="cfg_restore_go", use_container_width=True)
+
+            flash = st.session_state.pop("cfg_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_backup"):
+            c_dl, c_note, c_now = st.columns([1.2, 2, 1], vertical_alignment="center")
+            with c_dl:
+                st.download_button(
+                    "⬇ Download latest",
+                    data=(lambda: backup_file_bytes(get_backup(latest["BackupID"]))) if latest else b"",
+                    file_name=f"dashboard_config_backup_{latest['BackupID'] if latest else 0}.json",
+                    mime="application/json",
+                    disabled=latest is None,
+                    help="Keep a copy outside the database (e.g. a shared drive), so you can still restore "
+                         "if the database itself is down.",
+                    key="cfg_backup_download",
+                )
+            with c_note:
+                if latest:
+                    st.markdown(f'<span class="ac-foot-note">Last backup <b>{_when(latest["CreatedAt"])}</b></span>',
+                                unsafe_allow_html=True)
+            with c_now:
+                backup_now = st.button("Back up now", type="primary", key="cfg_backup_now", use_container_width=True)
+
+    if backup_now:
+        ok, msg, _ = create_backup(current_user_id(), "manual")
+        cached_backups.clear()
+        st.session_state["cfg_flash"] = (ok, msg)
+        st.rerun(scope="fragment")
+
+    if restore_clicked:
+        require_edit()   # US-13 gate: View Only users are stopped and the attempt is logged
+        with st.spinner("Restoring..."):
+            ok, msg = restore_backup(payload, current_user_id())
+        if ok:
+            st.cache_data.clear()   # every page picks up the restored settings right away
+            st.session_state.pop("cfg_restore_confirm", None)
+        st.session_state["cfg_flash"] = (ok, msg)
+        st.rerun()
+
+
+config_backup_section()
+
+# ============================================================
+# KPI EMAIL ALERTS (US-36)  -  logic lives in kpi_alerts.py, thresholds in kpi_thresholds.json
+# ============================================================
+from kpi_alerts import (
+    ALERT_KPIS, check_kpi_alerts, kpi_status, thresholds_for, email_is_configured,
+)
+
+# Styles for this card only (new class names, so nothing else on the page changes)
+ALERT_CARD_CSS = """<style>
+.st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:1px solid var(--ac-h-border);padding-left:20px;}
+.al-name{font-size:16px;font-weight:700;color:var(--ac-h-text);margin-top:8px;line-height:1.35;display:block !important;}
+.al-email{font-size:14px;color:var(--ac-h-label);display:flex !important;align-items:center;gap:8px;margin-top:4px;
+        word-break:normal !important;overflow-wrap:break-word !important;}
+.al-account{font-size:12px;color:var(--ac-h-label);margin-top:10px;line-height:1.5;display:block !important;}
+.al-wrap{overflow-x:auto;margin-top:6px;}
+.al-table{width:100%;border-collapse:collapse;}
+.al-table th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;
+        text-align:center;padding:4px 8px 8px 8px;border-bottom:1px solid var(--ac-h-border);}
+html[data-eo-theme="dark"] .al-table th{color:#94A3B8;}
+.al-table td{font-size:14px;color:var(--ac-h-text);padding:10px 8px;border-bottom:1px solid var(--ac-h-border);
+        vertical-align:middle;text-align:center;}
+.al-table .ac-pill{white-space:normal;line-height:1.35;}
+.al-table tr:last-child td{border-bottom:none;}
+.al-val{font-weight:700;}
+.al-line{font-size:12px;color:var(--ac-h-label);margin-top:2px;white-space:nowrap;}
+.ac-pill-bad{color:#B91B21;background:#FEF2F2;border-color:#FECACA;}
+html[data-eo-theme="dark"] .ac-pill-bad{color:#FCA5A5;background:rgba(185,27,33,.18);border-color:rgba(185,27,33,.4);}
+/* this card only: on phones the two sides stack, so the divider goes on top instead of the left */
+@media (max-width: 640px) {
+  .st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:none;padding-left:0;
+          border-top:1px solid var(--ac-h-border);padding-top:16px;}
+}
+</style>"""
+GOOD_COLOR, BAD_COLOR = "#55AB22", "#B91B21"   # same green / red as the Executive Overview KPI numbers
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_kpi_status():
+    return kpi_status()
+
+
+def _status_pill(row):
+    """What happened for this KPI: OK, or (when it's below the red line) whether the Dean was emailed."""
+    if not row["is_red"]:
+        return '<span class="ac-pill ac-pill-ok">OK</span>'
+    if row["email"] == "sent":
+        sent = row["sent_at"]
+        return (f'<span class="ac-pill ac-pill-bad">Emailed {sent:%b %d}, '
+                f'{sent.hour % 12 or 12}:{sent:%M %p}</span>')
+    if row["email"] == "failed":
+        return '<span class="ac-pill ac-pill-warn">Failed · will retry</span>'
+    return '<span class="ac-pill ac-pill-warn">Not emailed yet</span>'
+
+
+def _value_color(row):
+    if row["is_red"]:
+        return BAD_COLOR
+    return GOOD_COLOR if row["value"] >= row["green_at"] else "var(--ac-h-text)"
+
+
+@st.fragment
+def kpi_alerts_section():
+    try:
+        recipients, status_rows = cached_kpi_status()
+    except Exception as e:
+        st.error(f"Could not load KPI alerts: {e}")
+        return
+    limits = thresholds_for()
+    st.markdown(ALERT_CARD_CSS, unsafe_allow_html=True)
+
+    with st.container(key="accard_alerts"):
+        with st.container(key="achead_alerts"):
+            st.markdown(
+                '<div class="ac-card-title">KPI Email Alerts</div>'
+                '<div class="ac-card-desc">Emails the Dean once when a program\'s '
+                + " or ".join(f"{name} drops below {limits[k][1]:g}%" for k, (name, _) in ALERT_KPIS.items())
+                + '. Checked every night after the data refresh. Thresholds are set in '
+                '<span class="ac-chip">kpi_thresholds.json</span>.</div>',
+                unsafe_allow_html=True,
+            )
+
+        with st.container(key="acbody_alerts"):
+            with st.container(key="alertcols"):
+                c_to, c_status = st.columns([1.3, 2.7])
+                with c_to:   # ---- who gets the emails ----
+                    dot = "ac-dot-ok" if email_is_configured() else "ac-dot-fail"
+                    people = "".join(
+                        f'<div class="al-name">{html.escape(r["Name"])}</div>'
+                        f'<div class="al-email"><span class="ac-dot {dot}"></span>{html.escape(r["Email"])}</div>'
+                        for r in recipients
+                    ) or '<div class="al-name">No Dean found</div>'
+                    account = ("" if email_is_configured() else
+                               '<div class="al-account">Email account not set up: add ALERT_SMTP_PASSWORD '
+                               '(the Gmail app password) to .env</div>')
+                    st.markdown(f'<div class="ac-th2">Sends to</div>{people}{account}', unsafe_allow_html=True)
+
+                with c_status:   # ---- every program's KPIs right now ----
+                    if status_rows:
+                        body = "".join(
+                            f'<tr><td><b>{html.escape(str(r["ProgramCode"]))}</b></td>'
+                            f'<td>{html.escape(r["kpi"])}</td>'
+                            f'<td><span class="al-val" style="color:{_value_color(r)};">{r["value"]:.1f}%</span>'
+                            f'<div class="al-line">red below {r["red_below"]:g}%</div></td>'
+                            f'<td>{_status_pill(r)}</td></tr>'
+                            for r in status_rows
+                        )
+                        st.markdown(
+                            '<div class="ac-th2">KPI status</div>'
+                            '<div class="al-wrap"><table class="al-table"><thead><tr><th>Program</th><th>KPI</th>'
+                            f'<th>Now</th><th>Dean email</th></tr></thead><tbody>{body}</tbody></table></div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown('<div class="ac-th2">KPI status</div>'
+                                    '<div class="ac-hint">No programs with students yet.</div>', unsafe_allow_html=True)
+
+            flash = st.session_state.pop("alert_flash", None)
+            if flash:
+                (st.success if flash[0] else st.error)(flash[1])
+
+        with st.container(key="acfoot_alerts"):
+            email_clicked = st.button("Check KPI Status", type="primary", key="alert_check", use_container_width=True)
+
+    if email_clicked:
+        require_edit()   # US-13 gate
+        with st.spinner("Checking KPIs..."):
+            r = check_kpi_alerts()   # same check as the nightly one: new drops only, all in ONE email
+        cached_kpi_status.clear()
+        emails = r.get("emails", 1 if r.get("sent") else 0)
+        if r.get("errors"):
+            msg = f"Couldn't send the email: {r['errors'][0]}"
+        elif emails:
+            msg = (f"1 email sent to {', '.join(r['recipients'])} about {r['sent']} KPI(s) below their threshold."
+                   if emails == 1 else f"{emails} emails sent about {r['sent']} KPI(s).")
+        elif r["red"]:
+            msg = (f"Nothing new to email: the Dean was already emailed about the {r['red']} KPI(s) "
+                   "below their threshold.")
+        else:
+            msg = f"Nothing to email: all {r['checked']} KPIs are above their threshold."
+        st.session_state["alert_flash"] = (not r["errors"], msg)
+        st.rerun(scope="fragment")
+
+section_divider()
+st.markdown('<div style="height:32px;"></div>', unsafe_allow_html=True)
+kpi_alerts_section()
