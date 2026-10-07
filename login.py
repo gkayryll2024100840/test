@@ -165,6 +165,23 @@ if not st.session_state.get('user'):
         st.markdown(
             f"""
             <style>
+            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+            .stApp, .login-title, .st-key-login_card label, .st-key-login_card label p,
+            .st-key-login_card input, .st-key-login_button button {{
+                font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            }}
+
+            /* Explicitly preserve Streamlit's Material Symbols Icon fonts for buttons/inputs */
+            .st-key-login_card [data-testid="stTextInput"] button,
+            .st-key-login_card [data-testid="stTextInput"] button *,
+            [data-testid="stIconMaterial"],
+            [class*="material-symbols"],
+            [class*="material-icons"] {{
+                font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+            }}
+
             [data-testid="stSidebar"],
             [data-testid="stSidebarCollapseButton"],
             [data-testid="stExpandSidebarButton"] {{
@@ -202,13 +219,14 @@ if not st.session_state.get('user'):
             }}
 
             .st-key-login_card {{
-                background: rgba(255, 255, 255, 0.16);
-                border: 1px solid rgba(255, 255, 255, 0.22);
-                border-radius: 16px;
-                padding: 28px 36px 26px 36px;     /* slightly more padding for the wider card */
-                backdrop-filter: blur(8px);
+                background: rgba(255, 255, 255, 0.20);
+                border: 1px solid rgba(255, 255, 255, 0.32);
+                border-radius: 18px;
+                padding: 30px 38px 28px 38px;     /* slightly more padding for the wider card */
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
                 text-align: center;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+                box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
             }}
 
             /* ---- put the card in the exact middle of the screen (left-right AND top-bottom) ----
@@ -295,32 +313,40 @@ if not st.session_state.get('user'):
             .st-key-login_card [data-testid="stTextInput"] {{
                 margin-bottom: 4px !important;
             }}
-            .st-key-login_card [data-testid="stTextInput"] input,
-            .st-key-login_card [data-testid="stTextInput"] input:focus,
+            /* ---- Inputs: target the Baseweb wrapper layer ---- */
             .st-key-login_card [data-baseweb="input"],
             .st-key-login_card [data-baseweb="base-input"],
-            .st-key-login_card [data-baseweb="input"] > div,
             .st-key-login_card div[data-testid="stTextInputRootElement"] {{
                 background: #FFFFFF !important;
-                border: none !important;
-                border-radius: 6px !important;
-                box-shadow: none !important;
-                min-height: 36px !important;      /* slightly taller inputs now that they're wider */
-                height: 36px !important;
+                border: 1px solid rgba(255, 255, 255, 0.6) !important;
+                border-radius: 10px !important;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+                min-height: 42px !important;
+                height: 42px !important;
+                overflow: hidden !important;
+                transition: box-shadow 150ms ease, border-color 150ms ease !important;
             }}
-            .st-key-login_card [data-testid="stTextInput"] input {{
+            .st-key-login_card [data-baseweb="input"]:focus-within {{
+                border-color: #2563EB !important;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] input,
+            .st-key-login_card [data-testid="stTextInput"] input:focus {{
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
                 font-size: 14px !important;
-                padding: 0 12px !important;
+                padding: 0 14px !important;
                 color: #1A1F36 !important;
-                line-height: 36px !important;
+                height: 100% !important;
+                min-height: 40px !important;
+                line-height: 40px !important;
             }}
             .st-key-login_card [data-testid="stTextInput"] > div {{
                 border: none !important;
                 box-shadow: none !important;
-            }}
-            .st-key-login_card [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{
-                border: none !important;
-                box-shadow: none !important;
+                background: transparent !important;
             }}
             .st-key-login_card [data-testid="stVerticalBlock"],
             .st-key-login_card [data-testid="stVerticalBlockBorderWrapper"] > div {{
@@ -335,25 +361,49 @@ if not st.session_state.get('user'):
                 display: none;
             }}
 
-            /* ---- password show/hide (eye) button: white, inside the input, grey icon ---- */
+            /* ---- Hide Streamlit's 'Press Enter to submit form' text ---- */
+            .st-key-login_card [data-testid="InputInstructions"],
+            [data-testid="InputInstructions"] {{
+                display: none !important;
+            }}
+
+            /* ---- password show/hide (eye) button: transparent inside the input container ---- */
             .st-key-login_card [data-testid="stTextInput"] button {{
-                background: #FFFFFF !important;
+                background: transparent !important;
                 color: #6B7280 !important;
                 border: none !important;
                 box-shadow: none !important;
-                width: auto !important;
-                min-width: 36px !important;
-                height: 36px !important;
+                border-radius: 0 !important;
+                width: 40px !important;
+                min-width: 40px !important;
+                height: 40px !important;
                 margin: 0 !important;
-                padding: 0 10px !important;
-                border-radius: 0 6px 6px 0 !important;
+                padding: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                cursor: pointer !important;
+                font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+                font-size: 20px !important;
+                line-height: 1 !important;
             }}
             .st-key-login_card [data-testid="stTextInput"] button:hover {{
                 color: #12172B !important;
+                background: transparent !important;
+            }}
+            .st-key-login_card [data-testid="stTextInput"] button span,
+            .st-key-login_card [data-testid="stTextInput"] button i,
+            .st-key-login_card [data-testid="stTextInput"] button [data-testid="stIconMaterial"] {{
+                font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Icons" !important;
+                font-size: 20px !important;
+                line-height: 1 !important;
+                display: inline-block !important;
             }}
             .st-key-login_card [data-testid="stTextInput"] button svg {{
                 fill: currentColor !important;
                 color: inherit !important;
+                width: 20px !important;
+                height: 20px !important;
             }}
 
             /* ---- Login button (only this one: the old rule also hit the password's eye button) ---- */
@@ -361,13 +411,21 @@ if not st.session_state.get('user'):
                 background: #12172B !important;
                 color: #FFFFFF !important;
                 border: none !important;
-                border-radius: 6px !important;
-                font-weight: 600 !important;
-                font-size: 14px !important;
+                border-radius: 10px !important;
+                font-weight: 700 !important;
+                font-size: 14.5px !important;
                 width: 100% !important;
-                height: 40px !important;
+                height: 42px !important;
                 padding: 0 !important;
-                margin-top: 10px !important;
+                margin-top: 12px !important;
+                transition: transform 120ms ease, box-shadow 150ms ease, background-color 150ms ease !important;
+            }}
+            .st-key-login_button button:hover {{
+                background: #1A2238 !important;
+                box-shadow: 0 4px 14px rgba(18, 23, 43, 0.28) !important;
+            }}
+            .st-key-login_button button:active {{
+                transform: scale(0.98) !important;
             }}
             </style>
             """,

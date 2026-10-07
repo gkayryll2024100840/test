@@ -28,11 +28,16 @@ from db_connect import (
 from system_log import get_system_logs_local
 from field_mapping import load_mappings, save_mappings
 from permissions import require_edit
-from dashboard_views.components import _last_sync_time
+from dashboard_views.components import DARK_MODE_CSS, _last_sync_time
 
 USERS_PER_PAGE = 20
 
 HEADER_CSS = """<style>
+/* ---- typography guarantee for admin config ---- */
+.stApp, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp label,
+.ac-title, .ac-caption, .ac-section-title, .ac-section-caption, .ac-sub, .ac-th, .ac-table, .ac-table th, .ac-table td {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
 /* ---- page header: copied from the Executive Overview header ---- */
 .stApp{--ac-h-text:#0F172A; --ac-h-label:#4B5563; --ac-h-border:#E5E7EB;}
 html[data-eo-theme="dark"] .stApp{--ac-h-text:#F1F5F9; --ac-h-label:#94A3B8; --ac-h-border:#263044;}
@@ -72,14 +77,16 @@ html[data-eo-theme="dark"] .ac-th{color:#94A3B8;}
 
 /* log tables (Permission Audit Log / System Sync Logs): always the full page width, text left-aligned,
    long messages wrap instead of being cut off, header stays visible while the table scrolls */
-.ac-table-wrap{width:100%;overflow:auto;border:1px solid var(--ac-h-border);border-radius:10px;}
+.ac-table-wrap{width:100%;overflow:auto;border:1px solid var(--ac-h-border);border-radius:14px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
+html[data-eo-theme="dark"] .ac-table-wrap{box-shadow:0 4px 16px -2px rgba(0,0,0,.4);}
 .ac-table{width:100%;border-collapse:collapse;font-size:13px;color:var(--ac-h-text);}
-.ac-table th{position:sticky;top:0;z-index:1;text-align:left;padding:10px 14px;font-size:12px;font-weight:600;
-        letter-spacing:.03em;text-transform:uppercase;color:var(--ac-h-label);background:var(--ac-foot-bg,#FAFAFA);
+.ac-table th{position:sticky;top:0;z-index:1;text-align:left;padding:10px 14px;font-size:11.5px;font-weight:700;
+        letter-spacing:.04em;text-transform:uppercase;color:var(--ac-h-label);background:var(--ac-foot-bg,#FAFAFA);
         border-bottom:1px solid var(--ac-h-border);white-space:nowrap;}
 .ac-table td{text-align:left;vertical-align:top;padding:9px 14px;border-top:1px solid var(--ac-h-border);
         overflow-wrap:anywhere;}
 .ac-table tbody tr:first-child td{border-top:none;}
+.ac-table tbody tr{transition:background 120ms ease;}
 .ac-table tbody tr:hover td{background:rgba(148,163,184,.10);}
 
 @media (max-width: 1150px) {
@@ -197,6 +204,7 @@ def cached_audit_rows():
 
 
 # Title + caption styled like the Executive Overview header (line under both)
+st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
 st.markdown(HEADER_CSS, unsafe_allow_html=True)
 st.markdown(
     '<div class="ac-header">'
@@ -456,12 +464,14 @@ html[data-eo-theme="dark"] .ac-eyebrow{color:#94A3B8;}
 
 /* card frame */
 [class*="st-key-accard_"]{background:var(--ac-card-bg);border:1px solid var(--ac-h-border);border-radius:14px;
-        overflow:hidden;gap:0 !important;}
+        box-shadow:0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
+        overflow:hidden;gap:0 !important;transition:box-shadow 200ms ease;}
+html[data-eo-theme="dark"] [class*="st-key-accard_"]{box-shadow:0 4px 16px -2px rgba(0,0,0,.4);}
 [class*="st-key-achead_"]{padding:24px 28px 20px 28px;border-bottom:1px solid var(--ac-h-border);gap:4px !important;}
 [class*="st-key-acbody_"]{padding:24px 28px 24px 28px;gap:14px !important;}
 [class*="st-key-acfoot_"]{padding:14px 28px;background:var(--ac-foot-bg);border-top:1px solid var(--ac-h-border);}
-.ac-card-title{font-size:20px;font-weight:700;color:var(--ac-h-text);margin:0;line-height:1.3;}
-.ac-card-desc{font-size:14px;color:var(--ac-h-label);margin:4px 0 0 0;line-height:1.5;}
+.ac-card-title{font-size:20px;font-weight:700;color:var(--ac-h-text);margin:0;line-height:1.3;display:block !important;width:100% !important;}
+.ac-card-desc{font-size:14px;color:var(--ac-h-label);margin:4px 0 0 0;line-height:1.5;display:block !important;width:100% !important;}
 .ac-foot-note{font-size:14px;color:var(--ac-h-label);}
 .ac-foot-note b{color:var(--ac-h-text);}
 .ac-field-label{font-size:14px;font-weight:600;color:var(--ac-h-text);margin:0 0 6px 0;
@@ -487,8 +497,9 @@ html[data-eo-theme="dark"] .ac-eyebrow{color:#94A3B8;}
         background:var(--ac-chip-bg);border-radius:5px;padding:2px 7px;margin-right:8px;}
 
 /* KPI tiles table */
-.ac-th2{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;}
+.ac-th2{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;white-space:nowrap !important;}
 html[data-eo-theme="dark"] .ac-th2{color:#94A3B8;}
+.st-key-ac_permtable [data-testid="stColumn"]{white-space:nowrap !important;}
 [class*="st-key-kpirow_"]{border-bottom:1px solid var(--ac-h-border);padding:6px 0;}
 [class*="st-key-kpiord_"]{border:1px solid var(--ac-h-border);border-radius:8px;background:var(--ac-soft-bg);
         padding:0 4px;}
@@ -502,6 +513,7 @@ html[data-eo-theme="dark"] .ac-th2{color:#94A3B8;}
 [class*="st-key-kpidel_"] button p{color:#B91B21 !important;font-size:16px;}
 [class*="st-key-kpiadd_"]{border:1px dashed var(--ac-h-border);border-radius:12px;padding:16px 20px;
         background:var(--ac-foot-bg);margin-top:10px;}
+[class*="st-key-kpiadd_"] label, [class*="st-key-kpiadd_"] label p{white-space:nowrap !important;}
 .ac-add-title{font-size:16px;font-weight:700;color:var(--ac-h-text);margin:0;}
 /* Program Instances + Backup cards (same look as the KPI tiles table) */
 [class*="st-key-pirow_"],[class*="st-key-bkrow_"]{border-bottom:1px solid var(--ac-h-border);padding:6px 0;}
@@ -601,10 +613,10 @@ html[data-eo-theme="dark"] .ac-pill-muted{color:#CBD5E1;background:rgba(148,163,
   .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(5) { flex: 0.9 1 0 !important; }
   .st-key-ac_kpitable [data-testid="stColumn"]:not([class*="st-key-kpiord_"] *):nth-child(6) { flex: 0.55 1 0 !important; }
   .st-key-ac_kpitable [class*="st-key-kpiord_"] [data-testid="stColumn"] { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; }
-  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(1) { flex: 2 1 0 !important; }
-  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(2) { flex: 2 1 0 !important; }
-  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(3) { flex: 1.4 1 0 !important; }
-  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(4) { flex: 1.6 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(1) { flex: 1.7 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(2) { flex: 2.2 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(3) { flex: 1.8 1 0 !important; }
+  .st-key-ac_permtable [data-testid="stColumn"]:nth-child(4) { flex: 1.3 1 0 !important; }
   .st-key-ac_bktable [data-testid="stColumn"]:nth-child(1) { flex: 0.7 1 0 !important; }
   .st-key-ac_bktable [data-testid="stColumn"]:nth-child(2) { flex: 1.8 1 0 !important; }
   .st-key-ac_bktable [data-testid="stColumn"]:nth-child(3) { flex: 1.2 1 0 !important; }
@@ -1108,7 +1120,7 @@ def kpi_tiles_section():
             # ----- Add a tile -----
             with st.container(key=f"kpiadd_{pid}"):
                 st.markdown('<div class="ac-add-title">Add a Tile</div>', unsafe_allow_html=True)
-                a_key, a_lbl, a_src, a_col, a_vis, a_btn = st.columns([1.6, 1.8, 1.6, 0.6, 0.6, 0.8],
+                a_key, a_lbl, a_src, a_col, a_vis, a_btn = st.columns([1.4, 1.7, 1.4, 0.85, 0.85, 0.8],
                                                                        vertical_alignment="bottom")
                 a_key.text_input("Key (unique)", placeholder="retention_rate", key=f"kpi_new_key_{pid}")
                 a_lbl.text_input("Label", placeholder="Retention Rate", key=f"kpi_new_label_{pid}")
@@ -1199,7 +1211,7 @@ def user_permissions_section():
     # the table (header + one row per user) - on phones it scrolls sideways instead of stacking
     with st.container(key="ac_permtable"):
         # column headers (same look as the Student Roster / Executive Overview table headers)
-        perm_widths = [2, 2, 1.4, 1.6]
+        perm_widths = [1.7, 2.2, 1.8, 1.3]
         for col, label in zip(st.columns(perm_widths, vertical_alignment="bottom"),
                               ["UserID", "Name", "Role", "Permission"]):
             col.markdown(f'<div class="ac-th">{label}</div>', unsafe_allow_html=True)
@@ -1487,10 +1499,10 @@ from kpi_alerts import (
 # Styles for this card only (new class names, so nothing else on the page changes)
 ALERT_CARD_CSS = """<style>
 .st-key-alertcols [data-testid="stColumn"]:nth-child(2){border-left:1px solid var(--ac-h-border);padding-left:20px;}
-.al-name{font-size:16px;font-weight:700;color:var(--ac-h-text);margin-top:8px;line-height:1.35;}
-.al-email{font-size:14px;color:var(--ac-h-label);display:flex;align-items:center;gap:8px;margin-top:4px;
-        word-break:break-all;}
-.al-account{font-size:12px;color:var(--ac-h-label);margin-top:10px;line-height:1.5;}
+.al-name{font-size:16px;font-weight:700;color:var(--ac-h-text);margin-top:8px;line-height:1.35;display:block !important;}
+.al-email{font-size:14px;color:var(--ac-h-label);display:flex !important;align-items:center;gap:8px;margin-top:4px;
+        word-break:normal !important;overflow-wrap:break-word !important;}
+.al-account{font-size:12px;color:var(--ac-h-label);margin-top:10px;line-height:1.5;display:block !important;}
 .al-wrap{overflow-x:auto;margin-top:6px;}
 .al-table{width:100%;border-collapse:collapse;}
 .al-table th{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6B7280;
@@ -1560,7 +1572,7 @@ def kpi_alerts_section():
 
         with st.container(key="acbody_alerts"):
             with st.container(key="alertcols"):
-                c_to, c_status = st.columns([1, 3])
+                c_to, c_status = st.columns([1.3, 2.7])
                 with c_to:   # ---- who gets the emails ----
                     dot = "ac-dot-ok" if email_is_configured() else "ac-dot-fail"
                     people = "".join(
