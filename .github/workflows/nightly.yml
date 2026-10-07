@@ -1,0 +1,45 @@
+# Nightly dashboard job: data refresh, configuration backup (US-48), KPI email alerts (US-36) and
+# advisee alerts (US-37). Runs nightly_job.py on GitHub's servers, so it works even when nobody has the
+# dashboard open.
+#
+# Schedule: every hour from 1:10 to 6:10 AM Philippine time (GitHub uses UTC: 17-22 UTC = 1-6 AM UTC+8).
+# The job only really runs once a night, at the first check after the refresh time set in Admin Config;
+# the later checks just confirm it's done (and retry if the database was unreachable).
+# GitHub can start scheduled runs a few minutes late; that's normal.
+#
+# Setup: repo Settings > Secrets and variables > Actions > New repository secret, one per name below.
+name: Nightly dashboard job
+
+on:
+  schedule:
+    - cron: "10 17-22 * * *"
+  workflow_dispatch: {}   # "Run workflow" button on the Actions tab, for testing
+
+concurrency:
+  group: nightly-dashboard-job
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the packages the nightly job needs
+        run: pip install mysql-connector-python pandas python-dotenv cryptography
+
+      - name: Run the nightly job
+        run: python nightly_job.py
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
