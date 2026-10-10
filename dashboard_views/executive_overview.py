@@ -1,6 +1,10 @@
 # EXEC OVERVIEW MERGE
-# EXEC OVERVIEW 9-30-26 
+# EXEC OVERVIEW 10-10-26
 # QA fixes: Excel key metrics, Philippine export time, wider Program filter
+# UPDATED 10-10-26:
+#   - On-Time Graduation Rate = students who are Completed AND finished within threshold / total enrolled
+#   - Overall Completion = students in Completed stage / total enrolled
+#   - Lifecycle stage cascade re-derived from spec (all done -> Completed, cancelled -> Inactive, ...)
 import html
 import io
 import json
@@ -702,6 +706,18 @@ def _run_executive_query(conn, last_col) -> pd.DataFrame:
 
 
 def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Prepare the exec dataframe.
+
+    ActiveStage cascade (first rule that matches wins):
+      1. Coursework=Completed AND CompExam=Passed AND Capstone=Defended  -> "Completed"
+      2. Any of the three stages is "Cancelled"                          -> INACTIVE_STAGE ("Inactive")
+      3. Coursework is NOT "Completed"                                   -> "Coursework"
+      4. CompExam is NOT "Passed"                                        -> "Comprehensive Exam"
+      5. otherwise (Coursework + CompExam done, Capstone still in flight)-> "Capstone"
+
+    IsOnTimeGrad = True when the student is Completed AND their GraduateOnTime flag is truthy.
+    This is the numerator for the On-Time Graduation Rate KPI; the denominator stays len(df).
+    """
     df = df.drop_duplicates(subset="StudentNumber", keep="first").reset_index(drop=True)
 
     for col in ["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]:
@@ -711,14 +727,13 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
             .fillna(df[col])
         )
 
-    # same rules as determine_active_stage(), done for all rows at once instead of row by row
     cw_done = df["CourseworkStatus"].eq(COURSEWORK_DONE)
     ce_done = df["CompExamStatus"].eq(COMPEXAM_DONE)
     cs_done = df["CapstoneStatus"].eq(CAPSTONE_DONE)
     # any stage marked Cancelled = the student dropped out -> Inactive (unless they finished everything)
     is_cancelled = df[["CourseworkStatus", "CompExamStatus", "CapstoneStatus"]].eq("Cancelled").any(axis=1)
 
-    # first matching rule wins
+    # same rules as determine_active_stage(), done for all rows at once instead of row by row
     df["ActiveStage"] = np.select(
         [cw_done & ce_done & cs_done, is_cancelled, ~cw_done, ~ce_done],
         ["Completed", INACTIVE_STAGE, "Coursework", "Comprehensive Exam"],
@@ -726,6 +741,16 @@ def _prepare_executive_df(df: pd.DataFrame) -> pd.DataFrame:
     )
     df["IsComplete"] = df["ActiveStage"].eq("Completed")
     df["IsInactive"] = df["ActiveStage"].eq(INACTIVE_STAGE)
+
+    # ---- On-time graduation flag ----------------------------------------------------------
+    # A student counts as "graduated on time" only when they are BOTH Completed (all three
+    # stages done) AND their GraduateOnTime flag says yes. This stops a dropped-out student
+    # whose source row happens to say "yes" from inflating the On-Time Graduation Rate.
+    on_time_raw = df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE)
+    df["IsOnTimeGrad"] = df["IsComplete"] & on_time_raw
+    # Keep the raw flag too, so the export and any other consumer can still see the source value.
+    df["GraduateOnTimeFlag"] = on_time_raw
+
     current_status = np.select(
         [df["ActiveStage"].eq(stage) for stage in STAGE_STATUS_COL],
         [df[col].astype(object) for col in STAGE_STATUS_COL.values()],
@@ -763,15 +788,24 @@ def check_field_mappings():
 # BUSINESS LOGIC
 # ---------------------------------------------------------------------------
 def determine_active_stage(row) -> str:
-    """Single-row version of the rules in _prepare_executive_df (kept in sync)."""
-    statuses = (row.get("CourseworkStatus"), row.get("CompExamStatus"), row.get("CapstoneStatus"))
-    if statuses == (COURSEWORK_DONE, COMPEXAM_DONE, CAPSTONE_DONE):
+    """Single-row version of the cascade in _prepare_executive_df (kept in sync).
+
+      1. all three stages done                    -> "Completed"
+      2. any stage marked Cancelled               -> INACTIVE_STAGE
+      3. Coursework not yet "Completed"           -> "Coursework"
+      4. CompExam not yet "Passed"                -> "Comprehensive Exam"
+      5. otherwise                                -> "Capstone"
+    """
+    cw = row.get("CourseworkStatus")
+    ce = row.get("CompExamStatus")
+    cp = row.get("CapstoneStatus")
+    if (cw, ce, cp) == (COURSEWORK_DONE, COMPEXAM_DONE, CAPSTONE_DONE):
         return "Completed"
-    if "Cancelled" in statuses:
+    if "Cancelled" in (cw, ce, cp):
         return INACTIVE_STAGE
-    if row.get("CourseworkStatus") != COURSEWORK_DONE:
+    if cw != COURSEWORK_DONE:
         return "Coursework"
-    if row.get("CompExamStatus") != COMPEXAM_DONE:
+    if ce != COMPEXAM_DONE:
         return "Comprehensive Exam"
     return "Capstone"
 
@@ -798,14 +832,25 @@ def pct_1dp(part, whole) -> float:
 
 
 def completion_rate(df: pd.DataFrame) -> float:
+    """Overall Completion Rate = (# students in Completed stage) / (total students) × 100."""
     return pct_1dp(df["IsComplete"].sum(), len(df)) if not df.empty else 0.0
 
 
 def on_time_rate(df: pd.DataFrame) -> float:
+    """On-Time Graduation Rate = (# students who are Completed AND finished on time) / (total students) × 100.
+
+    The denominator is deliberately the FULL cohort (still-enrolled + inactive + completed), matching
+    your spec. Only the numerator is the intersection Completed ∧ GraduateOnTime.
+    """
     if df.empty:
         return 0.0
-    flags = df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE)
-    return pct_1dp(flags.sum(), len(df))
+    if "IsOnTimeGrad" in df.columns:
+        on_time_and_complete = int(df["IsOnTimeGrad"].sum())
+    else:
+        # Fallback for callers that don't have the new column: recompute from raw fields.
+        on_time_raw = df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE)
+        on_time_and_complete = int((df["IsComplete"] & on_time_raw).sum())
+    return pct_1dp(on_time_and_complete, len(df))
 
 
 def lifecycle_counts(df: pd.DataFrame) -> pd.DataFrame:
@@ -1370,8 +1415,10 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str, exported_at: st
             ov.cell(i, c).border = thin
     # rows 18-22 = Coursework, Comprehensive Exam, Capstone, Completed, Inactive
     yes = int(df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE).sum())
+    on_time_and_complete = int(df["IsOnTimeGrad"].sum()) if "IsOnTimeGrad" in df.columns else 0
     ov["A23"] = 'Graduate On Time = "yes"'; ov["B23"] = yes
-    ov["A23"].font = ov["B23"].font = Font(italic=True, color=grey)
+    ov["A24"] = "Completed AND on-time (On-Time Rate numerator)"; ov["B24"] = on_time_and_complete
+    ov["A23"].font = ov["B23"].font = ov["A24"].font = ov["B24"].font = Font(italic=True, color=grey)
 
     # --- KPIs ---
     cohort = filters.get("Cohort", "All Cohorts")
@@ -1383,8 +1430,10 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str, exported_at: st
     inactive_n = int(counts.loc[counts["Stage"] == INACTIVE_STAGE, "Count"].sum())
     kpis = [
         ("Total Enrolled", total_n, "#,##0", ""),
-        ("On-Time Graduation Rate", (yes / total_n) if total_n else 0, "0.0%",
+        # On-Time Graduation Rate numerator = Completed ∧ on-time; denominator = total enrolled
+        ("On-Time Graduation Rate", (on_time_and_complete / total_n) if total_n else 0, "0.0%",
          compare_text(hist, "OnTime", cohort)),
+        # Overall Completion numerator = Completed only; denominator = total enrolled
         ("Overall Completion", (completed_n / total_n) if total_n else 0, "0.0%",
          compare_text(hist, "Completion", cohort)),
         ("Remaining Students", total_n - completed_n - inactive_n, "#,##0",
@@ -1399,7 +1448,9 @@ def build_export_xlsx(df, hist, filters: dict, exported_by: str, exported_at: st
         cmp_cell.font = Font(size=9, color=color, italic=color == "9CA3AF")
     ov["C10"] = f"Students at Risk: {int(at_risk_students(df).shape[0]):,}"
     ov["C10"].font = Font(bold=True, color="C62828")
-    ov["A15"] = "Remaining Students = Total Enrolled − Completed − Inactive, split by current lifecycle stage."
+    ov["A15"] = ("On-Time = Completed ∧ On-Time Flag ÷ Total Enrolled · "
+                 "Overall Completion = Completed ÷ Total Enrolled · "
+                 "Remaining = Total Enrolled − Completed − Inactive.")
     ov["A15"].font = Font(size=9, italic=True, color=grey)
 
     # --- Completion trend data ---
@@ -1772,7 +1823,7 @@ def build_export_pdf(df, hist, filters: dict, exported_by: str, kpi_items, expor
 # Bump this whenever build_export_pdf() changes: it's part of the cache key, so an already-built
 # PDF from the old layout is never handed out again (Streamlit doesn't notice changes inside
 # build_export_pdf on its own and would keep serving the cached old file for up to 5 minutes).
-PDF_EXPORT_VERSION = 4
+PDF_EXPORT_VERSION = 5   # bumped: KPI formulas changed (on-time now Completed ∧ on-time)
 
 
 @st.cache_data(ttl=300, show_spinner=False, max_entries=20)
@@ -1885,11 +1936,12 @@ def resolve_kpi_value(source, df, program_label, selected_cohort, hist):
     if src == "at_risk":
         return f"{int(df['IsFlagged'].sum()):,}", None
     if src == "on_time_rate":
+        # On-Time Graduation Rate = (Completed ∧ on-time) ÷ total enrolled × 100
         rate = on_time_rate(df)
-        on_time_n = int(df["GraduateOnTime"].astype(str).str.strip().str.lower().isin(ON_TIME_TRUE).sum()) \
-            if not df.empty else 0
-        return f"{rate:.1f}%", rate_info_html(src, "Graduated on time", on_time_n, len(df), rate)
+        on_time_and_complete = int(df["IsOnTimeGrad"].sum()) if "IsOnTimeGrad" in df.columns else 0
+        return f"{rate:.1f}%", rate_info_html(src, "Completed on time", on_time_and_complete, len(df), rate)
     if src in ("overall_completion", "completion_rate"):
+        # Overall Completion = Completed ÷ total enrolled × 100
         rate = completion_rate(df)
         done_n = int(df["IsComplete"].sum()) if not df.empty else 0
         return f"{rate:.1f}%", rate_info_html(src, "Completed", done_n, len(df), rate)
